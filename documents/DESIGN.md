@@ -1342,7 +1342,77 @@ services:
 
 **Note**: Virtual threads work best with ZGC or G1GC. For CPU-bound workloads on platform threads, configure appropriate heap and GC settings.
 
-### Scenario 3: CI/CD Integration
+### Scenario 3: Programmatic Execution (Recommended for Examples)
+
+VajraPulse examples demonstrate programmatic usage where test tasks can be executed directly without CLI:
+
+```java
+// Example: examples/http-load-test/src/main/java/com/example/http/HttpLoadTestRunner.java
+
+public class HttpLoadTestRunner {
+    public static void main(String[] args) throws Exception {
+        // Create task instance
+        HttpLoadTest task = new HttpLoadTest();
+        
+        // Configure load pattern
+        LoadPattern loadPattern = new StaticLoad(100.0, Duration.ofSeconds(30));
+        
+        // Create metrics collector
+        MetricsCollector metricsCollector = new MetricsCollector();
+        
+        // Start periodic reporting (every 5 seconds)
+        try (PeriodicMetricsReporter reporter = 
+                new PeriodicMetricsReporter(metricsCollector, Duration.ofSeconds(5))) {
+            
+            reporter.start();
+            
+            // Run load test
+            try (ExecutionEngine engine = 
+                    new ExecutionEngine(task, loadPattern, metricsCollector)) {
+                engine.run();
+            }
+        }
+        
+        // Export final results
+        AggregatedMetrics metrics = metricsCollector.snapshot();
+        ConsoleMetricsExporter exporter = new ConsoleMetricsExporter();
+        exporter.export("HTTP Load Test Results", metrics);
+    }
+}
+```
+
+**Build Configuration** (examples use vajrapulse-worker as dependency):
+
+```gradle
+dependencies {
+    // Worker dependency brings in all required modules transitively via 'api'
+    implementation(files("../../vajrapulse-worker/build/libs/vajrapulse-worker-1.0.0-SNAPSHOT.jar"))
+}
+
+application {
+    mainClass.set("com.example.http.HttpLoadTestRunner")
+}
+```
+
+**Key Benefits**:
+- No CLI parsing needed for simple examples
+- Direct IDE execution support
+- Easy debugging with breakpoints
+- Clear demonstration of API usage
+- Suitable for integration tests
+- Educational examples
+
+**Running Examples**:
+```bash
+# From example directory
+./gradlew run
+
+# Or build and run directly
+./gradlew build
+java -jar build/libs/example.jar
+```
+
+### Scenario 4: CI/CD Integration
 
 ```yaml
 # GitHub Actions Example

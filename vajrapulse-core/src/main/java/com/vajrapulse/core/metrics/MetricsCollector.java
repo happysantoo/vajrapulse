@@ -4,8 +4,11 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleConfig;
+import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
 import com.vajrapulse.core.engine.ExecutionMetrics;
 
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -30,7 +33,11 @@ public final class MetricsCollector {
      * Creates a collector with default SimpleMeterRegistry.
      */
     public MetricsCollector() {
-        this(new SimpleMeterRegistry());
+        this(createDefaultRegistry());
+    }
+    
+    private static SimpleMeterRegistry createDefaultRegistry() {
+        return new SimpleMeterRegistry(SimpleConfig.DEFAULT, io.micrometer.core.instrument.Clock.SYSTEM);
     }
     
     /**
@@ -45,12 +52,34 @@ public final class MetricsCollector {
             .tag("status", "success")
             .description("Successful task execution duration")
             .publishPercentileHistogram()
+            .percentilePrecision(2)
+            .serviceLevelObjectives(
+                Duration.ofMillis(10),
+                Duration.ofMillis(50),
+                Duration.ofMillis(100),
+                Duration.ofMillis(200),
+                Duration.ofMillis(500),
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(2),
+                Duration.ofSeconds(5)
+            )
             .register(registry);
         
         this.failureTimer = Timer.builder("vajrapulse.execution.duration")
             .tag("status", "failure")
             .description("Failed task execution duration")
             .publishPercentileHistogram()
+            .percentilePrecision(2)
+            .serviceLevelObjectives(
+                Duration.ofMillis(10),
+                Duration.ofMillis(50),
+                Duration.ofMillis(100),
+                Duration.ofMillis(200),
+                Duration.ofMillis(500),
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(2),
+                Duration.ofSeconds(5)
+            )
             .register(registry);
         
         this.totalCounter = Counter.builder("vajrapulse.execution.total")

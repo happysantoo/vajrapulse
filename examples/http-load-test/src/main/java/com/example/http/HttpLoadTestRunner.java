@@ -6,6 +6,7 @@ import com.vajrapulse.core.engine.ExecutionEngine;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.core.metrics.MetricsCollector;
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
+import com.vajrapulse.exporter.console.PeriodicMetricsReporter;
 
 import java.time.Duration;
 
@@ -43,13 +44,21 @@ public final class HttpLoadTestRunner {
         System.out.println("  TPS:      100");
         System.out.println("  Duration: 30 seconds");
         System.out.println("  Endpoint: https://httpbin.org/delay/0");
-        System.out.println();
         System.out.println("Starting load test...");
         System.out.println();
         
-        // Run load test
-        try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector)) {
-            engine.run();
+        // Start periodic reporting every 5 seconds
+        try (PeriodicMetricsReporter reporter = new PeriodicMetricsReporter(
+                metricsCollector, Duration.ofSeconds(5))) {
+            
+            reporter.start();
+            
+            // Run load test
+            try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector)) {
+                engine.run();
+            }
+            
+            // Reporter will auto-close and stop
         }
         
         System.out.println();

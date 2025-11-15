@@ -8,10 +8,16 @@ application {
 }
 
 dependencies {
-    implementation(project(":vajrapulse-api"))
-    implementation(project(":vajrapulse-exporter-console"))
-    implementation(project(":vajrapulse-core"))
+    // Use api instead of implementation to expose these to consumers
+    api(project(":vajrapulse-api"))
+    api(project(":vajrapulse-core"))
+    api(project(":vajrapulse-exporter-console"))
     
+    // Expose required runtime dependencies
+    api("io.micrometer:micrometer-core:1.13.0")
+    api("org.slf4j:slf4j-api:2.0.13")
+    
+    // Worker-specific dependencies
     implementation("info.picocli:picocli:4.7.5")
     implementation("org.slf4j:slf4j-simple:2.0.9")
     
