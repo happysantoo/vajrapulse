@@ -67,4 +67,42 @@ public class HttpLoadTest implements Task {
         System.out.println("HttpLoadTest cleanup completed");
         // HttpClient doesn't need explicit cleanup
     }
+    
+    /**
+     * Main entry point to run this load test directly.
+     * 
+     * <p>Usage:
+     * <pre>
+     * ./gradlew run
+     * </pre>
+     */
+    public static void main(String[] args) throws Exception {
+        // Create task instance
+        HttpLoadTest task = new HttpLoadTest();
+        
+        // Configure load pattern: 100 TPS for 30 seconds
+        com.vajrapulse.api.LoadPattern loadPattern = 
+            new com.vajrapulse.api.StaticLoad(100.0, Duration.ofSeconds(30));
+        
+        // Create metrics collector
+        com.vajrapulse.core.metrics.MetricsCollector metricsCollector = 
+            new com.vajrapulse.core.metrics.MetricsCollector();
+        
+        // Run load test
+        System.out.println("Starting HTTP load test...");
+        System.out.println("Target: 100 TPS for 30 seconds");
+        System.out.println("Endpoint: https://httpbin.org/delay/0");
+        System.out.println();
+        
+        try (com.vajrapulse.core.engine.ExecutionEngine engine = 
+                new com.vajrapulse.core.engine.ExecutionEngine(task, loadPattern, metricsCollector)) {
+            engine.run();
+        }
+        
+        // Export results to console
+        com.vajrapulse.core.metrics.AggregatedMetrics metrics = metricsCollector.snapshot();
+        com.vajrapulse.exporter.console.ConsoleMetricsExporter exporter = 
+            new com.vajrapulse.exporter.console.ConsoleMetricsExporter();
+        exporter.export("HTTP Load Test Results", metrics);
+    }
 }

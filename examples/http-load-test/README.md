@@ -1,12 +1,12 @@
 # HTTP Load Test Example
 
-This example demonstrates how to create a simple HTTP load test using Vajra with Java 21 virtual threads.
+This example demonstrates how to create a simple HTTP load test using VajraPulse with Java 21 virtual threads.
 
 ## What it does
 
 - Sends HTTP GET requests to `https://httpbin.org/delay/0`
 - Uses virtual threads for efficient I/O handling
-- Runs at 10 TPS for 10 seconds (100 total requests)
+- Runs at 100 TPS for 30 seconds (3,000 total requests)
 - Reports latency percentiles and success/failure rates
 
 ## Quick Start
@@ -14,27 +14,48 @@ This example demonstrates how to create a simple HTTP load test using Vajra with
 ### Prerequisites
 
 - Java 21 or later
-- Built vajra-worker fat JAR
+- Built VajraPulse modules (run `./gradlew build` from project root)
 
 ### Build and Run
 
-```bash
-# Build the example
-./gradlew build
+There are three ways to run this example:
 
-# Run the load test using the vajra-worker JAR
-java -cp "build/libs/http-load-test-1.0.0-SNAPSHOT.jar:../../vajra-worker/build/libs/vajra-worker-1.0.0-SNAPSHOT-all.jar" \
-  com.vajra.worker.VajraWorker \
-  com.example.http.HttpLoadTest \
-  --mode static \
-  --tps 10 \
-  --duration 10s
+#### Option 1: Using the Runner (Recommended)
+
+```bash
+# Build and run directly
+./gradlew run
 ```
 
-Or use the gradle task:
+This uses the `HttpLoadTestRunner` class which programmatically configures the load test.
+
+#### Option 2: Using VajraPulse Worker CLI
 
 ```bash
-./gradlew runLoadTest
+# Build VajraPulse modules first (from project root)
+cd ../..
+./gradlew build
+
+# Build the example
+cd examples/http-load-test
+./gradlew build
+
+# Run using the worker CLI
+java -cp "build/libs/http-load-test-1.0.0-SNAPSHOT.jar:../../vajrapulse-worker/build/libs/vajrapulse-worker-1.0.0-SNAPSHOT-all.jar" \
+  com.vajrapulse.worker.VajraPulseWorker \
+  com.example.http.HttpLoadTest \
+  --mode static \
+  --tps 100 \
+  --duration 30s
+```
+
+#### Option 3: Using the Task's Main Method
+
+```bash
+# Run the main method in HttpLoadTest directly
+./gradlew build
+java -cp "build/libs/http-load-test-1.0.0-SNAPSHOT.jar:../../vajrapulse-core/build/libs/vajrapulse-core-1.0.0-SNAPSHOT.jar:../../vajrapulse-api/build/libs/vajrapulse-api-1.0.0-SNAPSHOT.jar:../../vajrapulse-exporter-console/build/libs/vajrapulse-exporter-console-1.0.0-SNAPSHOT.jar" \
+  com.example.http.HttpLoadTest
 ```
 
 ## Code Walkthrough
@@ -80,11 +101,36 @@ public class HttpLoadTest implements Task {
 3. **execute()** - Test logic executed repeatedly
 4. **TaskResult** - Return Success or Failure explicitly
 
-## Load Patterns
+## Programmatic Configuration
+
+The `HttpLoadTestRunner` shows how to configure and run tests programmatically:
+
+```java
+// Create task
+HttpLoadTest task = new HttpLoadTest();
+
+// Configure load pattern
+LoadPattern loadPattern = new StaticLoad(100.0, Duration.ofSeconds(30));
+
+// Create metrics collector
+MetricsCollector metricsCollector = new MetricsCollector();
+
+// Run test
+try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector)) {
+    engine.run();
+}
+
+// Export results
+AggregatedMetrics metrics = metricsCollector.snapshot();
+ConsoleMetricsExporter exporter = new ConsoleMetricsExporter();
+exporter.export("Results", metrics);
+```
+
+## Load Patterns via CLI
 
 ### Static Load
 ```bash
-java -cp ... com.vajra.worker.VajraWorker \
+java -cp ... com.vajrapulse.worker.VajraPulseWorker \
   com.example.http.HttpLoadTest \
   --mode static \
   --tps 100 \
@@ -93,7 +139,7 @@ java -cp ... com.vajra.worker.VajraWorker \
 
 ### Ramp-Up
 ```bash
-java -cp ... com.vajra.worker.VajraWorker \
+java -cp ... com.vajrapulse.worker.VajraPulseWorker \
   com.example.http.HttpLoadTest \
   --mode ramp \
   --tps 200 \
@@ -102,7 +148,7 @@ java -cp ... com.vajra.worker.VajraWorker \
 
 ### Ramp then Sustain
 ```bash
-java -cp ... com.vajra.worker.VajraWorker \
+java -cp ... com.vajrapulse.worker.VajraPulseWorker \
   com.example.http.HttpLoadTest \
   --mode ramp-sustain \
   --tps 200 \
