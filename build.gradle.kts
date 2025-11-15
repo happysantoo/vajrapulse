@@ -14,6 +14,13 @@ allprojects {
 }
 
 subprojects {
+    // Skip plugin/application for the aggregator ':examples' to avoid
+    // creating and resolving unused configurations like annotationProcessor.
+    if (project.path == ":examples") {
+        // Aggregator only; no source sets or plugins applied.
+        return@subprojects
+    }
+
     apply(plugin = "java")
     apply(plugin = "java-library")
     apply(plugin = "groovy")
