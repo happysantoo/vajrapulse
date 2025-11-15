@@ -1,7 +1,7 @@
 plugins {
     java
     groovy
-    id("com.gradleup.shadow") version "8.3.5" apply false
+    id("com.gradleup.shadow") version "9.0.0-beta4" apply false
 }
 
 allprojects {
