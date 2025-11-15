@@ -27,7 +27,7 @@ subprojects {
     tasks.withType<JavaCompile> {
         options.encoding = "UTF-8"
         options.release.set(21)
-        options.compilerArgs.add("-parameters")
+        options.compilerArgs.addAll(listOf("-parameters", "-Xlint:deprecation"))
     }
 
     tasks.withType<Test> {

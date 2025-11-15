@@ -84,13 +84,16 @@ public final class MetricsCollector {
         long failureCount = failureTimer.count();
         long totalCount = (long) totalCounter.count();
         
-        double successP50 = successTimer.percentile(0.50, TimeUnit.NANOSECONDS);
-        double successP95 = successTimer.percentile(0.95, TimeUnit.NANOSECONDS);
-        double successP99 = successTimer.percentile(0.99, TimeUnit.NANOSECONDS);
+        // Use takeSnapshot() to get percentile values
+        var successSnapshot = successTimer.takeSnapshot();
+        double successP50 = getPercentileValue(successSnapshot, 0.50);
+        double successP95 = getPercentileValue(successSnapshot, 0.95);
+        double successP99 = getPercentileValue(successSnapshot, 0.99);
         
-        double failureP50 = failureTimer.percentile(0.50, TimeUnit.NANOSECONDS);
-        double failureP95 = failureTimer.percentile(0.95, TimeUnit.NANOSECONDS);
-        double failureP99 = failureTimer.percentile(0.99, TimeUnit.NANOSECONDS);
+        var failureSnapshot = failureTimer.takeSnapshot();
+        double failureP50 = getPercentileValue(failureSnapshot, 0.50);
+        double failureP95 = getPercentileValue(failureSnapshot, 0.95);
+        double failureP99 = getPercentileValue(failureSnapshot, 0.99);
         
         return new AggregatedMetrics(
             totalCount,
@@ -103,6 +106,15 @@ public final class MetricsCollector {
             failureP95,
             failureP99
         );
+    }
+    
+    private double getPercentileValue(io.micrometer.core.instrument.distribution.HistogramSnapshot snapshot, double percentile) {
+        for (var pv : snapshot.percentileValues()) {
+            if (pv.percentile() == percentile) {
+                return pv.value(TimeUnit.NANOSECONDS);
+            }
+        }
+        return Double.NaN;
     }
     
     /**
