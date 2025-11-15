@@ -20,8 +20,8 @@ import org.slf4j.LoggerFactory;
  * 
  * <p>Enable trace logging to see detailed execution information:
  * <pre>
- * # In src/main/resources/simplelogger.properties:
- * org.slf4j.simpleLogger.log.com.vajrapulse.core.engine.TaskExecutor=TRACE
+ * # In src/main/resources/logback.xml, uncomment:
+ * &lt;logger name="com.vajrapulse.core.engine.TaskExecutor" level="TRACE"/&gt;
  * </pre>
  */
 public final class TaskExecutor {

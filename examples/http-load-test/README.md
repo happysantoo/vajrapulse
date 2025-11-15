@@ -197,10 +197,10 @@ Success Latency (ms):
 
 To see detailed per-request logs for manual validation of percentile calculations:
 
-1. **Edit** `src/main/resources/simplelogger.properties`
+1. **Edit** `src/main/resources/logback.xml`
 2. **Uncomment** this line:
-   ```properties
-   org.slf4j.simpleLogger.log.com.vajrapulse.core.engine.TaskExecutor=TRACE
+   ```xml
+   <logger name="com.vajrapulse.core.engine.TaskExecutor" level="TRACE"/>
    ```
 3. **Run** the test with low TPS for manageable output:
    ```bash
