@@ -1,0 +1,19 @@
+here are the requirements for the new test framework library. There are 2 major components in this system
+
+
+1. test orchestrator
+2. test worker
+
+As a common library to support these , we need to write the following features to be installed as a part of the worker
+
+1. simple task interface  which can be a part of SDK , which is pretty lean and open where the functionality to test can be written. Later abstractions can be planned later. At the moment , task needs to be very simple with 3 methods namely :
+	1. execute() returning TaskResult. result can contain success/failure details on the activity performed.
+	2. setup() which can be called when the test is started for the first time
+	3. cleanup() which can be called when the test ends for a graceful cleanup opportunity.
+2. A metrics processor and exporter library , these should be embeddable inside the worker and every time the method returns the taskresult , it should be able to collect the metrics , aggreegate them on both throughput and latencies. There needs to be a bunch of exporters like blazemeter reporter, opentelemetry reporter ,simple console exporter(for limited and quick testing).
+3. There can be multiple workers running at anytime all running at tandem to perform distributed load testing.
+4. Alternatively , worker can be run standalone with commands to define the scale and ramp parameters as a command line parameter.
+
+As an orchestrator , comes with a simple user interface to get the load parameters from the user and distribute the load to workers. for example , if an user wants to test a service supporting 10000 trnsactions per second and if there are 5 workers available at that time , it should be able to split the load into 5 equal 2k per second requests uniformly across the workers. optionally ,Orchestraor should be able to report the past runs. 
+
+Also lets consider a scenario where there is no orchestrator and test workers are standalone and for distrubuted testing they can interact with each other and coordinate the testing. I would still think opentelemetry is a nice place to aggregate the testing results. A standard grafana dashboard to visualize the test results will be nice too. 
