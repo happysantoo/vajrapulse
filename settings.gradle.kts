@@ -1,6 +1,6 @@
-rootProject.name = "vajra"
+rootProject.name = "vajrapulse"
 
-include("vajra-api")
-include("vajra-core")
-include("vajra-exporter-console")
-include("vajra-worker")
+include("vajrapulse-api")
+include("vajrapulse-core")
+include("vajrapulse-exporter-console")
+include("vajrapulse-worker")

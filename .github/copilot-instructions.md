@@ -1,8 +1,8 @@
-# GitHub Copilot Instructions for Vajra Load Testing Framework
+# GitHub Copilot Instructions for VajraPulse Load Testing Framework
 
 ## Project Overview
 
-Vajra is a Java 21-based distributed load testing framework leveraging virtual threads for high-concurrency testing with minimal resource overhead. The project follows strict architectural principles for maintainability, performance, and extensibility.
+VajraPulse is a Java 21-based distributed load testing framework leveraging virtual threads for high-concurrency testing with minimal resource overhead. The project follows strict architectural principles for maintainability, performance, and extensibility.
 
 ## Core Principles
 
@@ -200,7 +200,7 @@ snapshot.successCount() == 10
 #### Always Use Micrometer API
 ```java
 // ✅ GOOD - Use Micrometer Timer
-private final Timer successTimer = Timer.builder("vajra.execution.duration")
+private final Timer successTimer = Timer.builder("vajrapulse.execution.duration")
     .tag("status", "success")
     .publishPercentileHistogram()
     .register(registry);
@@ -215,12 +215,12 @@ histogram.recordValue(duration);
 #### Proper Meter Naming
 ```java
 // ✅ GOOD - Lowercase with dots
-"vajra.execution.duration"
-"vajra.execution.total"
-"vajra.task.success"
+"vajrapulse.execution.duration"
+"vajrapulse.execution.total"
+"vajrapulse.task.success"
 
 // ❌ BAD - Camel case or underscores
-"VajraExecutionDuration"
+"VajraPulseExecutionDuration"
 "vajra_execution_duration"
 ```
 
@@ -306,7 +306,7 @@ new RampUpToMaxLoad(200.0, Duration.ofSeconds(30), Duration.ofMinutes(5))
 
 ### 10. Module Boundaries
 
-#### vajra-api
+#### vajrapulse-api
 - **ZERO runtime dependencies**
 - Only interfaces and annotations
 - No implementation logic
@@ -326,12 +326,12 @@ public interface Task {
 }
 ```
 
-#### vajra-core
-- Depends ONLY on: vajra-api, micrometer-core, slf4j-api
+#### vajrapulse-core
+- Depends ONLY on: vajrapulse-api, micrometer-core, slf4j-api
 - No CLI, no exporters, no application logic
 - Pure execution engine
 
-#### vajra-worker
+#### vajrapulse-worker
 - Application layer
 - Can depend on all modules
 - Contains CLI and main entry point
@@ -402,7 +402,7 @@ public ExecutionMetrics executeWithMetrics(long iteration)
 ```java
 // ✅ GOOD - package-info.java in each package
 /**
- * Core execution engine for Vajra load testing framework.
+ * Core execution engine for VajraPulse load testing framework.
  * 
  * <p>This package contains the main execution components:
  * <ul>
@@ -411,9 +411,9 @@ public ExecutionMetrics executeWithMetrics(long iteration)
  *   <li>{@link RateController} - TPS control
  * </ul>
  * 
- * @see com.vajra.api for public API
+ * @see com.vajrapulse.api for public API
  */
-package com.vajra.core.engine;
+package com.vajrapulse.core.engine;
 ```
 
 ### 13. Gradle Configuration
@@ -486,6 +486,28 @@ public void record(ExecutionMetrics metrics) {
 }
 ```
 
+#### ❌ Don't Use Deprecated APIs
+```java
+// ❌ BAD - Deprecated Micrometer API
+double p95 = timer.percentile(0.95, TimeUnit.MILLISECONDS);
+double p99 = timer.percentile(0.99, TimeUnit.MILLISECONDS);
+
+// ✅ GOOD - Current Micrometer API
+HistogramSnapshot snapshot = timer.takeSnapshot();
+double p95 = getPercentileValue(snapshot, 0.95);
+double p99 = getPercentileValue(snapshot, 0.99);
+
+// Helper method
+private double getPercentileValue(HistogramSnapshot snapshot, double percentile) {
+    for (var value : snapshot.percentileValues()) {
+        if (value.percentile() == percentile) {
+            return value.value(TimeUnit.MILLISECONDS);
+        }
+    }
+    return 0.0;
+}
+```
+
 ### 15. Performance Considerations
 
 #### Memory Allocation
@@ -535,27 +557,39 @@ List<Result> results = new ArrayList<>(); // Resizes multiple times
 3. Track current value? → **Micrometer Gauge**
 4. Custom aggregation? → **Consider extending Micrometer**
 
+### "How to avoid compiler warnings?"
+1. **Build with warnings enabled**: `./gradlew build` (already configured with `-Xlint:deprecation`)
+2. **Check API docs** before using new APIs - look for `@Deprecated` annotations
+3. **If deprecated API is found**:
+   - Check JavaDoc for replacement API
+   - Example: `Timer.percentile()` → use `Timer.takeSnapshot().percentileValues()`
+   - Update code immediately, don't defer
+4. **Common deprecations to watch**:
+   - Micrometer: `percentile()`, old builder patterns
+   - JDK: `Thread.stop()`, `finalize()`, older date/time APIs
+5. **Zero tolerance**: Fix warnings before committing
+
 ## Module-Specific Guidelines
 
-### vajra-api Module
+### vajrapulse-api Module
 - Pure interfaces and records only
-- Zero dependencies (check with `./gradlew :vajra-api:dependencies`)
+- Zero dependencies (check with `./gradlew :vajrapulse-api:dependencies`)
 - No implementation logic
 - Extensive JavaDoc (this is user-facing API)
 - All classes `public` and `final` or `sealed`
 
-### vajra-core Module
+### vajrapulse-core Module
 - No main methods or CLI code
 - All logic must be testable without CLI
 - Use dependency injection patterns
 - Prefer constructor injection over field injection
 - All executors must be closeable/shutdown-able
 
-### vajra-worker Module
+### vajrapulse-worker Module
 - Only module with `main` method
 - CLI parsing with picocli
 - Thin orchestration layer
-- Delegates to vajra-core for all logic
+- Delegates to vajrapulse-core for all logic
 - No business logic here
 
 ## Code Review Checklist
@@ -575,6 +609,8 @@ Before submitting code, verify:
 - [ ] Module boundaries respected
 - [ ] Gradle configuration uses toolchain
 - [ ] All tests pass with `./gradlew test`
+- [ ] **No compiler warnings** - build with `-Xlint:deprecation` enabled
+- [ ] No deprecated API usage - check Micrometer/JDK deprecations
 - [ ] Remove all unused imports
 
 
@@ -597,11 +633,11 @@ When stuck, ask:
 ./gradlew test
 
 # Build fat JAR
-./gradlew :vajra-worker:shadowJar
+./gradlew :vajrapulse-worker:shadowJar
 
 # Check dependencies
-./gradlew :vajra-api:dependencies
-./gradlew :vajra-core:dependencies
+./gradlew :vajrapulse-api:dependencies
+./gradlew :vajrapulse-core:dependencies
 
 # Run example
 cd examples/http-load-test
@@ -610,6 +646,6 @@ cd examples/http-load-test
 
 ---
 
-**Remember**: Vajra prioritizes simplicity, performance, and minimal dependencies. When in doubt, choose the simpler, more explicit approach.
+**Remember**: VajraPulse prioritizes simplicity, performance, and minimal dependencies. When in doubt, choose the simpler, more explicit approach.
 **Remember**: Any documentation that you create should be persisted in documents folder.
 **Remember**: Any new work you start , make sure to branch out and work towards a successful PR creation and merging. 

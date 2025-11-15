@@ -1,8 +1,8 @@
-# Phase 1 Implementation Plan - Vajra Test Framework
+# Phase 1 Implementation Plan - VajraPulse Test Framework
 
 ## Overview
 
-Phase 1 delivers the core foundation of Vajra as a standalone, executable test framework with minimal dependencies. The focus is on creating a lean, modular system that can be easily extended in later phases.
+Phase 1 delivers the core foundation of VajraPulse as a standalone, executable test framework with minimal dependencies. The focus is on creating a lean, modular system that can be easily extended in later phases.
 
 **Build System**: Gradle 9.x  
 **Metrics**: Micrometer API (facade only)  
@@ -16,23 +16,23 @@ Phase 1 delivers the core foundation of Vajra as a standalone, executable test f
 ### Core JARs
 
 ```
-vajra-api-1.0.0.jar              (~15 KB)  - Task SDK interfaces only
-vajra-core-1.0.0.jar             (~150 KB) - Execution engine & metrics
-vajra-worker-1.0.0.jar           (~50 KB)  - Standalone worker CLI
-vajra-worker-1.0.0-all.jar       (~1.5 MB) - Fat JAR with all dependencies
+vajrapulse-api-1.0.0.jar              (~15 KB)  - Task SDK interfaces only
+vajrapulse-core-1.0.0.jar             (~150 KB) - Execution engine & metrics
+vajrapulse-worker-1.0.0.jar           (~50 KB)  - Standalone worker CLI
+vajrapulse-worker-1.0.0-all.jar       (~1.5 MB) - Fat JAR with all dependencies
 
-vajra-worker-native (future)     (~50 MB)  - GraalVM native executable
+vajrapulse-worker-native (future)     (~50 MB)  - GraalVM native executable
 ```
 
 ### Module Structure
 
 ```
 vajra/
-├── vajra-api/              - Task SDK (zero dependencies)
-├── vajra-core/             - Core execution engine
-├── vajra-worker/           - Standalone worker application
-├── vajra-exporters/        - Metrics exporters
-│   └── vajra-exporter-console/
+├── vajrapulse-api/              - Task SDK (zero dependencies)
+├── vajrapulse-core/             - Core execution engine
+├── vajrapulse-worker/           - Standalone worker application
+├── vajrapulse-exporters/        - Metrics exporters
+│   └── vajrapulse-exporter-console/
 └── examples/               - Complete working examples
     ├── http-load-test/     - HTTP API example
     ├── database-test/      - Database load test
@@ -43,7 +43,7 @@ vajra/
 
 ## Module Details
 
-### Module 1: vajra-api (Task SDK)
+### Module 1: vajrapulse-api (Task SDK)
 
 **Purpose**: Minimal interface library for task writers - ZERO runtime dependencies
 
@@ -51,7 +51,7 @@ vajra/
 
 **Package Structure**:
 ```
-com.vajra.api/
+com.vajrapulse.api/
 ├── Task.java                    - Core task interface
 ├── TaskResult.java              - Sealed result type
 ├── TaskContext.java             - Execution context (optional)
@@ -69,7 +69,7 @@ com.vajra.api/
 
 ```java
 // src/main/java/com/vajra/api/Task.java
-package com.vajra.api;
+package com.vajrapulse.api;
 
 /**
  * Core interface for defining load test tasks.
@@ -103,7 +103,7 @@ public interface Task {
 }
 
 // src/main/java/com/vajra/api/TaskResult.java
-package com.vajra.api;
+package com.vajrapulse.api;
 
 /**
  * Result of a task execution. Sealed to ensure type safety.
@@ -154,7 +154,7 @@ public sealed interface TaskResult
 }
 
 // src/main/java/com/vajra/api/TaskContext.java
-package com.vajra.api;
+package com.vajrapulse.api;
 
 import java.util.Map;
 import java.util.Optional;
@@ -187,7 +187,7 @@ public interface TaskContext {
 }
 
 // src/main/java/com/vajra/api/LoadPattern.java
-package com.vajra.api;
+package com.vajrapulse.api;
 
 import java.time.Duration;
 
@@ -212,9 +212,9 @@ public interface LoadPattern {
 }
 
 // src/main/java/com/vajra/api/pattern/StaticLoad.java
-package com.vajra.api.pattern;
+package com.vajrapulse.api.pattern;
 
-import com.vajra.api.LoadPattern;
+import com.vajrapulse.api.LoadPattern;
 import java.time.Duration;
 
 /**
@@ -244,9 +244,9 @@ public class StaticLoad implements LoadPattern {
 }
 
 // src/main/java/com/vajra/api/pattern/RampUpLoad.java
-package com.vajra.api.pattern;
+package com.vajrapulse.api.pattern;
 
-import com.vajra.api.LoadPattern;
+import com.vajrapulse.api.LoadPattern;
 import java.time.Duration;
 
 /**
@@ -283,9 +283,9 @@ public class RampUpLoad implements LoadPattern {
 }
 
 // src/main/java/com/vajra/api/pattern/RampUpToMaxLoad.java
-package com.vajra.api.pattern;
+package com.vajrapulse.api.pattern;
 
-import com.vajra.api.LoadPattern;
+import com.vajrapulse.api.LoadPattern;
 import java.time.Duration;
 
 /**
@@ -328,7 +328,7 @@ public class RampUpToMaxLoad implements LoadPattern {
 }
 
 // src/main/java/com/vajra/api/annotation/VirtualThreads.java
-package com.vajra.api.annotation;
+package com.vajrapulse.api.annotation;
 
 import java.lang.annotation.*;
 
@@ -343,7 +343,7 @@ public @interface VirtualThreads {
 }
 
 // src/main/java/com/vajra/api/annotation/PlatformThreads.java
-package com.vajra.api.annotation;
+package com.vajrapulse.api.annotation;
 
 import java.lang.annotation.*;
 
@@ -376,7 +376,7 @@ java {
     }
 }
 
-group = 'com.vajra'
+group = 'com.vajrapulse'
 version = '1.0.0'
 
 // Zero runtime dependencies!
@@ -402,12 +402,12 @@ java {
 
 ---
 
-### Module 2: vajra-core (Execution Engine)
+### Module 2: vajrapulse-core (Execution Engine)
 
 **Purpose**: Core execution engine with metrics collection
 
 **Dependencies** (MINIMAL):
-- `vajra-api` (compile)
+- `vajrapulse-api` (compile)
 - `micrometer-core` (1.12.0, ~400 KB) - Metrics facade (includes HdrHistogram)
 - SLF4J API (2.0.9, ~60 KB) - logging facade only
 
@@ -420,7 +420,7 @@ java {
 
 **Package Structure**:
 ```
-com.vajra.core/
+com.vajrapulse.core/
 ├── engine/
 │   ├── ExecutionEngine.java         - Main orchestrator
 │   ├── TaskExecutor.java            - Instrumented wrapper
@@ -445,9 +445,9 @@ com.vajra.core/
 
 ```java
 // ExecutionMetrics.java - What the executor captures
-package com.vajra.core.metrics;
+package com.vajrapulse.core.metrics;
 
-import com.vajra.api.TaskResult;
+import com.vajrapulse.api.TaskResult;
 
 public record ExecutionMetrics(
     long startNanos,
@@ -469,12 +469,12 @@ public record ExecutionMetrics(
 }
 
 // TaskExecutor.java - Wraps task with instrumentation
-package com.vajra.core.engine;
+package com.vajrapulse.core.engine;
 
-import com.vajra.api.Task;
-import com.vajra.api.TaskResult;
-import com.vajra.core.metrics.ExecutionMetrics;
-import com.vajra.core.metrics.MetricsCollector;
+import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskResult;
+import com.vajrapulse.core.metrics.ExecutionMetrics;
+import com.vajrapulse.core.metrics.MetricsCollector;
 
 public class TaskExecutor {
     
@@ -513,9 +513,9 @@ public class TaskExecutor {
 }
 
 // RateController.java - Controls execution rate based on load pattern
-package com.vajra.core.engine;
+package com.vajrapulse.core.engine;
 
-import com.vajra.api.LoadPattern;
+import com.vajrapulse.api.LoadPattern;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -573,7 +573,7 @@ public class RateController {
 }
 
 // MetricsCollector.java - Micrometer-based metrics aggregation
-package com.vajra.core.metrics;
+package com.vajrapulse.core.metrics;
 
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -599,7 +599,7 @@ public class MetricsCollector {
         this.startTimeMillis = System.currentTimeMillis();
         
         // Create meters
-        this.successTimer = Timer.builder("vajra.execution.duration")
+        this.successTimer = Timer.builder("vajrapulse.execution.duration")
             .tag("status", "success")
             .description("Execution duration for successful tasks")
             .publishPercentileHistogram()  // Enables percentiles
@@ -612,21 +612,21 @@ public class MetricsCollector {
             )
             .register(registry);
             
-        this.failureTimer = Timer.builder("vajra.execution.duration")
+        this.failureTimer = Timer.builder("vajrapulse.execution.duration")
             .tag("status", "failure")
             .description("Execution duration for failed tasks")
             .publishPercentileHistogram()
             .register(registry);
             
-        this.totalCounter = Counter.builder("vajra.execution.total")
+        this.totalCounter = Counter.builder("vajrapulse.execution.total")
             .description("Total executions")
             .register(registry);
             
-        this.successCounter = Counter.builder("vajra.execution.success")
+        this.successCounter = Counter.builder("vajrapulse.execution.success")
             .description("Successful executions")
             .register(registry);
             
-        this.failureCounter = Counter.builder("vajra.execution.failure")
+        this.failureCounter = Counter.builder("vajrapulse.execution.failure")
             .description("Failed executions")
             .register(registry);
     }
@@ -680,7 +680,7 @@ public class MetricsCollector {
 }
 
 // AggregatedMetrics.java
-package com.vajra.core.metrics;
+package com.vajrapulse.core.metrics;
 
 public record AggregatedMetrics(
     long totalExecutions,
@@ -721,12 +721,12 @@ java {
     }
 }
 
-group = 'com.vajra'
+group = 'com.vajrapulse'
 version = '1.0.0'
 
 dependencies {
     // Compile dependencies
-    api project(':vajra-api')
+    api project(':vajrapulse-api')
     implementation 'io.micrometer:micrometer-core:1.12.0'
     implementation 'org.slf4j:slf4j-api:2.0.9'
     
@@ -751,16 +751,16 @@ java {
 
 ---
 
-### Module 3: vajra-exporter-console
+### Module 3: vajrapulse-exporter-console
 
 **Purpose**: Simple console output for metrics
 
 **Dependencies**:
-- `vajra-core` (compile)
+- `vajrapulse-core` (compile)
 
 **Package Structure**:
 ```
-com.vajra.exporter.console/
+com.vajrapulse.exporter.console/
 ├── ConsoleExporter.java
 └── ConsoleFormatter.java
 ```
@@ -769,9 +769,9 @@ com.vajra.exporter.console/
 
 ```java
 // ConsoleExporter.java
-package com.vajra.exporter.console;
+package com.vajrapulse.exporter.console;
 
-import com.vajra.core.metrics.AggregatedMetrics;
+import com.vajrapulse.core.metrics.AggregatedMetrics;
 
 public class ConsoleExporter {
     
@@ -806,9 +806,9 @@ public class ConsoleExporter {
 }
 
 // ConsoleFormatter.java
-package com.vajra.exporter.console;
+package com.vajrapulse.exporter.console;
 
-import com.vajra.core.metrics.AggregatedMetrics;
+import com.vajrapulse.core.metrics.AggregatedMetrics;
 
 public class ConsoleFormatter {
     
@@ -895,29 +895,29 @@ java {
     }
 }
 
-group = 'com.vajra'
+group = 'com.vajrapulse'
 version = '1.0.0'
 
 dependencies {
-    api project(':vajra-core')
+    api project(':vajrapulse-core')
 }
 ```
 
 ---
 
-### Module 4: vajra-worker (Standalone CLI)
+### Module 4: vajrapulse-worker (Standalone CLI)
 
 **Purpose**: Executable worker with CLI interface
 
 **Dependencies**:
-- `vajra-core` (compile)
-- `vajra-exporter-console` (compile)
+- `vajrapulse-core` (compile)
+- `vajrapulse-exporter-console` (compile)
 - `picocli` (4.7.5, ~200 KB) - CLI parsing
 - `slf4j-simple` (runtime only)
 
 **Package Structure**:
 ```
-com.vajra.worker/
+com.vajrapulse.worker/
 ├── WorkerMain.java              - Entry point
 ├── WorkerApplication.java       - Main orchestration
 ├── cli/
@@ -931,33 +931,33 @@ com.vajra.worker/
 
 ```java
 // WorkerMain.java
-package com.vajra.worker;
+package com.vajrapulse.worker;
 
 import picocli.CommandLine;
-import com.vajra.worker.cli.RunCommand;
+import com.vajrapulse.worker.cli.RunCommand;
 
 public class WorkerMain {
     
     public static void main(String[] args) {
         int exitCode = new CommandLine(new RunCommand())
-            .setCommandName("vajra-worker")
+            .setCommandName("vajrapulse-worker")
             .execute(args);
         System.exit(exitCode);
     }
 }
 
 // RunCommand.java
-package com.vajra.worker.cli;
+package com.vajrapulse.worker.cli;
 
 import picocli.CommandLine.*;
-import com.vajra.worker.WorkerApplication;
+import com.vajrapulse.worker.WorkerApplication;
 import java.util.concurrent.Callable;
 
 @Command(
     name = "run",
     description = "Run a load test",
     mixinStandardHelpOptions = true,
-    version = "Vajra Worker 1.0.0"
+    version = "VajraPulse Worker 1.0.0"
 )
 public class RunCommand implements Callable<Integer> {
     
@@ -1070,13 +1070,13 @@ public class RunCommand implements Callable<Integer> {
 }
 
 // WorkerApplication.java
-package com.vajra.worker;
+package com.vajrapulse.worker;
 
-import com.vajra.api.Task;
-import com.vajra.core.engine.*;
-import com.vajra.core.metrics.*;
-import com.vajra.exporter.console.ConsoleExporter;
-import com.vajra.worker.loader.TaskLoader;
+import com.vajrapulse.api.Task;
+import com.vajrapulse.core.engine.*;
+import com.vajrapulse.core.metrics.*;
+import com.vajrapulse.exporter.console.ConsoleExporter;
+import com.vajrapulse.worker.loader.TaskLoader;
 
 import java.util.concurrent.*;
 
@@ -1158,9 +1158,9 @@ public class WorkerApplication {
 }
 
 // TaskLoader.java - Loads task from classpath or JAR
-package com.vajra.worker.loader;
+package com.vajrapulse.worker.loader;
 
-import com.vajra.api.Task;
+import com.vajrapulse.api.Task;
 import java.net.URL;
 import java.net.URLClassLoader;
 
@@ -1207,16 +1207,16 @@ java {
     }
 }
 
-group = 'com.vajra'
+group = 'com.vajrapulse'
 version = '1.0.0'
 
 application {
-    mainClass = 'com.vajra.worker.WorkerMain'
+    mainClass = 'com.vajrapulse.worker.WorkerMain'
 }
 
 dependencies {
-    implementation project(':vajra-core')
-    implementation project(':vajra-exporter-console')
+    implementation project(':vajrapulse-core')
+    implementation project(':vajrapulse-exporter-console')
     implementation 'info.picocli:picocli:4.7.5'
     
     runtimeOnly 'org.slf4j:slf4j-simple:2.0.9'
@@ -1233,7 +1233,7 @@ shadowJar {
     mergeServiceFiles()
     
     manifest {
-        attributes 'Main-Class': 'com.vajra.worker.WorkerMain'
+        attributes 'Main-Class': 'com.vajrapulse.worker.WorkerMain'
         attributes 'Multi-Release': 'true'
     }
     
@@ -1244,7 +1244,7 @@ shadowJar {
 // Also create thin JAR
 jar {
     manifest {
-        attributes 'Main-Class': 'com.vajra.worker.WorkerMain'
+        attributes 'Main-Class': 'com.vajrapulse.worker.WorkerMain'
     }
 }
 
@@ -1261,10 +1261,10 @@ tasks.named('test') {
 ```gradle
 rootProject.name = 'vajra'
 
-include 'vajra-api'
-include 'vajra-core'
-include 'vajra-exporter-console'
-include 'vajra-worker'
+include 'vajrapulse-api'
+include 'vajrapulse-core'
+include 'vajrapulse-exporter-console'
+include 'vajrapulse-worker'
 ```
 
 **build.gradle** (root):
@@ -1297,7 +1297,7 @@ subprojects {
     }
     
     version = '1.0.0'
-    group = 'com.vajra'
+    group = 'com.vajrapulse'
 }
 ```
 
@@ -1329,7 +1329,7 @@ zipStorePath=wrapper/dists
 ./gradlew clean build
 
 # Build fat JAR (standalone executable)
-./gradlew :vajra-worker:shadowJar
+./gradlew :vajrapulse-worker:shadowJar
 
 # Run tests
 ./gradlew test
@@ -1345,23 +1345,23 @@ zipStorePath=wrapper/dists
 
 ```
 build/
-├── vajra-api/
+├── vajrapulse-api/
 │   └── libs/
-│       ├── vajra-api-1.0.0.jar              (~15 KB)
-│       ├── vajra-api-1.0.0-sources.jar
-│       └── vajra-api-1.0.0-javadoc.jar
-├── vajra-core/
+│       ├── vajrapulse-api-1.0.0.jar              (~15 KB)
+│       ├── vajrapulse-api-1.0.0-sources.jar
+│       └── vajrapulse-api-1.0.0-javadoc.jar
+├── vajrapulse-core/
 │   └── libs/
-│       ├── vajra-core-1.0.0.jar             (~200 KB)
-│       ├── vajra-core-1.0.0-sources.jar
-│       └── vajra-core-1.0.0-javadoc.jar
-├── vajra-exporter-console/
+│       ├── vajrapulse-core-1.0.0.jar             (~200 KB)
+│       ├── vajrapulse-core-1.0.0-sources.jar
+│       └── vajrapulse-core-1.0.0-javadoc.jar
+├── vajrapulse-exporter-console/
 │   └── libs/
-│       └── vajra-exporter-console-1.0.0.jar (~30 KB)
-└── vajra-worker/
+│       └── vajrapulse-exporter-console-1.0.0.jar (~30 KB)
+└── vajrapulse-worker/
     └── libs/
-        ├── vajra-worker-1.0.0.jar           (~50 KB, thin)
-        └── vajra-worker-1.0.0-all.jar       (~2 MB, fat JAR)
+        ├── vajrapulse-worker-1.0.0.jar           (~50 KB, thin)
+        └── vajrapulse-worker-1.0.0-all.jar       (~2 MB, fat JAR)
 ```
 
 ---
@@ -1374,8 +1374,8 @@ build/
 ```java
 package com.example.test;
 
-import com.vajra.api.Task;
-import com.vajra.api.TaskResult;
+import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskResult;
 import java.net.http.*;
 import java.net.URI;
 
@@ -1425,13 +1425,13 @@ public class MyAPITest implements Task {
 **Compile and Run**:
 ```bash
 # Compile task
-javac -cp vajra-api-1.0.0.jar MyAPITest.java -d build/
+javac -cp vajrapulse-api-1.0.0.jar MyAPITest.java -d build/
 
 # Create task JAR
 jar cf my-test.jar -C build/ .
 
 # Run test
-java -jar vajra-worker-1.0.0-all.jar run \
+java -jar vajrapulse-worker-1.0.0-all.jar run \
   --task-class com.example.test.MyAPITest \
   --task-jar my-test.jar \
   --tps 100 \
@@ -1444,9 +1444,9 @@ java -jar vajra-worker-1.0.0-all.jar run \
 ```java
 package com.example.test;
 
-import com.vajra.api.Task;
-import com.vajra.api.TaskResult;
-import com.vajra.api.annotation.VirtualThreads;
+import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskResult;
+import com.vajrapulse.api.annotation.VirtualThreads;
 import com.zaxxer.hikari.*;
 import java.sql.*;
 import java.util.Random;
@@ -1503,9 +1503,9 @@ public class DatabaseTest implements Task {
 ```java
 package com.example.test;
 
-import com.vajra.api.Task;
-import com.vajra.api.TaskResult;
-import com.vajra.api.annotation.PlatformThreads;
+import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskResult;
+import com.vajrapulse.api.annotation.PlatformThreads;
 import javax.crypto.*;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -1543,14 +1543,14 @@ public class EncryptionTest implements Task {
 ### Total Dependency Tree
 
 ```
-vajra-worker-all.jar (~1.5 MB)
-├── vajra-api (0 dependencies)
-├── vajra-core
+vajrapulse-worker-all.jar (~1.5 MB)
+├── vajrapulse-api (0 dependencies)
+├── vajrapulse-core
 │   ├── micrometer-core:1.12.0 (~400 KB, includes HdrHistogram)
 │   │   └── HdrHistogram:2.1.12 (bundled)
 │   └── slf4j-api:2.0.9 (~60 KB)
-├── vajra-exporter-console (0 new dependencies)
-└── vajra-worker
+├── vajrapulse-exporter-console (0 new dependencies)
+└── vajrapulse-worker
     ├── picocli:4.7.5 (~200 KB)
     └── slf4j-simple:2.0.9 (~15 KB, runtime)
 
@@ -1595,11 +1595,11 @@ Core Dependencies (Required):
   ────────────────────────────
   Subtotal              675 KB
 
-Vajra Code:
-  vajra-api              15 KB
-  vajra-core            100 KB
-  vajra-exporter         20 KB
-  vajra-worker           30 KB
+VajraPulse Code:
+  vajrapulse-api              15 KB
+  vajrapulse-core            100 KB
+  vajrapulse-exporter         20 KB
+  vajrapulse-worker           30 KB
   ────────────────────────────
   Subtotal              165 KB
 
@@ -1700,12 +1700,12 @@ executor.submit(new TaskExecutionCallable(task, iteration, collector));
 ### Unit Tests (Spock Framework)
 
 ```groovy
-// vajra-core/src/test/groovy/com/vajra/core/engine/TaskExecutorSpec.groovy
-package com.vajra.core.engine
+// vajrapulse-core/src/test/groovy/com/vajra/core/engine/TaskExecutorSpec.groovy
+package com.vajrapulse.core.engine
 
-import com.vajra.api.Task
-import com.vajra.api.TaskResult
-import com.vajra.core.metrics.MetricsCollector
+import com.vajrapulse.api.Task
+import com.vajrapulse.api.TaskResult
+import com.vajrapulse.core.metrics.MetricsCollector
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -1780,10 +1780,10 @@ class TaskExecutorSpec extends Specification {
     }
 }
 
-// vajra-core/src/test/groovy/com/vajra/core/engine/RateControllerSpec.groovy
-package com.vajra.core.engine
+// vajrapulse-core/src/test/groovy/com/vajra/core/engine/RateControllerSpec.groovy
+package com.vajrapulse.core.engine
 
-import com.vajra.api.pattern.StaticLoad
+import com.vajrapulse.api.pattern.StaticLoad
 import spock.lang.Specification
 import java.time.Duration
 
@@ -1817,8 +1817,8 @@ class RateControllerSpec extends Specification {
     }
 }
 
-// vajra-api/src/test/groovy/com/vajra/api/pattern/RampUpToMaxLoadSpec.groovy
-package com.vajra.api.pattern
+// vajrapulse-api/src/test/groovy/com/vajra/api/pattern/RampUpToMaxLoadSpec.groovy
+package com.vajrapulse.api.pattern
 
 import spock.lang.Specification
 import java.time.Duration
@@ -1849,11 +1849,11 @@ class RampUpToMaxLoadSpec extends Specification {
 ### Integration Tests (Spock)
 
 ```groovy
-// vajra-worker/src/test/groovy/com/vajra/worker/WorkerIntegrationSpec.groovy
-package com.vajra.worker
+// vajrapulse-worker/src/test/groovy/com/vajra/worker/WorkerIntegrationSpec.groovy
+package com.vajrapulse.worker
 
-import com.vajra.api.Task
-import com.vajra.api.TaskResult
+import com.vajrapulse.api.Task
+import com.vajrapulse.api.TaskResult
 import spock.lang.Specification
 import spock.lang.TempDir
 import java.nio.file.Path
@@ -1865,7 +1865,7 @@ class WorkerIntegrationSpec extends Specification {
     
     def "should execute full load test with static load"() {
         given: "a simple test task"
-        def taskClass = "com.vajra.worker.test.DummyTask"
+        def taskClass = "com.vajrapulse.worker.test.DummyTask"
         def app = new WorkerApplication(
             taskClass,
             null,  // classpath
@@ -1890,7 +1890,7 @@ class WorkerIntegrationSpec extends Specification {
     def "should support ramp-up load pattern"() {
         given: "a worker with ramp-up"
         def app = new WorkerApplication(
-            "com.vajra.worker.test.DummyTask",
+            "com.vajrapulse.worker.test.DummyTask",
             null,
             100,   // target 100 TPS
             10000, // 10 seconds
@@ -1929,9 +1929,9 @@ class DummyTask implements Task {
 ```java
 package com.example.http;
 
-import com.vajra.api.Task;
-import com.vajra.api.TaskResult;
-import com.vajra.api.annotation.VirtualThreads;
+import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskResult;
+import com.vajrapulse.api.annotation.VirtualThreads;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -2006,7 +2006,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.vajra:vajra-api:1.0.0'
+    implementation 'com.vajrapulse:vajrapulse-api:1.0.0'
 }
 
 application {
@@ -2015,14 +2015,14 @@ application {
 
 tasks.register('runLoadTest', JavaExec) {
     group = 'application'
-    description = 'Run the load test using Vajra worker'
+    description = 'Run the load test using VajraPulse worker'
     
     classpath = files(
         configurations.runtimeClasspath,
         jar.archiveFile
     )
     
-    mainClass = 'com.vajra.worker.WorkerMain'
+    mainClass = 'com.vajrapulse.worker.WorkerMain'
     
     args = [
         'run',
@@ -2041,7 +2041,7 @@ tasks.register('runLoadTest', JavaExec) {
 ```markdown
 # HTTP Load Test Example
 
-Tests a public REST API using Vajra framework.
+Tests a public REST API using VajraPulse framework.
 
 ## Build
 
@@ -2056,7 +2056,7 @@ Tests a public REST API using Vajra framework.
 ./gradlew runLoadTest
 
 # Or manually
-java -jar ../../vajra-worker/build/libs/vajra-worker-1.0.0-all.jar run \
+java -jar ../../vajrapulse-worker/build/libs/vajrapulse-worker-1.0.0-all.jar run \
   --task-class com.example.http.ApiLoadTest \
   --task-jar build/libs/http-load-test-1.0.0.jar \
   --tps 50 \
@@ -2067,7 +2067,7 @@ java -jar ../../vajra-worker/build/libs/vajra-worker-1.0.0-all.jar run \
 
 ```bash
 # Static load: 100 TPS for 60 seconds
-java -jar vajra-worker-all.jar run \
+java -jar vajrapulse-worker-all.jar run \
   --task-class com.example.http.ApiLoadTest \
   --task-jar http-load-test.jar \
   --load-pattern static \
@@ -2075,7 +2075,7 @@ java -jar vajra-worker-all.jar run \
   --duration 60s
 
 # Ramp up: 0 to 200 TPS over 30 seconds
-java -jar vajra-worker-all.jar run \
+java -jar vajrapulse-worker-all.jar run \
   --task-class com.example.http.ApiLoadTest \
   --task-jar http-load-test.jar \
   --load-pattern ramp-up \
@@ -2083,7 +2083,7 @@ java -jar vajra-worker-all.jar run \
   --ramp-duration 30s
 
 # Ramp up then sustain: 0 to 200 TPS over 30s, then hold for 5 minutes
-java -jar vajra-worker-all.jar run \
+java -jar vajrapulse-worker-all.jar run \
   --task-class com.example.http.ApiLoadTest \
   --task-jar http-load-test.jar \
   --load-pattern ramp-sustain \
@@ -2099,9 +2099,9 @@ java -jar vajra-worker-all.jar run \
 ```java
 package com.example.db;
 
-import com.vajra.api.Task;
-import com.vajra.api.TaskResult;
-import com.vajra.api.annotation.VirtualThreads;
+import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskResult;
+import com.vajrapulse.api.annotation.VirtualThreads;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
@@ -2177,7 +2177,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.vajra:vajra-api:1.0.0'
+    implementation 'com.vajrapulse:vajrapulse-api:1.0.0'
     implementation 'com.zaxxer:HikariCP:5.1.0'
     implementation 'org.postgresql:postgresql:42.7.1'
 }
@@ -2189,9 +2189,9 @@ dependencies {
 ```java
 package com.example.cpu;
 
-import com.vajra.api.Task;
-import com.vajra.api.TaskResult;
-import com.vajra.api.annotation.PlatformThreads;
+import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskResult;
+import com.vajrapulse.api.annotation.PlatformThreads;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
@@ -2259,7 +2259,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.vajra:vajra-api:1.0.0'
+    implementation 'com.vajrapulse:vajrapulse-api:1.0.0'
 }
 ```
 
@@ -2269,7 +2269,7 @@ dependencies {
 
 ### Overview
 
-Java 25 (expected March 2025) with GraalVM Native Image compilation could produce standalone executables with significant benefits and trade-offs for Vajra.
+Java 25 (expected March 2025) with GraalVM Native Image compilation could produce standalone executables with significant benefits and trade-offs for VajraPulse.
 
 ### Benefits of Native Compilation
 
@@ -2401,7 +2401,7 @@ public class MyTask implements Task { ... }
 
 #### Phase 1: JVM Only (Current)
 ```
-vajra-worker-1.0.0-all.jar    (~1.5 MB, requires Java 21+)
+vajrapulse-worker-1.0.0-all.jar    (~1.5 MB, requires Java 21+)
 ```
 **Pros**: 
 - Full virtual threads support
@@ -2413,12 +2413,12 @@ vajra-worker-1.0.0-all.jar    (~1.5 MB, requires Java 21+)
 
 ```
 distributions/
-├── vajra-worker-1.0.0-all.jar           (JVM, universal)
-├── vajra-worker-linux-amd64             (Native, ~60 MB)
-├── vajra-worker-linux-arm64             (Native, ~55 MB)
-├── vajra-worker-macos-amd64             (Native, ~65 MB)
-├── vajra-worker-macos-arm64             (Native, ~58 MB)
-└── vajra-worker-windows-amd64.exe       (Native, ~70 MB)
+├── vajrapulse-worker-1.0.0-all.jar           (JVM, universal)
+├── vajrapulse-worker-linux-amd64             (Native, ~60 MB)
+├── vajrapulse-worker-linux-arm64             (Native, ~55 MB)
+├── vajrapulse-worker-macos-amd64             (Native, ~65 MB)
+├── vajrapulse-worker-macos-arm64             (Native, ~58 MB)
+└── vajrapulse-worker-windows-amd64.exe       (Native, ~70 MB)
 ```
 
 ### Native Image Build Configuration
@@ -2432,8 +2432,8 @@ plugins {
 graalvmNative {
     binaries {
         main {
-            imageName = 'vajra-worker'
-            mainClass = 'com.vajra.worker.WorkerMain'
+            imageName = 'vajrapulse-worker'
+            mainClass = 'com.vajrapulse.worker.WorkerMain'
             
             buildArgs.add('--no-fallback')
             buildArgs.add('--enable-preview')  // For virtual threads
@@ -2472,7 +2472,7 @@ tasks.register('buildAllNative') {
 ```bash
 # Run with tracing agent to generate configs
 java -agentlib:native-image-agent=config-output-dir=src/main/resources/META-INF/native-image \
-  -jar vajra-worker-all.jar run \
+  -jar vajrapulse-worker-all.jar run \
   --task-class com.example.MyTask \
   --tps 10 \
   --duration 5s
@@ -2506,7 +2506,7 @@ java -agentlib:native-image-agent=config-output-dir=src/main/resources/META-INF/
 4. Limited build resources (< 8 GB RAM)
 5. Need maximum runtime flexibility
 
-#### 🎯 **Recommended Strategy for Vajra**
+#### 🎯 **Recommended Strategy for VajraPulse**
 
 **Phase 1** (Current): JVM-only distribution
 - Focus on core functionality
@@ -2521,16 +2521,16 @@ java -agentlib:native-image-agent=config-output-dir=src/main/resources/META-INF/
 **Hybrid Approach**:
 ```bash
 # Development & max flexibility
-java -jar vajra-worker-all.jar ...
+java -jar vajrapulse-worker-all.jar ...
 
 # Production & CI/CD
-./vajra-worker-native ...
+./vajrapulse-worker-native ...
 
 # Container (choose based on needs)
 FROM eclipse-temurin:21-jre-alpine     # JVM: 150 MB
 # OR
 FROM scratch                            # Native: 60 MB
-COPY vajra-worker-native /vajra
+COPY vajrapulse-worker-native /vajra
 ```
 
 ---
@@ -2540,7 +2540,7 @@ COPY vajra-worker-native /vajra
 ### README.md
 
 ```markdown
-# Vajra Load Testing Framework
+# VajraPulse Load Testing Framework
 
 Java 21-based load testing framework with virtual threads support.
 
@@ -2550,7 +2550,7 @@ Java 21-based load testing framework with virtual threads support.
 
 ```gradle
 dependencies {
-    implementation 'com.vajra:vajra-api:1.0.0'
+    implementation 'com.vajrapulse:vajrapulse-api:1.0.0'
 }
 ```
 
@@ -2568,7 +2568,7 @@ public class MyTest implements Task {
 ### 3. Run Test
 
 ```bash
-java -jar vajra-worker-1.0.0-all.jar run \
+java -jar vajrapulse-worker-1.0.0-all.jar run \
   --task-class com.example.MyTest \
   --tps 100 \
   --duration 60s
@@ -2593,13 +2593,13 @@ Apache 2.0
 ## Implementation Timeline
 
 ### Week 1: Core Foundation
-- **Day 1-2**: vajra-api module + tests
-- **Day 3-4**: vajra-core execution engine
-- **Day 5**: vajra-core metrics collection
+- **Day 1-2**: vajrapulse-api module + tests
+- **Day 3-4**: vajrapulse-core execution engine
+- **Day 5**: vajrapulse-core metrics collection
 
 ### Week 2: Integration
-- **Day 1-2**: vajra-exporter-console
-- **Day 3-4**: vajra-worker CLI
+- **Day 1-2**: vajrapulse-exporter-console
+- **Day 3-4**: vajrapulse-worker CLI
 - **Day 5**: Integration tests
 
 ### Week 3: Polish & Documentation
@@ -2623,7 +2623,7 @@ Apache 2.0
 
 ✅ **Non-Functional**:
 - Fat JAR < 2 MB
-- vajra-api JAR < 20 KB
+- vajrapulse-api JAR < 20 KB
 - Startup time < 1 second (JVM) or < 50ms (native)
 - Supports 10,000+ TPS on commodity hardware
 - Memory efficient (virtual threads enable massive concurrency)

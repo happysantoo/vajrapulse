@@ -1,10 +1,10 @@
-# Vajra - Java 21 Load Testing Framework
+# VajraPulse - Java 21 Load Testing Framework
 
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Gradle](https://img.shields.io/badge/Gradle-9.0-blue.svg)](https://gradle.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
-Vajra is a modern, high-performance load testing framework built for Java 21, leveraging **virtual threads** for massive concurrency with minimal resource overhead.
+VajraPulse is a modern, high-performance load testing framework built for Java 21, leveraging **virtual threads** for massive concurrency with minimal resource overhead.
 
 ## Features
 
@@ -30,8 +30,8 @@ Vajra is a modern, high-performance load testing framework built for Java 21, le
 ```
 
 This produces:
-- Core modules in `vajra-*/build/libs/`
-- **Fat JAR**: `vajra-worker/build/libs/vajra-worker-1.0.0-SNAPSHOT-all.jar` (1.6MB)
+- Core modules in `vajrapulse-*/build/libs/`
+- **Fat JAR**: `vajrapulse-worker/build/libs/vajrapulse-worker-1.0.0-SNAPSHOT-all.jar` (1.6MB)
 
 ### Run Example
 
@@ -40,8 +40,8 @@ cd examples/http-load-test
 gradle build
 
 # Run load test: 10 TPS for 10 seconds
-java -cp "build/libs/http-load-test.jar:../../vajra-worker/build/libs/vajra-worker-1.0.0-SNAPSHOT-all.jar" \
-  com.vajra.worker.VajraWorker \
+java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajrapulse-worker-1.0.0-SNAPSHOT-all.jar" \
+  com.vajrapulse.worker.VajraPulseWorker \
   com.example.http.HttpLoadTest \
   --mode static \
   --tps 10 \
@@ -52,24 +52,24 @@ java -cp "build/libs/http-load-test.jar:../../vajra-worker/build/libs/vajra-work
 
 ```
 vajra/
-├── vajra-api/              # Public API (ZERO dependencies)
+├── vajrapulse-api/              # Public API (ZERO dependencies)
 │   ├── Task                # Main interface
 │   ├── TaskResult          # Sealed Success/Failure
 │   ├── LoadPattern         # Rate control abstraction
 │   ├── @VirtualThreads     # I/O-bound tasks
 │   └── @PlatformThreads    # CPU-bound tasks
 │
-├── vajra-core/             # Execution engine
+├── vajrapulse-core/             # Execution engine
 │   ├── ExecutionEngine     # Main orchestrator
 │   ├── TaskExecutor        # Instrumented wrapper
 │   ├── RateController      # TPS pacing
 │   └── MetricsCollector    # Micrometer integration
 │
-├── vajra-exporter-console/ # Console output
+├── vajrapulse-exporter-console/ # Console output
 │   └── ConsoleMetricsExporter
 │
-└── vajra-worker/           # CLI application
-    └── VajraWorker         # Main entry point
+└── vajrapulse-worker/           # CLI application
+    └── VajraPulseWorker         # Main entry point
 ```
 
 ## Creating a Task
@@ -77,7 +77,7 @@ vajra/
 ### 1. Implement the Task Interface
 
 ```java
-import com.vajra.api.*;
+import com.vajrapulse.api.*;
 
 @VirtualThreads  // Use virtual threads for I/O
 public class MyHttpTask implements Task {
@@ -132,7 +132,7 @@ public class DefaultTask implements Task { }
 ### 3. Run Your Test
 
 ```bash
-java -jar vajra-worker-all.jar \
+java -jar vajrapulse-worker-all.jar \
   com.yourpackage.MyHttpTask \
   --mode static \
   --tps 100 \
@@ -170,7 +170,7 @@ Ramp to max, then sustain:
 
 ## Metrics
 
-Vajra uses **Micrometer** for metrics collection. Output includes:
+VajraPulse uses **Micrometer** for metrics collection. Output includes:
 
 ```
 ========================================
@@ -194,7 +194,7 @@ Failure Latency (ms):
 
 ## Module Details
 
-### vajra-api (0 dependencies)
+### vajrapulse-api (0 dependencies)
 
 Pure API module with no external dependencies:
 
@@ -207,7 +207,7 @@ Pure API module with no external dependencies:
 **Dependency**: None
 **Size**: ~15 KB
 
-### vajra-core (3 dependencies)
+### vajrapulse-core (3 dependencies)
 
 Execution engine with minimal dependencies:
 
@@ -223,21 +223,21 @@ Execution engine with minimal dependencies:
 
 **Size**: ~150 KB + dependencies
 
-### vajra-exporter-console
+### vajrapulse-exporter-console
 
 Console metrics exporter:
 
 - `ConsoleMetricsExporter` - Formatted table output
 
-**Dependencies**: vajra-api, vajra-core, slf4j-api
+**Dependencies**: vajrapulse-api, vajrapulse-core, slf4j-api
 
 **Size**: ~30 KB
 
-### vajra-worker (Fat JAR)
+### vajrapulse-worker (Fat JAR)
 
 CLI application bundling everything:
 
-- `VajraWorker` - Main entry point with picocli
+- `VajraPulseWorker` - Main entry point with picocli
 - All modules bundled
 - slf4j-simple for logging
 
@@ -247,7 +247,7 @@ CLI application bundling everything:
 
 1. **Java 21 First** - Use all modern features (records, sealed types, virtual threads)
 2. **Minimal Dependencies** - Every dependency must be justified
-3. **Zero API Dependencies** - vajra-api has NO external dependencies
+3. **Zero API Dependencies** - vajrapulse-api has NO external dependencies
 4. **Micrometer for Metrics** - Industry-standard, not direct HdrHistogram
 5. **Explicit over Implicit** - No magic, clear execution model
 6. **Performance Conscious** - No lambdas in hot paths, pre-sized collections
@@ -255,7 +255,7 @@ CLI application bundling everything:
 
 ## Performance
 
-With Java 21 virtual threads, Vajra can handle:
+With Java 21 virtual threads, VajraPulse can handle:
 
 - **10,000+ TPS** on typical hardware
 - **Millions of concurrent requests** with minimal memory
@@ -275,8 +275,8 @@ Run all tests:
 ```
 
 Test results:
-- vajra-api: 12 tests ✅
-- vajra-core: 11 tests ✅
+- vajrapulse-api: 12 tests ✅
+- vajrapulse-core: 11 tests ✅
 - **Total**: 23 tests, all passing
 
 ## Examples
@@ -314,4 +314,4 @@ Built with:
 
 ---
 
-**Vajra** (वज्र) - Sanskrit for "thunderbolt" - symbolizing the power and speed of this load testing framework.
+**VajraPulse** (वज्र) - Sanskrit for "thunderbolt" - symbolizing the power and speed of this load testing framework.

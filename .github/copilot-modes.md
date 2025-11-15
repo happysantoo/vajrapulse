@@ -1,13 +1,13 @@
-# Vajra Custom Chat Modes
+# VajraPulse Custom Chat Modes
 
 ## @task-developer - For Implementing Task SDK
 
 **Purpose**: Help developers implement load test tasks correctly
 
-**Scope**: vajra-api module, user-facing Task implementations
+**Scope**: vajrapulse-api module, user-facing Task implementations
 
 **Context**: 
-- You are helping someone implement a Task for Vajra load testing framework
+- You are helping someone implement a Task for VajraPulse load testing framework
 - Focus on clean, simple implementations
 - Tasks should be thread-safe
 - User controls all test data generation
@@ -64,9 +64,9 @@ public class MyTask implements Task {
 
 ## @core-developer - For Core Engine Implementation
 
-**Purpose**: Implement vajra-core execution engine components
+**Purpose**: Implement vajrapulse-core execution engine components
 
-**Scope**: vajra-core module, execution engine, metrics
+**Scope**: vajrapulse-core module, execution engine, metrics
 
 **Context**:
 - Building high-performance execution engine
@@ -220,7 +220,7 @@ class MyClassSpec extends Specification {
 
 **Purpose**: Implement command-line interface with picocli
 
-**Scope**: vajra-worker module, CLI commands
+**Scope**: vajrapulse-worker module, CLI commands
 
 **Context**:
 - Using picocli 4.7.5
@@ -243,7 +243,7 @@ class MyClassSpec extends Specification {
     name = "run",
     description = "Run a load test",
     mixinStandardHelpOptions = true,
-    version = "Vajra 1.0.0"
+    version = "VajraPulse 1.0.0"
 )
 public class RunCommand implements Callable<Integer> {
     
@@ -360,7 +360,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.vajra:vajra-api:1.0.0'
+    implementation 'com.vajrapulse:vajrapulse-api:1.0.0'
     // Example-specific dependencies
 }
 
@@ -381,7 +381,7 @@ tasks.register('runLoadTest', JavaExec) {
 
 ## @architect - For Architecture Decisions
 
-**Purpose**: Make architectural decisions consistent with Vajra design
+**Purpose**: Make architectural decisions consistent with VajraPulse design
 
 **Scope**: Cross-cutting concerns, module design
 
@@ -400,10 +400,10 @@ tasks.register('runLoadTest', JavaExec) {
 → If all yes, consider new module
 
 **2. Which module does this belong to?**
-- vajra-api: Public interfaces, zero deps
-- vajra-core: Execution engine, metrics
-- vajra-exporter-*: Specific exporters
-- vajra-worker: CLI and application
+- vajrapulse-api: Public interfaces, zero deps
+- vajrapulse-core: Execution engine, metrics
+- vajrapulse-exporter-*: Specific exporters
+- vajrapulse-worker: CLI and application
 
 **3. Should I add a dependency?**
 ```

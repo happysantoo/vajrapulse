@@ -1,8 +1,8 @@
-# Vajra Test Framework - Design Documentation
+# VajraPulse Test Framework - Design Documentation
 
 ## Executive Summary
 
-Vajra is a distributed load testing framework designed for high-scale performance testing with flexible deployment models. Built on **Java 21**, it leverages **virtual threads** for massive concurrency with minimal resource overhead, while also supporting platform threads for CPU-intensive workloads. The framework supports both orchestrated and peer-to-peer distributed testing modes with comprehensive metrics collection and reporting.
+VajraPulse is a distributed load testing framework designed for high-scale performance testing with flexible deployment models. Built on **Java 21**, it leverages **virtual threads** for massive concurrency with minimal resource overhead, while also supporting platform threads for CPU-intensive workloads. The framework supports both orchestrated and peer-to-peer distributed testing modes with comprehensive metrics collection and reporting.
 
 ### Technology Stack
 - **Language**: Java 21
@@ -441,7 +441,7 @@ The foundation of test execution - a lean, extensible interface for defining tes
     ┌─────────────────────────────────────┐
     │        Command Line Interface        │
     │                                      │
-    │  $ vajra-worker run \               │
+    │  $ vajrapulse-worker run \               │
     │      --tps 5000 \                   │
     │      --duration 300s \              │
     │      --ramp-up 60s \                │
@@ -1229,7 +1229,7 @@ Worker Process
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vajra-orchestrator
+  name: vajrapulse-orchestrator
 spec:
   replicas: 2  # HA setup
   template:
@@ -1243,7 +1243,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vajra-worker
+  name: vajrapulse-worker
 spec:
   replicas: 5  # Can be auto-scaled
   template:
@@ -1257,12 +1257,12 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: vajra-worker-hpa
+  name: vajrapulse-worker-hpa
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: vajra-worker
+    name: vajrapulse-worker
   minReplicas: 5
   maxReplicas: 50
   metrics:
@@ -1365,9 +1365,9 @@ jobs:
         run: |
           mvn clean package
           
-      - name: Run Vajra Worker
+      - name: Run VajraPulse Worker
         run: |
-          java -jar vajra-worker.jar run \
+          java -jar vajrapulse-worker.jar run \
             --task-jar target/my-load-test.jar \
             --task-class com.example.MyAPITest \
             --tps 1000 \
@@ -1448,4 +1448,4 @@ jobs:
 
 ---
 
-**This design provides a solid foundation for building Vajra with maximum flexibility and extensibility while maintaining simplicity where needed.**
+**This design provides a solid foundation for building VajraPulse with maximum flexibility and extensibility while maintaining simplicity where needed.**

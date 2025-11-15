@@ -48,13 +48,13 @@ new RampUpToMaxLoad(200.0, Duration.ofSeconds(30), Duration.ofMinutes(5))
 **CLI Usage**:
 ```bash
 # Static
-java -jar vajra-worker-all.jar run --load-pattern static --tps 100 --duration 60s
+java -jar vajrapulse-worker-all.jar run --load-pattern static --tps 100 --duration 60s
 
 # Ramp-up
-java -jar vajra-worker-all.jar run --load-pattern ramp-up --tps 200 --ramp-duration 30s
+java -jar vajrapulse-worker-all.jar run --load-pattern ramp-up --tps 200 --ramp-duration 30s
 
 # Ramp-sustain
-java -jar vajra-worker-all.jar run --load-pattern ramp-sustain --tps 200 \
+java -jar vajrapulse-worker-all.jar run --load-pattern ramp-sustain --tps 200 \
   --ramp-duration 30s --sustain-duration 5m
 ```
 
@@ -163,7 +163,7 @@ graalvmNative {
 
 **Final dependency tree**:
 ```
-vajra-worker-all.jar (~1.5 MB)
+vajrapulse-worker-all.jar (~1.5 MB)
 ├── micrometer-core:1.12.0    (~400 KB)
 ├── slf4j-api:2.0.9           (~60 KB)
 ├── picocli:4.7.5             (~200 KB)
@@ -243,7 +243,7 @@ public interface LoadPattern {
 
 ### Build Fat JAR
 ```bash
-./gradlew :vajra-worker:shadowJar
+./gradlew :vajrapulse-worker:shadowJar
 ```
 
 ### Run Tests (Spock)
@@ -274,7 +274,7 @@ cd examples/http-load-test
 ## Next Steps
 
 1. ✅ Implementation plan updated
-2. 🔲 Begin implementation (Week 1: vajra-api)
+2. 🔲 Begin implementation (Week 1: vajrapulse-api)
 3. 🔲 Set up CI/CD with Gradle 9
 4. 🔲 Implement load patterns
 5. 🔲 Write Spock tests
@@ -288,10 +288,10 @@ vajra/
 ├── DESIGN.md                           # Architecture design
 ├── PHASE1_IMPLEMENTATION_PLAN.md       # Detailed implementation
 ├── IMPLEMENTATION_UPDATES.md           # This file
-├── vajra-api/                          # Zero-dependency SDK
-├── vajra-core/                         # Engine with Micrometer
-├── vajra-exporter-console/             # Console output
-├── vajra-worker/                       # CLI application
+├── vajrapulse-api/                          # Zero-dependency SDK
+├── vajrapulse-core/                         # Engine with Micrometer
+├── vajrapulse-exporter-console/             # Console output
+├── vajrapulse-worker/                       # CLI application
 └── examples/
     ├── http-load-test/                 # HTTP example
     ├── database-test/                  # Database example

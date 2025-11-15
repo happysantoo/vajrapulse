@@ -1,4 +1,4 @@
-# Vajra Code Quality Rules & Patterns
+# VajraPulse Code Quality Rules & Patterns
 
 ## Automated Quality Checks
 
@@ -8,31 +8,31 @@ These rules should be enforced by CI/CD and caught by Copilot during development
 
 ## 1. Module Dependency Rules
 
-### vajra-api: ZERO Dependencies
+### vajrapulse-api: ZERO Dependencies
 
 ```java
-// ✅ ALLOWED in vajra-api
+// ✅ ALLOWED in vajrapulse-api
 public interface Task {
     TaskResult execute() throws Exception;
 }
 
 public record ExecutionConfig(int tps, Duration duration) {}
 
-// ❌ FORBIDDEN in vajra-api
+// ❌ FORBIDDEN in vajrapulse-api
 import org.slf4j.Logger;  // NO external dependencies
 import io.micrometer.core.instrument.Timer;  // NO
 ```
 
 **Check Command**:
 ```bash
-./gradlew :vajra-api:dependencies --configuration runtimeClasspath
+./gradlew :vajrapulse-api:dependencies --configuration runtimeClasspath
 # Output should show: "No dependencies"
 ```
 
-### vajra-core: Limited Dependencies
+### vajrapulse-core: Limited Dependencies
 
 **ALLOWED**:
-- vajra-api (api dependency)
+- vajrapulse-api (api dependency)
 - micrometer-core
 - slf4j-api
 
@@ -44,7 +44,7 @@ import io.micrometer.core.instrument.Timer;  // NO
 - Any -impl or -runtime JARs
 
 ```gradle
-// ❌ FORBIDDEN in vajra-core
+// ❌ FORBIDDEN in vajrapulse-core
 dependencies {
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'  // NO
     implementation 'org.postgresql:postgresql:42.7.1'    // NO
@@ -347,7 +347,7 @@ private final Histogram histogram = new Histogram(...);
 
 // ✅ REQUIRED - Micrometer Timer
 import io.micrometer.core.instrument.Timer;
-private final Timer timer = Timer.builder("vajra.execution.duration")
+private final Timer timer = Timer.builder("vajrapulse.execution.duration")
     .publishPercentileHistogram()
     .register(registry);
 ```
@@ -356,12 +356,12 @@ private final Timer timer = Timer.builder("vajra.execution.duration")
 
 ```java
 // ✅ REQUIRED - All lowercase, dot-separated
-"vajra.execution.duration"
-"vajra.execution.total"
-"vajra.task.active"
+"vajrapulse.execution.duration"
+"vajrapulse.execution.total"
+"vajrapulse.task.active"
 
 // ❌ FORBIDDEN
-"VajraExecutionDuration"  // No camelCase
+"VajraPulseExecutionDuration"  // No camelCase
 "vajra_execution_duration"  // No underscores
 "execution.duration"  // Missing 'vajra' prefix
 ```
@@ -370,14 +370,14 @@ private final Timer timer = Timer.builder("vajra.execution.duration")
 
 ```java
 // ✅ REQUIRED - Dimension tags
-Timer.builder("vajra.execution.duration")
+Timer.builder("vajrapulse.execution.duration")
     .tag("status", "success")  // success/failure
     .tag("task", taskClass)    // task class name
     .tag("worker", workerId)   // worker identifier
     .register(registry);
 
 // ❌ FORBIDDEN - No tags (loses dimensions)
-Timer.builder("vajra.execution.duration")
+Timer.builder("vajrapulse.execution.duration")
     .register(registry);
 ```
 
@@ -585,18 +585,18 @@ Each package must have `package-info.java`:
 
 ```java
 /**
- * Core execution engine for Vajra load testing framework.
+ * Core execution engine for VajraPulse load testing framework.
  * 
  * <p>This package contains the main orchestration components:
  * <ul>
- *   <li>{@link com.vajra.core.engine.ExecutionEngine} - Main coordinator
- *   <li>{@link com.vajra.core.engine.TaskExecutor} - Task wrapper with metrics
- *   <li>{@link com.vajra.core.engine.RateController} - TPS control
+ *   <li>{@link com.vajrapulse.core.engine.ExecutionEngine} - Main coordinator
+ *   <li>{@link com.vajrapulse.core.engine.TaskExecutor} - Task wrapper with metrics
+ *   <li>{@link com.vajrapulse.core.engine.RateController} - TPS control
  * </ul>
  * 
- * @see com.vajra.api
+ * @see com.vajrapulse.api
  */
-package com.vajra.core.engine;
+package com.vajrapulse.core.engine;
 ```
 
 ---
@@ -643,10 +643,10 @@ dependencies {
 # .git/hooks/pre-commit
 
 # Check API has zero dependencies
-echo "Checking vajra-api dependencies..."
-API_DEPS=$(./gradlew :vajra-api:dependencies --configuration runtimeClasspath | grep -v "No dependencies")
+echo "Checking vajrapulse-api dependencies..."
+API_DEPS=$(./gradlew :vajrapulse-api:dependencies --configuration runtimeClasspath | grep -v "No dependencies")
 if [ -n "$API_DEPS" ]; then
-    echo "ERROR: vajra-api must have zero runtime dependencies"
+    echo "ERROR: vajrapulse-api must have zero runtime dependencies"
     exit 1
 fi
 
@@ -688,7 +688,7 @@ jobs:
       
       - name: Validate Dependencies
         run: |
-          ./gradlew :vajra-api:dependencies --configuration runtimeClasspath | grep "No dependencies"
+          ./gradlew :vajrapulse-api:dependencies --configuration runtimeClasspath | grep "No dependencies"
       
       - name: Run Tests
         run: ./gradlew test
@@ -697,11 +697,11 @@ jobs:
         run: ./gradlew jacocoTestCoverageVerification
       
       - name: Build Fat JAR
-        run: ./gradlew :vajra-worker:shadowJar
+        run: ./gradlew :vajrapulse-worker:shadowJar
       
       - name: Check JAR Size
         run: |
-          SIZE=$(stat -f%z build/libs/vajra-worker-*-all.jar)
+          SIZE=$(stat -f%z build/libs/vajrapulse-worker-*-all.jar)
           if [ $SIZE -gt 2000000 ]; then
             echo "ERROR: Fat JAR exceeds 2MB limit"
             exit 1
@@ -714,7 +714,7 @@ jobs:
 
 Before committing code, verify:
 
-- [ ] No dependencies added to vajra-api
+- [ ] No dependencies added to vajrapulse-api
 - [ ] Micrometer used for all metrics (not direct HdrHistogram)
 - [ ] No lambdas in hot paths
 - [ ] No synchronized blocks with virtual threads
