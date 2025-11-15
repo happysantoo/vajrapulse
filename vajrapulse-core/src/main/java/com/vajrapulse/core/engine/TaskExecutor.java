@@ -13,9 +13,16 @@ import org.slf4j.LoggerFactory;
  *   <li>Timing each execution</li>
  *   <li>Catching exceptions and wrapping in TaskResult.Failure</li>
  *   <li>Creating ExecutionMetrics for each iteration</li>
+ *   <li>Logging detailed execution traces for debugging</li>
  * </ul>
  * 
  * <p>Tasks focus on business logic; this executor handles the cross-cutting concerns.
+ * 
+ * <p>Enable trace logging to see detailed execution information:
+ * <pre>
+ * # In src/main/resources/simplelogger.properties:
+ * org.slf4j.simpleLogger.log.com.vajrapulse.core.engine.TaskExecutor=TRACE
+ * </pre>
  */
 public final class TaskExecutor {
     private static final Logger logger = LoggerFactory.getLogger(TaskExecutor.class);
@@ -35,6 +42,7 @@ public final class TaskExecutor {
      *   <li>Calls task.execute()</li>
      *   <li>Catches any exceptions</li>
      *   <li>Captures end time</li>
+     *   <li>Logs execution details at TRACE level</li>
      *   <li>Returns ExecutionMetrics</li>
      * </ol>
      * 
@@ -47,14 +55,38 @@ public final class TaskExecutor {
         
         try {
             result = task.execute();
+            long endNanos = System.nanoTime();
+            long durationNanos = endNanos - startNanos;
+            
+            // TRACE logging for manual validation
+            if (logger.isTraceEnabled()) {
+                logger.trace("Iteration={} Status=SUCCESS Duration={}ns ({}ms)", 
+                    iteration, 
+                    durationNanos,
+                    String.format("%.3f", durationNanos / 1_000_000.0));
+            }
+            
+            return new ExecutionMetrics(startNanos, endNanos, result, iteration);
+            
         } catch (Exception e) {
+            long endNanos = System.nanoTime();
+            long durationNanos = endNanos - startNanos;
+            
             logger.debug("Task execution failed at iteration {}: {}", 
                 iteration, e.getMessage());
+            
+            // TRACE logging for failures
+            if (logger.isTraceEnabled()) {
+                logger.trace("Iteration={} Status=FAILURE Duration={}ns ({}ms) Error={}", 
+                    iteration, 
+                    durationNanos,
+                    String.format("%.3f", durationNanos / 1_000_000.0),
+                    e.getMessage());
+            }
+            
             result = TaskResult.failure(e);
+            return new ExecutionMetrics(startNanos, endNanos, result, iteration);
         }
-        
-        long endNanos = System.nanoTime();
-        return new ExecutionMetrics(startNanos, endNanos, result, iteration);
     }
     
     /**

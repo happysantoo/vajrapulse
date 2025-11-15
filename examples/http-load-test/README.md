@@ -159,12 +159,29 @@ java -cp ... com.vajrapulse.worker.VajraPulseWorker \
 ## Expected Output
 
 ```
+╔════════════════════════════════════════════════════════╗
+║        VajraPulse HTTP Load Test Example              ║
+╚════════════════════════════════════════════════════════╝
+
+Configuration:
+  Task:     HttpLoadTest
+  Pattern:  Static Load
+  TPS:      100
+  Duration: 30 seconds
+  Endpoint: https://httpbin.org/delay/0
+
+Starting load test...
+
+[Live metrics updates every 5 seconds...]
+
+Load test completed!
+
 ========================================
-Load Test Results
+HTTP Load Test Results
 ========================================
-Total Executions:    100
-Successful:          98 (98.0%)
-Failed:              2 (2.0%)
+Total Executions:    3000
+Successful:          2985 (99.5%)
+Failed:              15 (0.5%)
 
 Success Latency (ms):
   P50:  125.45
@@ -172,6 +189,105 @@ Success Latency (ms):
   P99:  389.12
 
 ========================================
+```
+
+## Debugging and Manual Validation
+
+### Enable Trace Logging
+
+To see detailed per-request logs for manual validation of percentile calculations:
+
+1. **Edit** `src/main/resources/simplelogger.properties`
+2. **Uncomment** this line:
+   ```properties
+   org.slf4j.simpleLogger.log.com.vajrapulse.core.engine.TaskExecutor=TRACE
+   ```
+3. **Run** the test with low TPS for manageable output:
+   ```bash
+   # Modify HttpLoadTestRunner.java to use lower TPS temporarily:
+   # LoadPattern loadPattern = new StaticLoad(10.0, Duration.ofSeconds(10));
+   ./gradlew run
+   ```
+
+### Trace Log Format
+
+With TRACE logging enabled, you'll see output like:
+```
+2025-11-15 10:30:45.123 TRACE TaskExecutor - Iteration=0 Status=SUCCESS Duration=245678912ns (245.679ms)
+2025-11-15 10:30:45.234 TRACE TaskExecutor - Iteration=1 Status=SUCCESS Duration=156234567ns (156.235ms)
+2025-11-15 10:30:45.345 TRACE TaskExecutor - Iteration=2 Status=SUCCESS Duration=189456789ns (189.457ms)
+...
+```
+
+### Manual Percentile Validation
+
+1. **Extract durations** from trace logs:
+   ```bash
+   ./gradlew run 2>&1 | grep "TRACE TaskExecutor" | awk '{print $9}' | sed 's/ms)//' | sed 's/(//g' > durations.txt
+   ```
+
+2. **Sort and calculate** percentiles:
+   ```bash
+   # Sort durations
+   sort -n durations.txt > sorted_durations.txt
+   
+   # Count total
+   total=$(wc -l < sorted_durations.txt)
+   
+   # Calculate P50 (50th percentile)
+   p50_line=$((total * 50 / 100))
+   p50=$(sed -n "${p50_line}p" sorted_durations.txt)
+   
+   # Calculate P95 (95th percentile)
+   p95_line=$((total * 95 / 100))
+   p95=$(sed -n "${p95_line}p" sorted_durations.txt)
+   
+   # Calculate P99 (99th percentile)
+   p99_line=$((total * 99 / 100))
+   p99=$(sed -n "${p99_line}p" sorted_durations.txt)
+   
+   echo "Manual Calculations:"
+   echo "P50: ${p50}ms"
+   echo "P95: ${p95}ms"
+   echo "P99: ${p99}ms"
+   ```
+
+3. **Compare** with VajraPulse reported metrics
+
+⚠️ **WARNING**: TRACE logging generates massive output at high TPS! Only use for validation with:
+- Low TPS (10-50 TPS)
+- Short duration (10-30 seconds)
+- Total requests < 1000
+
+### Python Script for Validation
+
+For easier validation, use this Python script:
+
+```python
+#!/usr/bin/env python3
+import sys
+import re
+
+durations = []
+with open(sys.argv[1] if len(sys.argv) > 1 else 'durations.txt', 'r') as f:
+    for line in f:
+        match = re.search(r'\((\d+\.\d+)ms\)', line)
+        if match:
+            durations.append(float(match.group(1)))
+
+durations.sort()
+n = len(durations)
+
+print(f"Total requests: {n}")
+print(f"P50: {durations[int(n * 0.50)]:.2f}ms")
+print(f"P95: {durations[int(n * 0.95)]:.2f}ms")
+print(f"P99: {durations[int(n * 0.99)]:.2f}ms")
+```
+
+Save as `validate_percentiles.py` and run:
+```bash
+./gradlew run 2>&1 | tee test_output.log
+python3 validate_percentiles.py test_output.log
 ```
 
 ## Customization
