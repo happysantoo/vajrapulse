@@ -5,7 +5,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleConfig;
-import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
 import com.vajrapulse.core.engine.ExecutionMetrics;
 
 import java.time.Duration;

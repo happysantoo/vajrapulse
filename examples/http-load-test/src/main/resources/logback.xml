@@ -36,6 +36,8 @@
     
     <!-- VajraPulse framework logging -->
     <logger name="com.vajrapulse" level="INFO"/>
+
+    <logger name="com.vajrapulse.core.engine.TaskExecutor" level="TRACE"/>
     
     <!-- Example application logging -->
     <logger name="com.example" level="INFO"/>

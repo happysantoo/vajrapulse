@@ -612,6 +612,7 @@ Before submitting code, verify:
 - [ ] **No compiler warnings** - build with `-Xlint:deprecation` enabled
 - [ ] No deprecated API usage - check Micrometer/JDK deprecations
 - [ ] Remove all unused imports
+- [ ] Make sure to check for the latest versions against mvnrepository.com or maven central before including as a dependency on the build.gradle
 
 
 ## Questions to Ask Copilot

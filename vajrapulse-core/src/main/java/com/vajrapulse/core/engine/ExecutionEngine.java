@@ -43,7 +43,6 @@ public final class ExecutionEngine implements AutoCloseable {
     private final LoadPattern loadPattern;
     private final MetricsCollector metricsCollector;
     private final ExecutorService executor;
-    private final boolean useVirtualThreads;
     
     public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector) {
         this.task = task;
@@ -53,7 +52,6 @@ public final class ExecutionEngine implements AutoCloseable {
         // Determine thread strategy from annotations
         if (task.getClass().isAnnotationPresent(VirtualThreads.class)) {
             this.executor = Executors.newVirtualThreadPerTaskExecutor();
-            this.useVirtualThreads = true;
             logger.info("Using virtual threads for task: {}", task.getClass().getSimpleName());
         } else if (task.getClass().isAnnotationPresent(PlatformThreads.class)) {
             PlatformThreads annotation = task.getClass().getAnnotation(PlatformThreads.class);
@@ -62,13 +60,11 @@ public final class ExecutionEngine implements AutoCloseable {
                 poolSize = Runtime.getRuntime().availableProcessors();
             }
             this.executor = Executors.newFixedThreadPool(poolSize);
-            this.useVirtualThreads = false;
             logger.info("Using platform threads (pool size: {}) for task: {}", 
                 poolSize, task.getClass().getSimpleName());
         } else {
             // Default to virtual threads
             this.executor = Executors.newVirtualThreadPerTaskExecutor();
-            this.useVirtualThreads = true;
             logger.info("No thread annotation found, defaulting to virtual threads for task: {}", 
                 task.getClass().getSimpleName());
         }
@@ -100,7 +96,6 @@ public final class ExecutionEngine implements AutoCloseable {
             TaskExecutor taskExecutor = new TaskExecutor(task);
             RateController rateController = new RateController(loadPattern);
             
-            long testStartMillis = System.currentTimeMillis();
             long testDurationMillis = loadPattern.getDuration().toMillis();
             long iteration = 0;
             

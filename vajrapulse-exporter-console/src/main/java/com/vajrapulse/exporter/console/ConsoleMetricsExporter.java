@@ -5,7 +5,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.PrintStream;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Exports metrics to the console in a human-readable format.
