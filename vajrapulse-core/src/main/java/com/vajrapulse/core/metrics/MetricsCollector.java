@@ -51,6 +51,7 @@ public final class MetricsCollector {
         this.successTimer = Timer.builder("vajrapulse.execution.duration")
             .tag("status", "success")
             .description("Successful task execution duration")
+            .publishPercentiles(0.5, 0.95, 0.99)  // Explicitly publish these percentiles
             .publishPercentileHistogram()
             .percentilePrecision(2)
             .serviceLevelObjectives(
@@ -68,6 +69,7 @@ public final class MetricsCollector {
         this.failureTimer = Timer.builder("vajrapulse.execution.duration")
             .tag("status", "failure")
             .description("Failed task execution duration")
+            .publishPercentiles(0.5, 0.95, 0.99)  // Explicitly publish these percentiles
             .publishPercentileHistogram()
             .percentilePrecision(2)
             .serviceLevelObjectives(
