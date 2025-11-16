@@ -33,16 +33,26 @@ processors:
 exporters:
   # Debug exporter - prints metrics to stdout (replaces deprecated logging)
   debug:
-    verbosity: detailed
+    verbosity: normal
+    sampling_initial: 5
+    sampling_thereafter: 100
 
   # File exporter - writes metrics to JSON file for validation
   file:
     path: /tmp/otel-collector-data/metrics.json
     format: json
 
-  # Prometheus exporter for scraping
+  # Prometheus exporter - exposes metrics for Prometheus to scrape
   prometheus:
     endpoint: "0.0.0.0:8889"
+    # Don't add namespace prefix since metrics already have vajrapulse prefix
+    const_labels:
+      collector: otel
+    # Enable OpenMetrics format
+    enable_open_metrics: true
+    # Add resource attributes as labels
+    resource_to_telemetry_conversion:
+      enabled: true
 
 service:
   pipelines:

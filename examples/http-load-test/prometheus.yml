@@ -1,0 +1,27 @@
+# Prometheus configuration for VajraPulse observability stack
+
+global:
+  scrape_interval: 5s
+  scrape_timeout: 4s
+  evaluation_interval: 5s
+  external_labels:
+    cluster: vajrapulse-local
+    environment: dev
+
+# Scrape configurations
+scrape_configs:
+  # OpenTelemetry Collector metrics (VajraPulse metrics)
+  - job_name: 'otel-collector'
+    static_configs:
+      - targets: ['otel-collector:8889']
+        labels:
+          service: vajrapulse
+          component: load-test
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: prometheus
+          component: monitoring
