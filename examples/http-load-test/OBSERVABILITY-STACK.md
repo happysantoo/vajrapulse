@@ -283,6 +283,35 @@ examples/http-load-test/
    - Visit http://localhost:3000/dashboards
    - Import `grafana/dashboards/vajrapulse-dashboard.json`
 
+### Prometheus Datasource UID / Panel Errors
+If panels show "prometheus datasource does not exist" or Grafana logs contain `Data source not found`:
+1. Ensure the provisioning file sets an explicit UID:
+   ```yaml
+   datasources:
+     - name: Prometheus
+       uid: prometheus
+       type: prometheus
+       url: http://prometheus:9090
+       isDefault: true
+   ```
+2. Remove existing Grafana data volume so the UID takes effect (Grafana persists previously provisioned datasource without UID):
+   ```bash
+   docker compose down -v
+   docker compose up -d
+   ```
+3. Confirm via API:
+   ```bash
+   docker exec grafana wget -qO- http://localhost:3000/api/datasources | jq '.[] | {name,uid}'
+   ```
+4. Dashboard JSON should reference `"uid": "prometheus"` in each panel datasource block. Adjust if different.
+
+### Histogram Metric Naming
+Prometheus sanitizes metric names (dots become underscores) and appends `_milliseconds_bucket` for latency histogram buckets. Use queries like:
+```promql
+histogram_quantile(0.95, rate(vajrapulse_latency_success_milliseconds_bucket[5m]))
+```
+If buckets are missing, verify the exporter configuration and that histograms are registered (look for `_bucket`, `_sum`, `_count` variants with the `vajrapulse_latency_success_milliseconds` prefix).
+
 ### Port Conflicts
 
 If ports are already in use:
