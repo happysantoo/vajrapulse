@@ -8,6 +8,8 @@ import com.vajrapulse.api.Task;
 import com.vajrapulse.core.engine.ExecutionEngine;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.core.metrics.MetricsCollector;
+import com.vajrapulse.core.tracing.Tracing;
+import com.vajrapulse.core.logging.StructuredLogger;
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,6 +104,15 @@ public final class VajraPulseWorker implements Callable<Integer> {
         String runId = java.util.UUID.randomUUID().toString();
         MetricsCollector metricsCollector = MetricsCollector.createWithRunId(runId, new double[]{0.50, 0.95, 0.99});
         logger.info("Run initialized runId={}", runId);
+        // Initialize tracing if enabled
+        Tracing.initIfEnabled(runId);
+        StructuredLogger.info(VajraPulseWorker.class, "start", java.util.Map.of(
+            "run_id", runId,
+            "task", taskClassName,
+            "mode", mode,
+            "tps", tps,
+            "duration", duration
+        ));
         
         // Run load test
         try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector)) {
@@ -113,6 +124,12 @@ public final class VajraPulseWorker implements Callable<Integer> {
         AggregatedMetrics metrics = metricsCollector.snapshot();
         ConsoleMetricsExporter exporter = new ConsoleMetricsExporter();
         exporter.export("Load Test Results (runId=" + runId + ")", metrics);
+        StructuredLogger.info(VajraPulseWorker.class, "finished", java.util.Map.of(
+            "run_id", runId,
+            "total", metrics.totalExecutions(),
+            "success", metrics.successCount(),
+            "failure", metrics.failureCount()
+        ));
         
         return 0;
     }

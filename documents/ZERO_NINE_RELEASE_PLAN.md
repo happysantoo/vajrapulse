@@ -54,6 +54,8 @@ Deferred (post-0.9):
 - Logging: JSON layout; fields: timestamp, level, message, run_id, task_id, iteration, trace_id, span_id, status.
 - Run ID: generated UUID at start; exposed via config snapshot log & metrics tag `run_id`.
 	- Current status: integrated into `MetricsCollector` and `ExecutionEngine` (worker now creates collector with `run_id`). Pipeline builder supports explicit runId.
+	- Tracing: Minimal OpenTelemetry tracing added (env enable `VAJRAPULSE_TRACE_ENABLED=true`); spans for each execution with attributes (run_id, iteration, status). Scenario span placeholder to follow.
+	- Structured Logging: Added lightweight `StructuredLogger` producing JSON lines for run start/finish; execution-level JSON planned post refinement.
 
 ### 4.3 Load Patterns
 Implemented / To Implement records (Java 21) for `LoadPattern`:

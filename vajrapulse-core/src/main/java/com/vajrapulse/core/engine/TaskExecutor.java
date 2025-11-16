@@ -2,6 +2,8 @@ package com.vajrapulse.core.engine;
 
 import com.vajrapulse.api.Task;
 import com.vajrapulse.api.TaskResult;
+import com.vajrapulse.core.tracing.Tracing;
+import io.opentelemetry.api.trace.Span;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +54,11 @@ public final class TaskExecutor {
     public ExecutionMetrics executeWithMetrics(long iteration) {
         long startNanos = System.nanoTime();
         TaskResult result;
+        Span execSpan = Span.getInvalid();
+        // Parent scenario span not tracked here yet; execution spans stand-alone for now.
+        if (Tracing.isEnabled()) {
+            execSpan = Tracing.startExecutionSpan(null, "unknown", iteration); // runId injected by caller soon
+        }
         
         try {
             result = task.execute();
@@ -66,6 +73,8 @@ public final class TaskExecutor {
                     String.format("%.3f", durationNanos / 1_000_000.0));
             }
             
+            Tracing.markSuccess(execSpan);
+            execSpan.end();
             return new ExecutionMetrics(startNanos, endNanos, result, iteration);
             
         } catch (Exception e) {
@@ -85,6 +94,8 @@ public final class TaskExecutor {
             }
             
             result = TaskResult.failure(e);
+            Tracing.markFailure(execSpan, e);
+            execSpan.end();
             return new ExecutionMetrics(startNanos, endNanos, result, iteration);
         }
     }
