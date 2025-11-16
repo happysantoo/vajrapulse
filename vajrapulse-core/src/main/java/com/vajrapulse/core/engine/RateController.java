@@ -1,8 +1,6 @@
 package com.vajrapulse.core.engine;
 
 import com.vajrapulse.api.LoadPattern;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
@@ -17,7 +15,6 @@ import java.util.concurrent.locks.LockSupport;
  * <p>Thread-safe for concurrent rate control.
  */
 public final class RateController {
-    private static final Logger logger = LoggerFactory.getLogger(RateController.class);
     
     private final LoadPattern loadPattern;
     private final long testStartNanos;

@@ -18,6 +18,7 @@ dependencies {
     implementation(project(":vajrapulse-api"))
     implementation(project(":vajrapulse-core"))
     implementation(project(":vajrapulse-exporter-console"))
+    implementation(project(":vajrapulse-worker"))
     
     // Logback for logging (replaces slf4j-simple)
     runtimeOnly("ch.qos.logback:logback-classic:1.5.21")

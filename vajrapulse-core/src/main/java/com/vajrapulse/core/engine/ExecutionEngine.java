@@ -159,4 +159,27 @@ public final class ExecutionEngine implements AutoCloseable {
             return null;
         }
     }
+
+    /**
+     * Convenience static helper to execute a task with a load pattern and metrics
+     * collection without manually managing the engine lifecycle.
+     * <p>Usage:
+     * <pre>{@code
+     * AggregatedMetrics metrics = ExecutionEngine.execute(task, loadPattern, collector);
+     * }</pre>
+     * @param task the task to execute
+     * @param loadPattern the load pattern definition
+     * @param metricsCollector metrics collector instance
+     * @return aggregated metrics snapshot after execution
+     * @throws Exception if setup or cleanup fails
+     */
+    public static com.vajrapulse.core.metrics.AggregatedMetrics execute(
+            Task task,
+            LoadPattern loadPattern,
+            MetricsCollector metricsCollector) throws Exception {
+        try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector)) {
+            engine.run();
+        }
+        return metricsCollector.snapshot();
+    }
 }

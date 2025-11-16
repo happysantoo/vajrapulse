@@ -8,23 +8,15 @@ package com.vajrapulse.core.metrics;
  * @param totalExecutions total number of executions
  * @param successCount number of successful executions
  * @param failureCount number of failed executions
- * @param successP50 50th percentile latency for successes (nanos)
- * @param successP95 95th percentile latency for successes (nanos)
- * @param successP99 99th percentile latency for successes (nanos)
- * @param failureP50 50th percentile latency for failures (nanos)
- * @param failureP95 95th percentile latency for failures (nanos)
- * @param failureP99 99th percentile latency for failures (nanos)
+ * @param successPercentiles map of percentile→latency nanos for successes
+ * @param failurePercentiles map of percentile→latency nanos for failures
  */
 public record AggregatedMetrics(
     long totalExecutions,
     long successCount,
     long failureCount,
-    double successP50,
-    double successP95,
-    double successP99,
-    double failureP50,
-    double failureP95,
-    double failureP99
+    java.util.Map<Double, Double> successPercentiles,
+    java.util.Map<Double, Double> failurePercentiles
 ) {
     /**
      * Calculates the success rate as a percentage.

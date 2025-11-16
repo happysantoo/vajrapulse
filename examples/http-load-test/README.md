@@ -27,7 +27,7 @@ There are three ways to run this example:
 ./gradlew run
 ```
 
-This uses the `HttpLoadTestRunner` class which programmatically configures the load test.
+This uses the `HttpLoadTestRunner` class which now leverages the high-level `MetricsPipeline` abstraction for minimal boilerplate.
 
 #### Option 2: Using VajraPulse Worker CLI
 
@@ -49,14 +49,8 @@ java -cp "build/libs/http-load-test-1.0.0-SNAPSHOT.jar:../../vajrapulse-worker/b
   --duration 30s
 ```
 
-#### Option 3: Using the Task's Main Method
-
-```bash
-# Run the main method in HttpLoadTest directly
-./gradlew build
-java -cp "build/libs/http-load-test-1.0.0-SNAPSHOT.jar:../../vajrapulse-core/build/libs/vajrapulse-core-1.0.0-SNAPSHOT.jar:../../vajrapulse-api/build/libs/vajrapulse-api-1.0.0-SNAPSHOT.jar:../../vajrapulse-exporter-console/build/libs/vajrapulse-exporter-console-1.0.0-SNAPSHOT.jar" \
-  com.example.http.HttpLoadTest
-```
+#### Option 3: (Deprecated) Direct Task Main
+Direct invocation via a task `main` method has been deprecated in favor of the `MetricsPipeline` or the worker CLI. Keep tests focused on task logic only.
 
 ## Code Walkthrough
 
@@ -103,28 +97,27 @@ public class HttpLoadTest implements Task {
 
 ## Programmatic Configuration
 
-The `HttpLoadTestRunner` shows how to configure and run tests programmatically:
+The `HttpLoadTestRunner` now uses the `MetricsPipeline` for concise orchestration:
 
 ```java
-// Create task
 HttpLoadTest task = new HttpLoadTest();
+LoadPattern pattern = new StaticLoad(100.0, Duration.ofSeconds(30));
 
-// Configure load pattern
-LoadPattern loadPattern = new StaticLoad(100.0, Duration.ofSeconds(30));
+MetricsPipeline pipeline = MetricsPipeline.builder()
+  .addExporter(new ConsoleMetricsExporter())       // final + live exports
+  .withPeriodic(Duration.ofSeconds(5))             // live updates every 5s
+  .build();                                        // creates MetricsCollector internally
 
-// Create metrics collector
-MetricsCollector metricsCollector = new MetricsCollector();
-
-// Run test
-try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector)) {
-    engine.run();
-}
-
-// Export results
-AggregatedMetrics metrics = metricsCollector.snapshot();
-ConsoleMetricsExporter exporter = new ConsoleMetricsExporter();
-exporter.export("Results", metrics);
+AggregatedMetrics results = pipeline.run(task, pattern);
 ```
+
+Internals handled by the pipeline:
+1. Task setup/cleanup
+2. Thread strategy annotation resolution
+3. Rate-controlled submission
+4. Metrics collection & aggregation
+5. Optional periodic live snapshot export
+6. Final snapshot export
 
 ## Load Patterns via CLI
 

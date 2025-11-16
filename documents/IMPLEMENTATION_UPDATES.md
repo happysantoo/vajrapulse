@@ -2,6 +2,24 @@
 
 ## Changes Made
 
+### 0. ✅ Metrics Abstraction & Pipeline (Recent)
+- Introduced `MetricsExporter` interface in `vajrapulse-core` for pluggable output strategies.
+- Moved `PeriodicMetricsReporter` into core and generalized to accept any exporter (no hard dependency on console formatting).
+- Added `MetricsPipeline` (in worker layer) providing a high-level builder API:
+    - `.addExporter(new ConsoleMetricsExporter())`
+    - `.withPeriodic(Duration.ofSeconds(5))`
+    - `.withImmediateLive(true)` to fire the first live snapshot immediately (optional)
+    - `.withPercentiles(...)` to configure latency percentiles
+    - `.withSloBuckets(Duration...)` to configure histogram SLOs
+    - `.withCollector(existingCollector)` (optional; auto-creates if omitted)
+    - `.run(task, loadPattern)` returns `AggregatedMetrics`.
+- Builder validation: `withCollector` must not be combined with `withPercentiles`/`withSloBuckets` (throws `IllegalStateException`).
+- Percentiles are normalized to 3 decimal places (rounded), deduplicated, and sorted.
+- Console exporter prints percentiles sorted ascending with labels up to 3 decimals (e.g., `P97.125`).
+- Simplified example (`HttpLoadTestRunner`) to use pipeline instead of manual engine + reporter wiring.
+- Added static convenience `ExecutionEngine.execute(task, pattern, collector)` for direct programmatic one-off execution.
+- Removed deprecated pattern of providing a `main` method in task classes; orchestration belongs to pipeline or CLI.
+
 ### 1. ✅ Consolidated Thread Pool Annotation
 - **Before**: Separate `@ThreadPoolSize` annotation
 - **After**: `poolSize` parameter in `@PlatformThreads` annotation
@@ -161,15 +179,16 @@ graalvmNative {
 
 ### 9. ✅ Updated Dependencies
 
-**Final dependency tree**:
+**Final dependency tree (updated logging)**:
 ```
-vajrapulse-worker-all.jar (~1.5 MB)
-├── micrometer-core:1.12.0    (~400 KB)
-├── slf4j-api:2.0.9           (~60 KB)
-├── picocli:4.7.5             (~200 KB)
-└── slf4j-simple:2.0.9        (~15 KB)
+vajrapulse-worker-all.jar (~1.6 MB)
+├── micrometer-core:1.12.x      (~400 KB)
+├── slf4j-api:2.0.x             (~60 KB)
+├── logback-classic:1.5.x       (~300 KB)
+├── picocli:4.7.x               (~200 KB)
+└── (internal modules)          (~600 KB aggregated)
 
-Total: ~1.5 MB
+Total: ~1.6 MB
 ```
 
 **Size reduction**: 2 MB → 1.5 MB (using minimize in shadowJar)
@@ -219,6 +238,15 @@ public interface LoadPattern {
 - No lambda overhead in hot path
 
 ### ✅ Concrete Classes over Lambdas
+
+### ✅ High-Level MetricsPipeline Orchestration
+**Decision**: Provide ergonomic builder for common test flows.
+**Benefits**:
+1. Eliminates repetitive boilerplate in examples & user code.
+2. Keeps core engine minimal; pipeline resides in worker layer.
+3. Encourages consistent metrics export & live reporting usage.
+4. Extensible—additional exporters (JSON, Prometheus push, etc.) can plug in without engine changes.
+**Trade-off**: Slight abstraction layer; advanced users can still use `ExecutionEngine` directly.
 
 **Decision**: Minimize lambda usage, especially in hot paths
 
@@ -270,16 +298,23 @@ cd examples/http-load-test
 2. **Ramp-Up**: Change from single `--ramp-up` to `--load-pattern ramp-up --ramp-duration`
 3. **Dependencies**: Update to use Micrometer (already included, no code changes needed)
 4. **Tests**: Consider migrating to Spock for better readability
+5. **Programmatic Use**: Replace manual `ExecutionEngine` + custom reporter wiring with:
+```java
+MetricsPipeline.builder()
+    .addExporter(new ConsoleMetricsExporter())
+    .withPeriodic(Duration.ofSeconds(5))
+    .build()
+    .run(task, pattern);
+```
 
 ## Next Steps
 
 1. ✅ Implementation plan updated
-2. 🔲 Begin implementation (Week 1: vajrapulse-api)
-3. 🔲 Set up CI/CD with Gradle 9
-4. 🔲 Implement load patterns
-5. 🔲 Write Spock tests
-6. 🔲 Create example projects
-7. 🔲 Evaluate native compilation (Phase 2)
+2. ✅ Core metrics abstraction & pipeline
+3. 🔲 Spock test for `MetricsPipeline` (exporter invocation validation)
+4. 🔲 Additional exporters (e.g., structured JSON) – optional
+5. 🔲 CI/CD integration (future phase)
+6. 🔲 Native compilation evaluation (Phase 2)
 
 ## File Structure
 

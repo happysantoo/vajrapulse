@@ -2,11 +2,9 @@ package com.example.http;
 
 import com.vajrapulse.api.LoadPattern;
 import com.vajrapulse.api.StaticLoad;
-import com.vajrapulse.core.engine.ExecutionEngine;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
-import com.vajrapulse.core.metrics.MetricsCollector;
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
-import com.vajrapulse.exporter.console.PeriodicMetricsReporter;
+import com.vajrapulse.worker.pipeline.MetricsPipeline;
 
 import java.time.Duration;
 
@@ -30,8 +28,14 @@ public final class HttpLoadTestRunner {
         // Configure load pattern: 100 TPS for 30 seconds
         LoadPattern loadPattern = new StaticLoad(100.0, Duration.ofSeconds(30));
         
-        // Create metrics collector
-        MetricsCollector metricsCollector = new MetricsCollector();
+        // Build pipeline (creates its own MetricsCollector)
+        MetricsPipeline pipeline = MetricsPipeline.builder()
+            .addExporter(new ConsoleMetricsExporter())
+            .withPeriodic(Duration.ofSeconds(5))
+            .withPercentiles(0.1,0.2,0.5,0.75,0.9,0.95,0.99)
+            .build();
+
+  
         
         // Display test configuration
         System.out.println("╔════════════════════════════════════════════════════════╗");
@@ -47,27 +51,8 @@ public final class HttpLoadTestRunner {
         System.out.println("Starting load test...");
         System.out.println();
         
-        // Start periodic reporting every 5 seconds
-        try (PeriodicMetricsReporter reporter = new PeriodicMetricsReporter(
-                metricsCollector, Duration.ofSeconds(5))) {
-            
-            reporter.start();
-            
-            // Run load test
-            try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector)) {
-                engine.run();
-            }
-            
-            // Reporter will auto-close and stop
-        }
+        AggregatedMetrics metrics = pipeline.run(task, loadPattern);
         
-        System.out.println();
-        System.out.println("Load test completed!");
-        System.out.println();
-        
-        // Export results to console
-        AggregatedMetrics metrics = metricsCollector.snapshot();
-        ConsoleMetricsExporter exporter = new ConsoleMetricsExporter();
-        exporter.export("HTTP Load Test Results", metrics);
+        System.out.println("Load test completed!\n");
     }
 }
