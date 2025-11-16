@@ -623,6 +623,7 @@ Before submitting code, verify:
 - [ ] No deprecated API usage - check Micrometer/JDK deprecations
 - [ ] Remove all unused imports
 - [ ] Make sure to check for the latest versions against mvnrepository.com or maven central before including as a dependency on the build.gradle
+- [ ] **No duplicate classes or logic** - search project for duplicate class names and redundant implementations before committing
 
 
 ## Questions to Ask Copilot

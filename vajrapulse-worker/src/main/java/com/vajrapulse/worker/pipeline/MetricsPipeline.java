@@ -17,8 +17,21 @@ import java.util.List;
 /**
  * High-level convenience pipeline bundling execution, metrics collection, optional
  * periodic reporting and final export. Lives in worker layer to keep core minimal.
+ * 
+ * <p>Implements {@link AutoCloseable} to manage exporter lifecycle automatically.
+ * When used with try-with-resources, exporters are closed after final metrics are exported.
+ * 
+ * <p>Example:
+ * <pre>{@code
+ * try (MetricsPipeline pipeline = MetricsPipeline.builder()
+ *         .addExporter(new OpenTelemetryExporter(...))
+ *         .withPeriodic(Duration.ofSeconds(5))
+ *         .build()) {
+ *     pipeline.run(task, loadPattern);
+ * } // Automatic final export and cleanup
+ * }</pre>
  */
-public final class MetricsPipeline {
+public final class MetricsPipeline implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(MetricsPipeline.class);
 
     private final MetricsCollector collector;
@@ -52,14 +65,38 @@ public final class MetricsPipeline {
             }
         }
 
+        // Export final metrics to all exporters
         for (MetricsExporter exporter : exporters) {
             try {
                 exporter.export("Final Results", finalSnapshot);
             } catch (Exception e) {
-                logger.error("Exporter {} failed", exporter.getClass().getSimpleName(), e);
+                logger.error("Exporter {} failed during final export", exporter.getClass().getSimpleName(), e);
             }
         }
         return finalSnapshot;
+    }
+
+    /**
+     * Closes all AutoCloseable exporters.
+     * 
+     * <p>This method is automatically called when using try-with-resources.
+     * It ensures exporters are properly closed after final metrics have been exported.
+     * 
+     * <p>Note: Final metrics export happens in {@link #run(Task, LoadPattern)} before
+     * this method is called, guaranteeing all metrics are flushed before cleanup.
+     */
+    @Override
+    public void close() {
+        for (MetricsExporter exporter : exporters) {
+            if (exporter instanceof AutoCloseable closeable) {
+                try {
+                    closeable.close();
+                    logger.debug("Closed exporter: {}", exporter.getClass().getSimpleName());
+                } catch (Exception e) {
+                    logger.error("Failed to close exporter: {}", exporter.getClass().getSimpleName(), e);
+                }
+            }
+        }
     }
 
     public static final class Builder {
