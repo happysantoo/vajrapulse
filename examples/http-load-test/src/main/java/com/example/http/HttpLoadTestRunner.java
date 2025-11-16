@@ -28,15 +28,6 @@ public final class HttpLoadTestRunner {
         // Configure load pattern: 100 TPS for 30 seconds
         LoadPattern loadPattern = new StaticLoad(100.0, Duration.ofSeconds(30));
         
-        // Build pipeline (creates its own MetricsCollector)
-        MetricsPipeline pipeline = MetricsPipeline.builder()
-            .addExporter(new ConsoleMetricsExporter())
-            .withPeriodic(Duration.ofSeconds(5))
-            .withPercentiles(0.1,0.2,0.5,0.75,0.9,0.95,0.99)
-            .build();
-
-  
-        
         // Display test configuration
         System.out.println("╔════════════════════════════════════════════════════════╗");
         System.out.println("║        VajraPulse HTTP Load Test Example              ║");
@@ -51,7 +42,15 @@ public final class HttpLoadTestRunner {
         System.out.println("Starting load test...");
         System.out.println();
         
-        AggregatedMetrics metrics = pipeline.run(task, loadPattern);
+        // Pipeline automatically manages lifecycle
+        try (MetricsPipeline pipeline = MetricsPipeline.builder()
+            .addExporter(new ConsoleMetricsExporter())
+            .withPeriodic(Duration.ofSeconds(5))
+            .withPercentiles(0.1,0.2,0.5,0.75,0.9,0.95,0.99)
+            .build()) {
+            
+            pipeline.run(task, loadPattern);
+        } // Automatic cleanup
         
         System.out.println("Load test completed!\n");
     }

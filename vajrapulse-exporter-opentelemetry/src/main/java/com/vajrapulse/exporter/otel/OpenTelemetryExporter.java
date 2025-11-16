@@ -32,7 +32,10 @@ import java.util.concurrent.TimeUnit;
  * <pre>{@code
  * OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
  *     .endpoint("http://localhost:4318/v1/metrics")
- *     .serviceName("my-load-test")
+ *     .resourceAttributes(Map.of(
+ *         "service.name", "my-load-test",
+ *         "service.version", "1.0.0"
+ *     ))
  *     .build();
  * 
  * MetricsPipeline.builder()
@@ -48,7 +51,6 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     private static final Logger logger = LoggerFactory.getLogger(OpenTelemetryExporter.class);
     
     private final String endpoint;
-    private final String serviceName;
     private final SdkMeterProvider meterProvider;
     private final Meter meter;
     private final Map<String, String> additionalHeaders;
@@ -57,7 +59,6 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     
     private OpenTelemetryExporter(Builder builder) {
         this.endpoint = builder.endpoint;
-        this.serviceName = builder.serviceName;
         this.additionalHeaders = Map.copyOf(builder.additionalHeaders);
         this.resourceAttributes = Map.copyOf(builder.resourceAttributes);
         this.protocol = builder.protocol;
@@ -70,12 +71,8 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
             .setInterval(Duration.ofSeconds(builder.exportIntervalSeconds))
             .build();
         
-        // Create meter provider with service resource
-        var attributesBuilder = Attributes.builder()
-            .put(AttributeKey.stringKey("service.name"), serviceName)
-            .put(AttributeKey.stringKey("service.version"), "1.0.0");
-        
-        // Add custom resource attributes
+        // Create meter provider with resource attributes
+        var attributesBuilder = Attributes.builder();
         resourceAttributes.forEach((key, value) ->
             attributesBuilder.put(AttributeKey.stringKey(key), value)
         );
@@ -87,8 +84,8 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         
         this.meter = meterProvider.get("vajrapulse");
         
-        logger.info("OpenTelemetry exporter initialized - endpoint: {}, service: {}, protocol: {}", 
-            endpoint, serviceName, protocol);
+        logger.info("OpenTelemetry exporter initialized - endpoint: {}, protocol: {}", 
+            endpoint, protocol);
     }
     
     /**
@@ -250,7 +247,6 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
      */
     public static final class Builder {
         private String endpoint = "http://localhost:4318";
-        private String serviceName = "vajrapulse-load-test";
         private int exportIntervalSeconds = 10;
         private Map<String, String> additionalHeaders = Map.of();
         private Map<String, String> resourceAttributes = Map.of();
@@ -264,17 +260,6 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
          */
         public Builder endpoint(String endpoint) {
             this.endpoint = endpoint;
-            return this;
-        }
-        
-        /**
-         * Sets the service name for resource attribution.
-         * 
-         * @param serviceName the service name
-         * @return this builder
-         */
-        public Builder serviceName(String serviceName) {
-            this.serviceName = serviceName;
             return this;
         }
         
@@ -315,6 +300,8 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
          * <p>Example:
          * <pre>{@code
          * builder.resourceAttributes(Map.of(
+         *     "service.name", "my-load-test",
+         *     "service.version", "1.0.0",
          *     "environment", "production",
          *     "region", "us-east-1",
          *     "test.name", "checkout-flow",
@@ -322,10 +309,13 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
          * ))
          * }</pre>
          * 
-         * <p>Built-in resource attributes (always included):
+         * <p>Common OpenTelemetry semantic conventions include:
          * <ul>
-         *   <li>service.name - from serviceName()</li>
-         *   <li>service.version - "1.0.0"</li>
+         *   <li>service.name - Name of the service</li>
+         *   <li>service.version - Version of the service</li>
+         *   <li>deployment.environment - Deployment environment (dev, staging, prod)</li>
+         *   <li>cloud.provider - Cloud provider (aws, gcp, azure)</li>
+         *   <li>cloud.region - Cloud region</li>
          * </ul>
          * 
          * @param attributes map of attribute names to values
@@ -364,9 +354,6 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         public OpenTelemetryExporter build() {
             if (endpoint == null || endpoint.isBlank()) {
                 throw new IllegalStateException("OTLP endpoint is required");
-            }
-            if (serviceName == null || serviceName.isBlank()) {
-                throw new IllegalStateException("Service name is required");
             }
             return new OpenTelemetryExporter(this);
         }

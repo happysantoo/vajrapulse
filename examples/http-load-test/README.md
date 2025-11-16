@@ -20,14 +20,40 @@ This example demonstrates how to create a simple HTTP load test using VajraPulse
 
 There are three ways to run this example:
 
-#### Option 1: Using the Runner (Recommended)
+#### Option 1: Using the Console Runner (Console Export)
 
 ```bash
 # Build and run directly
 ./gradlew run
 ```
 
-This uses the `HttpLoadTestRunner` class which now leverages the high-level `MetricsPipeline` abstraction for minimal boilerplate.
+This uses the `HttpLoadTestRunner` class which leverages the high-level `MetricsPipeline` abstraction for minimal boilerplate and prints metrics to the console.
+
+#### Option 1b: Using the OpenTelemetry Runner (OTLP Export)
+
+Run the variant that exports metrics to an OpenTelemetry Collector:
+
+```bash
+./gradlew runOtel
+```
+
+Requirements:
+1. Running OpenTelemetry Collector (default ports) – simplest via Docker:
+   ```bash
+   docker run --name otel-collector -p 4317:4317 -p 4318:4318 \
+     -e OTEL_EXPORTER_OTLP_LOGS_ENABLED=false \
+     otel/opentelemetry-collector:latest
+   ```
+2. Endpoint used: `http://localhost:4318` (HTTP protocol) – configured in `HttpLoadTestOtelRunner`.
+3. Service/resource attributes applied: `environment=dev`, `example.type=http-load-test`, `team=platform`.
+
+The OTLP exporter is automatically closed when the pipeline completes, ensuring final metrics are flushed before shutdown.
+
+You can switch to gRPC by changing:
+```java
+    .protocol(Protocol.GRPC)
+```
+and (optionally) using port 4317.
 
 #### Option 2: Using VajraPulse Worker CLI
 
@@ -103,12 +129,14 @@ The `HttpLoadTestRunner` now uses the `MetricsPipeline` for concise orchestratio
 HttpLoadTest task = new HttpLoadTest();
 LoadPattern pattern = new StaticLoad(100.0, Duration.ofSeconds(30));
 
-MetricsPipeline pipeline = MetricsPipeline.builder()
-  .addExporter(new ConsoleMetricsExporter())       // final + live exports
-  .withPeriodic(Duration.ofSeconds(5))             // live updates every 5s
-  .build();                                        // creates MetricsCollector internally
-
-AggregatedMetrics results = pipeline.run(task, pattern);
+// Pipeline implements AutoCloseable for automatic cleanup
+try (MetricsPipeline pipeline = MetricsPipeline.builder()
+    .addExporter(new ConsoleMetricsExporter())       // final + live exports
+    .withPeriodic(Duration.ofSeconds(5))             // live updates every 5s
+    .build()) {                                      // creates MetricsCollector internally
+    
+    pipeline.run(task, pattern);
+} // Automatic final export + cleanup
 ```
 
 Internals handled by the pipeline:
@@ -117,7 +145,39 @@ Internals handled by the pipeline:
 3. Rate-controlled submission
 4. Metrics collection & aggregation
 5. Optional periodic live snapshot export
-6. Final snapshot export
+6. Final snapshot export (guaranteed before close)
+7. Automatic exporter cleanup (AutoCloseable exporters)
+
+## OpenTelemetry Export Details
+
+### Metrics Sent
+- `vajrapulse.executions.total` – Counter
+- `vajrapulse.executions.success` – Counter
+- `vajrapulse.executions.failure` – Counter
+- `vajrapulse.success.rate` – Gauge (0-100)
+- `vajrapulse.latency.success` – Histogram (ms) with `percentile` attribute
+- `vajrapulse.latency.failure` – Histogram (ms) with `percentile` attribute (if failures > 0)
+
+### Custom Resource Attributes
+Configured in the OTLP runner:
+```java
+resourceAttributes(Map.of(
+  "environment", "dev",
+  "example.type", "http-load-test",
+  "team", "platform"
+))
+```
+Use these for filtering and grouping in your observability backend.
+
+### Switching Protocol
+Default is gRPC. In the example we explicitly use HTTP:
+```java
+protocol(Protocol.HTTP)
+```
+Change to `Protocol.GRPC` when collector supports gRPC or for improved efficiency.
+
+### Manual Endpoint Override
+Update `.endpoint("http://collector-host:4318")` to point at remote collectors. For gRPC use typical port `4317`.
 
 ## Load Patterns via CLI
 

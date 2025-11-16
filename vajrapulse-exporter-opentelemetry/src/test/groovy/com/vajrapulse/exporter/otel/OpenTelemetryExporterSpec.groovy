@@ -46,21 +46,7 @@ class OpenTelemetryExporterSpec extends Specification {
         exporter?.close()
     }
     
-    def "should build exporter with custom service name"() {
-        given: "a custom service name"
-        def serviceName = "my-custom-load-test"
-        
-        when: "building with custom service name"
-        def exporter = OpenTelemetryExporter.builder()
-            .serviceName(serviceName)
-            .build()
-        
-        then: "exporter is created successfully"
-        exporter != null
-        
-        cleanup:
-        exporter?.close()
-    }
+
     
     def "should build exporter with custom export interval"() {
         given: "a custom export interval"
@@ -233,31 +219,15 @@ class OpenTelemetryExporterSpec extends Specification {
         thrown(IllegalStateException)
     }
     
-    def "should fail to build with blank service name"() {
-        when: "building with blank service name"
-        OpenTelemetryExporter.builder()
-            .serviceName("")
-            .build()
-        
-        then: "throws IllegalStateException"
-        thrown(IllegalStateException)
-    }
+
     
-    def "should fail to build with null service name"() {
-        when: "building with null service name"
-        OpenTelemetryExporter.builder()
-            .serviceName(null)
-            .build()
-        
-        then: "throws IllegalStateException"
-        thrown(IllegalStateException)
-    }
+
     
     def "should export metrics without throwing exceptions"() {
         given: "an exporter instance"
         def exporter = OpenTelemetryExporter.builder()
             .endpoint("http://localhost:4318")
-            .serviceName("test-service")
+            .resourceAttributes(["service.name": "test-service"])
             .build()
         
         and: "sample aggregated metrics"
@@ -426,9 +396,10 @@ class OpenTelemetryExporterSpec extends Specification {
     
     def "should not fail when OTLP endpoint is unreachable"() {
         given: "exporter pointing to unreachable endpoint"
+        def unreachableEndpoint = "http://nonexistent-host.invalid:9999"
         def exporter = OpenTelemetryExporter.builder()
-            .endpoint("http://unreachable-host:9999")
-            .serviceName("resilient-test")
+            .endpoint(unreachableEndpoint)
+            .resourceAttributes(["service.name": "resilient-test"])
             .build()
         
         and: "sample metrics"

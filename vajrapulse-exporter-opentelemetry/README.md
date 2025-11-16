@@ -47,18 +47,23 @@ dependencies {
 ```java
 import com.vajrapulse.exporter.otel.OpenTelemetryExporter;
 
-// Create exporter with defaults
+// Create exporter with resource attributes
 try (var exporter = OpenTelemetryExporter.builder()
         .endpoint("http://localhost:4318")  // OTLP endpoint
-        .serviceName("my-load-test")
+        .resourceAttributes(Map.of(
+            "service.name", "my-load-test",
+            "service.version", "1.0.0"
+        ))
         .build()) {
     
-    // Use with MetricsPipeline
-    MetricsPipeline.builder()
-        .addExporter(exporter)
-        .withPeriodic(Duration.ofSeconds(10))
-        .build()
-        .run(task, loadPattern);
+    // Use with MetricsPipeline (automatic lifecycle)
+    try (MetricsPipeline pipeline = MetricsPipeline.builder()
+            .addExporter(exporter)
+            .withPeriodic(Duration.ofSeconds(10))
+            .build()) {
+        pipeline.run(task, loadPattern);
+    }
+}
 }
 ```
 
@@ -67,7 +72,6 @@ try (var exporter = OpenTelemetryExporter.builder()
 ```java
 OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
     .endpoint("https://otlp.example.com:4318")
-    .serviceName("checkout-load-test")
     .exportInterval(5)  // Export every 5 seconds
     .protocol(OpenTelemetryExporter.Protocol.GRPC)  // or Protocol.HTTP
     .headers(Map.of(
@@ -75,6 +79,8 @@ OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
         "X-Org-ID", orgId
     ))
     .resourceAttributes(Map.of(
+        "service.name", "checkout-load-test",
+        "service.version", "2.1.0",
         "environment", "production",
         "region", "us-east-1",
         "team", "platform"
@@ -86,12 +92,11 @@ OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `endpoint` | String | `http://localhost:4318` | OTLP gRPC endpoint URL |
-| `serviceName` | String | `vajrapulse-load-test` | Service name for resource attribution |
+| `endpoint` | String | `http://localhost:4318` | OTLP endpoint URL |
 | `exportInterval` | int | `10` | Export interval in seconds |
 | `protocol` | Protocol | `GRPC` | OTLP protocol: `GRPC` or `HTTP` |
 | `headers` | Map<String, String> | `{}` | Custom headers (e.g., auth tokens) |
-| `resourceAttributes` | Map<String, String> | `{}` | Custom resource attributes for context |
+| `resourceAttributes` | Map<String, String> | `{}` | Resource attributes (service.name, environment, etc.) |
 
 ## OTLP Protocols
 
@@ -262,7 +267,7 @@ service:
 ```java
 OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
     .endpoint("http://localhost:4318")
-    .serviceName("api-load-test")
+    .resourceAttributes(Map.of("service.name", "api-load-test"))
     .build();
 ```
 
@@ -271,7 +276,10 @@ OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
 ```java
 OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
     .endpoint("https://otlp-gateway-prod-us-central-0.grafana.net/otlp")
-    .serviceName("production-load-test")
+    .resourceAttributes(Map.of(
+        "service.name", "production-load-test",
+        "service.version", "1.0.0"
+    ))
     .headers(Map.of(
         "Authorization", "Basic " + base64Encode(instanceId + ":" + apiKey)
     ))
