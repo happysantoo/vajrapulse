@@ -12,6 +12,7 @@ java {
 dependencies {
     // VajraPulse dependencies
     implementation(project(":vajrapulse-core"))
+    implementation(project(":vajrapulse-api"))
     
     // OpenTelemetry dependencies
     implementation("io.opentelemetry:opentelemetry-api:1.43.0")

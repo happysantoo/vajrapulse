@@ -2,6 +2,7 @@ package com.vajrapulse.exporter.otel;
 
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.core.metrics.MetricsExporter;
+import com.vajrapulse.api.TaskIdentity;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.metrics.Meter;
@@ -56,12 +57,14 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     private final Map<String, String> additionalHeaders;
     private final Map<String, String> resourceAttributes;
     private final Protocol protocol;
+    private final TaskIdentity taskIdentity;
     
     private OpenTelemetryExporter(Builder builder) {
         this.endpoint = builder.endpoint;
         this.additionalHeaders = Map.copyOf(builder.additionalHeaders);
         this.resourceAttributes = Map.copyOf(builder.resourceAttributes);
         this.protocol = builder.protocol;
+        this.taskIdentity = builder.taskIdentity;
         
         // Create appropriate exporter based on protocol
         var metricExporter = createExporter(builder);
@@ -76,6 +79,14 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         resourceAttributes.forEach((key, value) ->
             attributesBuilder.put(AttributeKey.stringKey(key), value)
         );
+        if (taskIdentity != null) {
+            // Task name under namespaced key
+            attributesBuilder.put(AttributeKey.stringKey("task.name"), taskIdentity.name());
+            // Tags prefixed to avoid collision with generic resource attributes
+            taskIdentity.tags().forEach((k, v) ->
+                attributesBuilder.put(AttributeKey.stringKey("task." + k), v)
+            );
+        }
         
         this.meterProvider = SdkMeterProvider.builder()
             .setResource(Resource.create(attributesBuilder.build()))
@@ -251,6 +262,7 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         private Map<String, String> additionalHeaders = Map.of();
         private Map<String, String> resourceAttributes = Map.of();
         private Protocol protocol = Protocol.GRPC;
+        private TaskIdentity taskIdentity;
         
         /**
          * Sets the OTLP endpoint URL.
@@ -342,6 +354,20 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
          */
         public Builder protocol(Protocol protocol) {
             this.protocol = protocol;
+            return this;
+        }
+
+        /**
+         * Associates a {@link TaskIdentity} with this exporter.
+         * <p>Its name and tags are published as resource attributes using the
+         * keys <code>task.name</code> and <code>task.&lt;tagKey&gt;</code>. This keeps
+         * task metadata separate from generic service attributes while still
+         * enabling rich filtering in observability backends.
+         * @param identity task identity descriptor
+         * @return this builder
+         */
+        public Builder taskIdentity(TaskIdentity identity) {
+            this.taskIdentity = identity;
             return this;
         }
         
