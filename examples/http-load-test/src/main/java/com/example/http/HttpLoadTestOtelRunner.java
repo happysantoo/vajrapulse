@@ -4,6 +4,7 @@ import com.vajrapulse.api.LoadPattern;
 import com.vajrapulse.api.StaticLoad;
 import com.vajrapulse.exporter.otel.OpenTelemetryExporter;
 import com.vajrapulse.exporter.otel.OpenTelemetryExporter.Protocol;
+import com.vajrapulse.api.TaskIdentity;
 import com.vajrapulse.worker.pipeline.MetricsPipeline;
 
 import java.time.Duration;
@@ -23,7 +24,7 @@ import java.util.Map;
  *
  * <p>Collector Assumptions:
  * <ul>
- *   <li>OTLP HTTP endpoint at http://localhost:4318</li>
+ *   <li>OTLP gRPC endpoint at http://localhost:4317</li>
  *   <li>Metrics receiver enabled (default if using official Docker image)</li>
  * </ul>
  */
@@ -36,10 +37,20 @@ public final class HttpLoadTestOtelRunner {
         LoadPattern loadPattern = new StaticLoad(100.0, Duration.ofSeconds(30));
 
         // Configure OpenTelemetry exporter
+        // Define task identity for tagging in observability backends
+        TaskIdentity identity = new TaskIdentity(
+            "http-load-test",
+            Map.of(
+                "scenario", "baseline",
+                "component", "http-client"
+            )
+        );
+
         OpenTelemetryExporter otelExporter = OpenTelemetryExporter.builder()
-            .endpoint("http://localhost:4318") // Typical collector HTTP port
-            .protocol(Protocol.HTTP) // Explicitly use HTTP for demo clarity
+            .endpoint("http://localhost:4317") // gRPC endpoint
+            .protocol(Protocol.GRPC) // Use gRPC protocol
             .exportInterval(5) // Align with periodic pipeline snapshots
+            .taskIdentity(identity)
             .resourceAttributes(Map.of(
                 "service.name", "vajrapulse-http-example",
                 "service.version", "1.0.0",
@@ -55,8 +66,10 @@ public final class HttpLoadTestOtelRunner {
         System.out.println();
         System.out.println("Configuration:");
         System.out.println("  Service Name: vajrapulse-http-example");
-        System.out.println("  Protocol:     HTTP (OTLP)");
-        System.out.println("  Endpoint:     http://localhost:4318");
+        System.out.println("  Protocol:     gRPC (OTLP)");
+        System.out.println("  Endpoint:     http://localhost:4317");
+        System.out.println("  Task Name:    " + identity.name());
+        System.out.println("  Tags:         " + identity.tags());
         System.out.println("  TPS:          100");
         System.out.println("  Duration:     30 seconds");
         System.out.println("Starting load test with OpenTelemetry export...\n");
