@@ -11,7 +11,10 @@ dependencies {
     // Use api instead of implementation to expose these to consumers
     api(project(":vajrapulse-api"))
     api(project(":vajrapulse-core"))
-    api(project(":vajrapulse-exporter-console"))
+    // BREAKING CHANGE (Pre-1.0): Console exporter is now optional for library users
+    // The worker CLI itself uses console (implementation), but doesn't expose it (api)
+    // Users must explicitly add vajrapulse-exporter-console if using worker as library
+    implementation(project(":vajrapulse-exporter-console"))
     
     // Expose required runtime dependencies
     api("io.micrometer:micrometer-core:1.13.0")
