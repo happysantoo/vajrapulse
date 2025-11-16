@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -58,6 +59,21 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     private final Map<String, String> resourceAttributes;
     private final Protocol protocol;
     private final TaskIdentity taskIdentity;
+
+    // Pre-created instruments (avoid rebuilding every export call)
+    private final io.opentelemetry.api.metrics.LongCounter executionsTotal;
+    private final io.opentelemetry.api.metrics.LongCounter executionsSuccess;
+    private final io.opentelemetry.api.metrics.LongCounter executionsFailure;
+    private final io.opentelemetry.api.metrics.DoubleHistogram latencySuccessHist;
+    private final io.opentelemetry.api.metrics.DoubleHistogram latencyFailureHist;
+
+    // Track last cumulative counts to emit deltas for monotonic counters
+    private long lastTotal;
+    private long lastSuccess;
+    private long lastFailure;
+
+    // Store latest snapshot for asynchronous success rate gauge
+    private final AtomicReference<AggregatedMetrics> lastMetrics = new AtomicReference<>();
     
     private OpenTelemetryExporter(Builder builder) {
         this.endpoint = builder.endpoint;
@@ -94,6 +110,37 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
             .build();
         
         this.meter = meterProvider.get("vajrapulse");
+
+        // Create monotonic counters once
+        this.executionsTotal = meter.counterBuilder("vajrapulse.executions.total")
+            .setDescription("Total number of task executions")
+            .build();
+        this.executionsSuccess = meter.counterBuilder("vajrapulse.executions.success")
+            .setDescription("Number of successful task executions")
+            .build();
+        this.executionsFailure = meter.counterBuilder("vajrapulse.executions.failure")
+            .setDescription("Number of failed task executions")
+            .build();
+
+        // Histograms represent latency distributions (values recorded are percentile snapshots here pre-aggregated by engine)
+        this.latencySuccessHist = meter.histogramBuilder("vajrapulse.latency.success")
+            .setDescription("Success latency distribution (pre-aggregated percentiles)")
+            .setUnit("ms")
+            .build();
+        this.latencyFailureHist = meter.histogramBuilder("vajrapulse.latency.failure")
+            .setDescription("Failure latency distribution (pre-aggregated percentiles)")
+            .setUnit("ms")
+            .build();
+
+        // Asynchronous gauge for success rate referencing latest metrics snapshot
+        meter.gaugeBuilder("vajrapulse.success.rate")
+            .setDescription("Success rate percentage (0-100)")
+            .buildWithCallback(measurement -> {
+                var snapshot = lastMetrics.get();
+                if (snapshot != null && snapshot.totalExecutions() > 0) {
+                    measurement.record(snapshot.successRate());
+                }
+            });
         
         logger.info("OpenTelemetry exporter initialized - endpoint: {}, protocol: {}", 
             endpoint, protocol);
@@ -134,102 +181,71 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
      * HTTP endpoints typically use port 4318.
      */
     private MetricExporter createHttpExporter(Builder builder) {
-        // For HTTP exports, we need to ensure the endpoint uses HTTP protocol
+        // HTTP metrics export may fall back to gRPC exporter when HTTP metrics exporter is unavailable in dependency version.
         String httpEndpoint = endpoint;
         if (!httpEndpoint.startsWith("http://") && !httpEndpoint.startsWith("https://")) {
             httpEndpoint = "http://" + httpEndpoint;
         }
-        
         var otlpExporterBuilder = OtlpGrpcMetricExporter.builder()
             .setEndpoint(httpEndpoint)
             .setTimeout(Duration.ofSeconds(30));
-        
-        // Add custom headers if provided (e.g., for authentication)
         if (!additionalHeaders.isEmpty()) {
-            additionalHeaders.forEach((key, value) -> 
-                otlpExporterBuilder.addHeader(key, value)
-            );
+            additionalHeaders.forEach(otlpExporterBuilder::addHeader);
         }
-        
         return otlpExporterBuilder.build();
     }
     
     @Override
-    public void export(String title, AggregatedMetrics metrics) {
+    public synchronized void export(String title, AggregatedMetrics metrics) {
         try {
             logger.debug("Exporting metrics to OTLP: {}", title);
-            
-            // Record total executions
-            meter.counterBuilder("vajrapulse.executions.total")
-                .setDescription("Total number of task executions")
-                .build()
-                .add(metrics.totalExecutions());
-            
-            // Record success count
-            meter.counterBuilder("vajrapulse.executions.success")
-                .setDescription("Number of successful task executions")
-                .build()
-                .add(metrics.successCount());
-            
-            // Record failure count
-            meter.counterBuilder("vajrapulse.executions.failure")
-                .setDescription("Number of failed task executions")
-                .build()
-                .add(metrics.failureCount());
-            
-            // Record success rate as a gauge
-            meter.gaugeBuilder("vajrapulse.success.rate")
-                .setDescription("Success rate percentage (0-100)")
-                .buildWithCallback(measurement -> 
-                    measurement.record(metrics.successRate())
-                );
-            
-            // Record success latency percentiles
-            if (metrics.successCount() > 0) {
+
+            // Update last snapshot for asynchronous gauge
+            lastMetrics.set(metrics);
+
+            // Compute deltas for monotonic counters
+            long total = metrics.totalExecutions();
+            long success = metrics.successCount();
+            long failure = metrics.failureCount();
+            long deltaTotal = total - lastTotal;
+            long deltaSuccess = success - lastSuccess;
+            long deltaFailure = failure - lastFailure;
+            if (deltaTotal < 0 || deltaSuccess < 0 || deltaFailure < 0) {
+                // Counter reset scenario – treat as fresh
+                deltaTotal = total;
+                deltaSuccess = success;
+                deltaFailure = failure;
+            }
+            if (deltaTotal > 0) executionsTotal.add(deltaTotal);
+            if (deltaSuccess > 0) executionsSuccess.add(deltaSuccess);
+            if (deltaFailure > 0) executionsFailure.add(deltaFailure);
+            lastTotal = total;
+            lastSuccess = success;
+            lastFailure = failure;
+
+            // Record success latency percentiles (pre-aggregated snapshot)
+            if (success > 0) {
                 for (var entry : metrics.successPercentiles().entrySet()) {
                     double percentile = entry.getKey();
-                    double latencyMs = entry.getValue() / 1_000_000.0; // nanos to millis
-                    
-                    meter.histogramBuilder("vajrapulse.latency.success")
-                        .setDescription("Success latency distribution")
-                        .setUnit("ms")
-                        .build()
-                        .record(latencyMs, 
-                            Attributes.of(
-                                AttributeKey.doubleKey("percentile"), 
-                                percentile
-                            )
-                        );
+                    double latencyMs = entry.getValue() / 1_000_000.0; // nanos -> millis
+                    latencySuccessHist.record(latencyMs,
+                        Attributes.of(AttributeKey.doubleKey("percentile"), percentile));
                 }
             }
-            
             // Record failure latency percentiles
-            if (metrics.failureCount() > 0) {
+            if (failure > 0) {
                 for (var entry : metrics.failurePercentiles().entrySet()) {
                     double percentile = entry.getKey();
-                    double latencyMs = entry.getValue() / 1_000_000.0; // nanos to millis
-                    
-                    meter.histogramBuilder("vajrapulse.latency.failure")
-                        .setDescription("Failure latency distribution")
-                        .setUnit("ms")
-                        .build()
-                        .record(latencyMs,
-                            Attributes.of(
-                                AttributeKey.doubleKey("percentile"),
-                                percentile
-                            )
-                        );
+                    double latencyMs = entry.getValue() / 1_000_000.0;
+                    latencyFailureHist.record(latencyMs,
+                        Attributes.of(AttributeKey.doubleKey("percentile"), percentile));
                 }
             }
-            
-            // Force flush to ensure metrics are sent
-            meterProvider.forceFlush().join(10, TimeUnit.SECONDS);
-            
-            logger.debug("Successfully exported metrics to OTLP");
-            
+
+            // Flush is deferred to periodic reader; avoid heavy forceFlush each call.
+            logger.debug("Metrics recorded for export batch: total={}, success={}, failure={}", total, success, failure);
         } catch (Exception e) {
             logger.error("Failed to export metrics to OTLP endpoint: {}", endpoint, e);
-            // Don't throw - exporters should be resilient
         }
     }
     
@@ -238,9 +254,13 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         logger.info("Closing OpenTelemetry exporter");
         try {
             meterProvider.forceFlush().join(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            logger.warn("Force flush failed during close", e);
+        }
+        try {
             meterProvider.close();
         } catch (Exception e) {
-            logger.error("Error closing OpenTelemetry exporter", e);
+            logger.error("Error closing OpenTelemetry meterProvider", e);
         }
     }
     
