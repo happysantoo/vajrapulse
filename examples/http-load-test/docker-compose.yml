@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.126.0
+    container_name: otel-collector-contrib
+    command:
+      - "--config=/etc/otel-collector-config.yml"
+    ports:
+      # gRPC
+      - "4317:4317"
+      # HTTP
+      - "4318:4318"
+      # Prometheus metrics (for debugging)
+      - "8889:8889"
+      # Health check
+      - "13133:13133"
+    volumes:
+      - ./otel-collector-config.yml:/etc/otel-collector-config.yml:ro
+      - ./otel-collector-data:/tmp/otel-collector-data
+    environment:
+      - GOGC=80
+    networks:
+      - otel-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:13133/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  otel-network:
+    driver: bridge
+
+volumes:
+  otel-collector-data:
