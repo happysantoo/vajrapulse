@@ -106,10 +106,16 @@ public final class MetricsPipeline implements AutoCloseable {
         private boolean fireImmediateLive;
         private double[] percentiles;
         private java.time.Duration[] sloBuckets;
+        private String runId;
 
         /** Provide a fully constructed collector. If set, `withPercentiles`/`withSloBuckets` must not be used. */
         public Builder withCollector(MetricsCollector collector) {
             this.collector = collector;
+            return this;
+        }
+        /** Explicit runId for correlation; if absent one will be generated only if needed. */
+        public Builder withRunId(String runId) {
+            this.runId = runId;
             return this;
         }
 
@@ -151,9 +157,17 @@ public final class MetricsPipeline implements AutoCloseable {
             if (effectiveCollector == null) {
                 if ((sloBuckets != null && sloBuckets.length > 0) || percentiles != null) {
                     double[] pts = (percentiles != null) ? percentiles : new double[]{0.50, 0.95, 0.99};
-                    effectiveCollector = MetricsCollector.createWith(pts, sloBuckets == null ? new java.time.Duration[]{} : sloBuckets);
+                    if (runId != null && !runId.isBlank()) {
+                        effectiveCollector = MetricsCollector.createWithRunId(runId, pts, sloBuckets == null ? new java.time.Duration[]{} : sloBuckets);
+                    } else {
+                        effectiveCollector = MetricsCollector.createWith(pts, sloBuckets == null ? new java.time.Duration[]{} : sloBuckets);
+                    }
                 } else {
-                    effectiveCollector = new MetricsCollector();
+                    if (runId != null && !runId.isBlank()) {
+                        effectiveCollector = MetricsCollector.createWithRunId(runId, new double[]{0.50, 0.95, 0.99});
+                    } else {
+                        effectiveCollector = new MetricsCollector();
+                    }
                 }
             }
             return new MetricsPipeline(effectiveCollector, List.copyOf(exporters), periodicInterval, fireImmediateLive);

@@ -98,8 +98,10 @@ public final class VajraPulseWorker implements Callable<Integer> {
         LoadPattern loadPattern = createLoadPattern();
         logger.info("Load pattern created: {}", loadPattern.getClass().getSimpleName());
         
-        // Create metrics collector
-        MetricsCollector metricsCollector = new MetricsCollector();
+        // Create runId and metrics collector tagged with it
+        String runId = java.util.UUID.randomUUID().toString();
+        MetricsCollector metricsCollector = MetricsCollector.createWithRunId(runId, new double[]{0.50, 0.95, 0.99});
+        logger.info("Run initialized runId={}", runId);
         
         // Run load test
         try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector)) {
@@ -110,7 +112,7 @@ public final class VajraPulseWorker implements Callable<Integer> {
         // Export results
         AggregatedMetrics metrics = metricsCollector.snapshot();
         ConsoleMetricsExporter exporter = new ConsoleMetricsExporter();
-        exporter.export("Load Test Results", metrics);
+        exporter.export("Load Test Results (runId=" + runId + ")", metrics);
         
         return 0;
     }

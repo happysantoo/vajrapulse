@@ -53,6 +53,7 @@ Deferred (post-0.9):
 - Tracing: scenario root span, per-execution child spans (sampled); error tagging (`status=error`, exception event).
 - Logging: JSON layout; fields: timestamp, level, message, run_id, task_id, iteration, trace_id, span_id, status.
 - Run ID: generated UUID at start; exposed via config snapshot log & metrics tag `run_id`.
+	- Current status: integrated into `MetricsCollector` and `ExecutionEngine` (worker now creates collector with `run_id`). Pipeline builder supports explicit runId.
 
 ### 4.3 Load Patterns
 Implemented / To Implement records (Java 21) for `LoadPattern`:

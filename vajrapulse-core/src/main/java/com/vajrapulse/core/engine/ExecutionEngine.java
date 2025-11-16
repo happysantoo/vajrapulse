@@ -43,11 +43,21 @@ public final class ExecutionEngine implements AutoCloseable {
     private final LoadPattern loadPattern;
     private final MetricsCollector metricsCollector;
     private final ExecutorService executor;
+    private final String runId; // Correlates metrics/traces/logs
+    private final java.util.concurrent.atomic.AtomicBoolean stopRequested = new java.util.concurrent.atomic.AtomicBoolean(false);
     
     public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector) {
+        String effectiveRunId = (metricsCollector.getRunId() != null && !metricsCollector.getRunId().isBlank())
+            ? metricsCollector.getRunId()
+            : java.util.UUID.randomUUID().toString();
+        this(task, loadPattern, metricsCollector, effectiveRunId);
+    }
+
+    public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId) {
         this.task = task;
         this.loadPattern = loadPattern;
         this.metricsCollector = metricsCollector;
+        this.runId = runId;
         
         // Determine thread strategy from annotations
         if (task.getClass().isAnnotationPresent(VirtualThreads.class)) {
@@ -68,6 +78,12 @@ public final class ExecutionEngine implements AutoCloseable {
             logger.info("No thread annotation found, defaulting to virtual threads for task: {}", 
                 task.getClass().getSimpleName());
         }
+        // Register JVM shutdown hook for graceful termination
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (stopRequested.compareAndSet(false, true)) {
+                logger.info("Shutdown hook triggered for runId={} - initiating graceful stop", runId);
+            }
+        }, "vajrapulse-shutdown-hook"));
     }
     
     /**
@@ -85,8 +101,7 @@ public final class ExecutionEngine implements AutoCloseable {
      * @throws Exception if setup, execution, or cleanup fails
      */
     public void run() throws Exception {
-        logger.info("Starting load test with pattern: {}", loadPattern.getClass().getSimpleName());
-        logger.info("Test duration: {}", loadPattern.getDuration());
+        logger.info("Starting load test runId={} pattern={} duration={}", runId, loadPattern.getClass().getSimpleName(), loadPattern.getDuration());
         
         // Setup
         task.setup();
@@ -99,14 +114,18 @@ public final class ExecutionEngine implements AutoCloseable {
             long testDurationMillis = loadPattern.getDuration().toMillis();
             long iteration = 0;
             
-            while (rateController.getElapsedMillis() < testDurationMillis) {
+            while (!stopRequested.get() && rateController.getElapsedMillis() < testDurationMillis) {
                 rateController.waitForNext();
                 
                 long currentIteration = iteration++;
                 executor.submit(new ExecutionCallable(taskExecutor, metricsCollector, currentIteration));
             }
             
-            logger.info("Test duration completed, shutting down executor");
+            if (stopRequested.get()) {
+                logger.info("Stop requested - draining executor runId={}", runId);
+            } else {
+                logger.info("Test duration completed, shutting down executor runId={}", runId);
+            }
             
         } finally {
             // Cleanup
@@ -117,8 +136,12 @@ public final class ExecutionEngine implements AutoCloseable {
                 executor.shutdownNow();
             }
             
-            task.cleanup();
-            logger.info("Task cleanup completed");
+            try {
+                task.cleanup();
+                logger.info("Task cleanup completed runId={}", runId);
+            } finally {
+                logger.info("Run finished runId={}", runId);
+            }
         }
     }
     
@@ -182,4 +205,13 @@ public final class ExecutionEngine implements AutoCloseable {
         }
         return metricsCollector.snapshot();
     }
+
+    /** Request early stop (graceful). */
+    public void stop() {
+        if (stopRequested.compareAndSet(false, true)) {
+            logger.info("Manual stop invoked runId={}", runId);
+        }
+    }
+
+    public String getRunId() { return runId; }
 }
