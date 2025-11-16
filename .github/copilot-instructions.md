@@ -4,7 +4,17 @@
 
 VajraPulse is a Java 21-based distributed load testing framework leveraging virtual threads for high-concurrency testing with minimal resource overhead. The project follows strict architectural principles for maintainability, performance, and extensibility.
 
+**🚨 PRE-1.0 STATUS**: This project has NOT reached 1.0 release yet. Breaking changes are acceptable and encouraged if they result in cleaner, better-designed code. **DO NOT** prioritize backwards compatibility over clean architecture. Focus on getting the design right, not maintaining compatibility with unreleased code.
+
 ## Core Principles
+
+### 0. Pre-1.0 Design Philosophy
+- **Clean code > Backwards compatibility** - Always choose the cleaner design
+- **Breaking changes are acceptable** - We haven't released 1.0 yet
+- **Refactor boldly** - Don't be constrained by previous implementations
+- **Get it right, then stabilize** - Focus on correct architecture first
+- **No deprecated code** - Remove immediately, don't deprecate
+- **Simplify aggressively** - Remove unnecessary abstractions
 
 ### 1. Language & Version
 - **Java 21** is MANDATORY - use all modern features
