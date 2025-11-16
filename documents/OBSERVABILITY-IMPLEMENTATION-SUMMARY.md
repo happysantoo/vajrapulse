@@ -121,12 +121,9 @@ TaskIdentity identity = new TaskIdentity(
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `vajrapulse_executions_total` | Counter | Total executions |
-| `vajrapulse_executions_success` | Counter | Successful executions |
-| `vajrapulse_executions_failure` | Counter | Failed executions |
-| `vajrapulse_success_rate` | Gauge | Success percentage |
-| `vajrapulse_latency_success` | Histogram | Success latency distribution |
-| `vajrapulse_latency_failure` | Histogram | Failure latency distribution |
+| `vajrapulse_execution_count` | Counter | Count of task executions, with `status=success|failure` |
+| `vajrapulse_execution_duration` | Histogram | Execution duration values in ms, with `status` and `percentile` attributes |
+| `vajrapulse_success_rate` | Gauge | Success percentage (0-100) |
 
 ---
 
@@ -218,17 +215,21 @@ TaskIdentity identity = new TaskIdentity(
 
 ### Prometheus Queries
 ```promql
-# Total execution rate
-rate(vajrapulse_executions_total[1m])
+# Total execution rate (per minute) by task
+sum by (task_name) (rate(vajrapulse_execution_count[1m])) * 60
 
-# Success rate by task
+# Success/failure rates (per minute)
+rate(vajrapulse_execution_count{status="success"}[1m]) * 60
+rate(vajrapulse_execution_count{status="failure"}[1m]) * 60
+
+# Success rate by task (gauge)
 vajrapulse_success_rate{task_name="http-load-test"}
 
-# P95 latency
-histogram_quantile(0.95, rate(vajrapulse_latency_success_bucket[1m]))
+# P95 duration (ms) for successes (pre-aggregated percentile series)
+vajrapulse_execution_duration{status="success", percentile="0.95"}
 
-# Failures by scenario
-rate(vajrapulse_executions_failure{task_scenario="baseline"}[5m])
+# Failures by scenario (per minute)
+rate(vajrapulse_execution_count{status="failure", task_scenario="baseline"}[5m])
 ```
 
 ---

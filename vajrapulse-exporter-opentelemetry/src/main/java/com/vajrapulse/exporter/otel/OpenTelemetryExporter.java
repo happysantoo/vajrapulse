@@ -60,15 +60,13 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     private final Protocol protocol;
     private final TaskIdentity taskIdentity;
 
-    // Pre-created instruments (avoid rebuilding every export call)
-    private final io.opentelemetry.api.metrics.LongCounter executionsTotal;
-    private final io.opentelemetry.api.metrics.LongCounter executionsSuccess;
-    private final io.opentelemetry.api.metrics.LongCounter executionsFailure;
-    private final io.opentelemetry.api.metrics.DoubleHistogram latencySuccessHist;
-    private final io.opentelemetry.api.metrics.DoubleHistogram latencyFailureHist;
+    // Pre-created unified instruments (semantic conventions applied)
+    // Counter: vajrapulse.execution.count {status=success|failure}
+    private final io.opentelemetry.api.metrics.LongCounter executionCount;
+    // Histogram: vajrapulse.execution.duration {status=success|failure, percentile=<p>}
+    private final io.opentelemetry.api.metrics.DoubleHistogram executionDuration;
 
-    // Track last cumulative counts to emit deltas for monotonic counters
-    private long lastTotal;
+    // Track last cumulative counts to emit deltas for monotonic counter per status
     private long lastSuccess;
     private long lastFailure;
 
@@ -90,11 +88,12 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
             .setInterval(Duration.ofSeconds(builder.exportIntervalSeconds))
             .build();
         
-        // Create meter provider with resource attributes
+        // Create meter provider with translated resource attributes (semantic conventions)
         var attributesBuilder = Attributes.builder();
-        resourceAttributes.forEach((key, value) ->
-            attributesBuilder.put(AttributeKey.stringKey(key), value)
-        );
+        resourceAttributes.forEach((key, value) -> {
+            String translatedKey = translateResourceKey(key);
+            attributesBuilder.put(AttributeKey.stringKey(translatedKey), value);
+        });
         if (taskIdentity != null) {
             // Task name under namespaced key
             attributesBuilder.put(AttributeKey.stringKey("task.name"), taskIdentity.name());
@@ -111,24 +110,12 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         
         this.meter = meterProvider.get("vajrapulse");
 
-        // Create monotonic counters once
-        this.executionsTotal = meter.counterBuilder("vajrapulse.executions.total")
-            .setDescription("Total number of task executions")
+        // Unified counter and histogram following internal semantic naming
+        this.executionCount = meter.counterBuilder("vajrapulse.execution.count")
+            .setDescription("Count of task executions partitioned by status (success|failure)")
             .build();
-        this.executionsSuccess = meter.counterBuilder("vajrapulse.executions.success")
-            .setDescription("Number of successful task executions")
-            .build();
-        this.executionsFailure = meter.counterBuilder("vajrapulse.executions.failure")
-            .setDescription("Number of failed task executions")
-            .build();
-
-        // Histograms represent latency distributions (values recorded are percentile snapshots here pre-aggregated by engine)
-        this.latencySuccessHist = meter.histogramBuilder("vajrapulse.latency.success")
-            .setDescription("Success latency distribution (pre-aggregated percentiles)")
-            .setUnit("ms")
-            .build();
-        this.latencyFailureHist = meter.histogramBuilder("vajrapulse.latency.failure")
-            .setDescription("Failure latency distribution (pre-aggregated percentiles)")
+        this.executionDuration = meter.histogramBuilder("vajrapulse.execution.duration")
+            .setDescription("Execution duration distribution (percentile snapshot values) partitioned by status and percentile")
             .setUnit("ms")
             .build();
 
@@ -203,47 +190,52 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
             // Update last snapshot for asynchronous gauge
             lastMetrics.set(metrics);
 
-            // Compute deltas for monotonic counters
-            long total = metrics.totalExecutions();
+            // Compute deltas per status for unified counter
             long success = metrics.successCount();
             long failure = metrics.failureCount();
-            long deltaTotal = total - lastTotal;
             long deltaSuccess = success - lastSuccess;
             long deltaFailure = failure - lastFailure;
-            if (deltaTotal < 0 || deltaSuccess < 0 || deltaFailure < 0) {
-                // Counter reset scenario – treat as fresh
-                deltaTotal = total;
+            if (deltaSuccess < 0 || deltaFailure < 0) {
+                // Reset scenario – treat as fresh
                 deltaSuccess = success;
                 deltaFailure = failure;
             }
-            if (deltaTotal > 0) executionsTotal.add(deltaTotal);
-            if (deltaSuccess > 0) executionsSuccess.add(deltaSuccess);
-            if (deltaFailure > 0) executionsFailure.add(deltaFailure);
-            lastTotal = total;
+            if (deltaSuccess > 0) {
+                executionCount.add(deltaSuccess, Attributes.of(AttributeKey.stringKey("status"), "success"));
+            }
+            if (deltaFailure > 0) {
+                executionCount.add(deltaFailure, Attributes.of(AttributeKey.stringKey("status"), "failure"));
+            }
             lastSuccess = success;
             lastFailure = failure;
 
-            // Record success latency percentiles (pre-aggregated snapshot)
+            // Record success latency percentile snapshot values
             if (success > 0) {
                 for (var entry : metrics.successPercentiles().entrySet()) {
                     double percentile = entry.getKey();
                     double latencyMs = entry.getValue() / 1_000_000.0; // nanos -> millis
-                    latencySuccessHist.record(latencyMs,
-                        Attributes.of(AttributeKey.doubleKey("percentile"), percentile));
+                    executionDuration.record(latencyMs,
+                        Attributes.builder()
+                            .put(AttributeKey.stringKey("status"), "success")
+                            .put(AttributeKey.doubleKey("percentile"), percentile)
+                            .build());
                 }
             }
-            // Record failure latency percentiles
+            // Record failure latency percentile snapshot values
             if (failure > 0) {
                 for (var entry : metrics.failurePercentiles().entrySet()) {
                     double percentile = entry.getKey();
                     double latencyMs = entry.getValue() / 1_000_000.0;
-                    latencyFailureHist.record(latencyMs,
-                        Attributes.of(AttributeKey.doubleKey("percentile"), percentile));
+                    executionDuration.record(latencyMs,
+                        Attributes.builder()
+                            .put(AttributeKey.stringKey("status"), "failure")
+                            .put(AttributeKey.doubleKey("percentile"), percentile)
+                            .build());
                 }
             }
 
             // Flush is deferred to periodic reader; avoid heavy forceFlush each call.
-            logger.debug("Metrics recorded for export batch: total={}, success={}, failure={}", total, success, failure);
+            logger.debug("Metrics recorded for export batch: successDelta={}, failureDelta={}, successTotal={}, failureTotal={}", deltaSuccess, deltaFailure, success, failure);
         } catch (Exception e) {
             logger.error("Failed to export metrics to OTLP endpoint: {}", endpoint, e);
         }
@@ -424,5 +416,25 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
          * Default port: 4318.
          */
         HTTP
+    }
+
+    /**
+     * Translates common user-provided resource attribute keys into their
+     * OpenTelemetry semantic convention equivalents while preserving
+     * already-compliant keys.
+     * <ul>
+     *   <li>environment -> deployment.environment</li>
+     *   <li>region -> cloud.region</li>
+     * </ul>
+     * Keys not listed are returned unchanged.
+     * @param original user supplied key
+     * @return translated key
+     */
+    private static String translateResourceKey(String original) {
+        return switch (original) {
+            case "environment" -> "deployment.environment";
+            case "region" -> "cloud.region";
+            default -> original;
+        };
     }
 }

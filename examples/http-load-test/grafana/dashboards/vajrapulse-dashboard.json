@@ -105,8 +105,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(vajrapulse_executions_total{job=\"otel-collector\"}[1m]) * 60",
-          "legendFormat": "Total Executions/min - {{task_name}}",
+          "expr": "sum by (task_name) (rate(vajrapulse_execution_count{job=\"otel-collector\"}[1m])) * 60",
+          "legendFormat": "Total/min - {{task_name}}",
           "range": true,
           "refId": "A"
         },
@@ -116,7 +116,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(vajrapulse_executions_success{job=\"otel-collector\"}[1m]) * 60",
+          "expr": "rate(vajrapulse_execution_count{job=\"otel-collector\", status=\"success\"}[1m]) * 60",
           "legendFormat": "Successful/min - {{task_name}}",
           "range": true,
           "refId": "B"
@@ -127,7 +127,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(vajrapulse_executions_failure{job=\"otel-collector\"}[1m]) * 60",
+          "expr": "rate(vajrapulse_execution_count{job=\"otel-collector\", status=\"failure\"}[1m]) * 60",
           "legendFormat": "Failed/min - {{task_name}}",
           "range": true,
           "refId": "C"
@@ -297,7 +297,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_executions_total{job=\"otel-collector\"}",
+          "expr": "sum by (task_name) (vajrapulse_execution_count{job=\"otel-collector\"})",
           "legendFormat": "Total",
           "range": true,
           "refId": "A"
@@ -308,7 +308,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_executions_success{job=\"otel-collector\"}",
+          "expr": "vajrapulse_execution_count{job=\"otel-collector\", status=\"success\"}",
           "legendFormat": "Success",
           "range": true,
           "refId": "B"
@@ -319,7 +319,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_executions_failure{job=\"otel-collector\"}",
+          "expr": "vajrapulse_execution_count{job=\"otel-collector\", status=\"failure\"}",
           "legendFormat": "Failure",
           "range": true,
           "refId": "C"
@@ -412,7 +412,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, rate(vajrapulse_latency_success_milliseconds_bucket{job=\"otel-collector\"}[1m]))",
+          "expr": "vajrapulse_execution_duration{job=\"otel-collector\", status=\"success\", percentile=\"0.5\"}",
           "legendFormat": "P50 - {{task_name}}",
           "range": true,
           "refId": "A"
@@ -423,7 +423,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, rate(vajrapulse_latency_success_milliseconds_bucket{job=\"otel-collector\"}[1m]))",
+          "expr": "vajrapulse_execution_duration{job=\"otel-collector\", status=\"success\", percentile=\"0.9\"}",
           "legendFormat": "P90 - {{task_name}}",
           "range": true,
           "refId": "B"
@@ -434,7 +434,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, rate(vajrapulse_latency_success_milliseconds_bucket{job=\"otel-collector\"}[1m]))",
+          "expr": "vajrapulse_execution_duration{job=\"otel-collector\", status=\"success\", percentile=\"0.95\"}",
           "legendFormat": "P95 - {{task_name}}",
           "range": true,
           "refId": "C"
@@ -445,7 +445,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, rate(vajrapulse_latency_success_milliseconds_bucket{job=\"otel-collector\"}[1m]))",
+          "expr": "vajrapulse_execution_duration{job=\"otel-collector\", status=\"success\", percentile=\"0.99\"}",
           "legendFormat": "P99 - {{task_name}}",
           "range": true,
           "refId": "D"
@@ -538,7 +538,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, rate(vajrapulse_latency_failure_milliseconds_bucket{job=\"otel-collector\"}[1m]))",
+          "expr": "vajrapulse_execution_duration{job=\"otel-collector\", status=\"failure\", percentile=\"0.5\"}",
           "legendFormat": "P50 - {{task_name}}",
           "range": true,
           "refId": "A"
@@ -549,7 +549,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, rate(vajrapulse_latency_failure_milliseconds_bucket{job=\"otel-collector\"}[1m]))",
+          "expr": "vajrapulse_execution_duration{job=\"otel-collector\", status=\"failure\", percentile=\"0.9\"}",
           "legendFormat": "P90 - {{task_name}}",
           "range": true,
           "refId": "B"
@@ -560,7 +560,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, rate(vajrapulse_latency_failure_milliseconds_bucket{job=\"otel-collector\"}[1m]))",
+          "expr": "vajrapulse_execution_duration{job=\"otel-collector\", status=\"failure\", percentile=\"0.95\"}",
           "legendFormat": "P95 - {{task_name}}",
           "range": true,
           "refId": "C"
@@ -571,7 +571,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, rate(vajrapulse_latency_failure_milliseconds_bucket{job=\"otel-collector\"}[1m]))",
+          "expr": "vajrapulse_execution_duration{job=\"otel-collector\", status=\"failure\", percentile=\"0.99\"}",
           "legendFormat": "P99 - {{task_name}}",
           "range": true,
           "refId": "D"
@@ -637,7 +637,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "vajrapulse_executions_total{job=\"otel-collector\"}",
+          "expr": "vajrapulse_execution_count{job=\"otel-collector\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
@@ -661,7 +661,8 @@
             "includeByName": {},
             "indexByName": {},
             "renameByName": {
-              "environment": "Environment",
+              "deployment_environment": "Environment",
+              "cloud_region": "Region",
               "service_name": "Service",
               "service_version": "Version",
               "task_component": "Component",

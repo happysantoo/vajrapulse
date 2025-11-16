@@ -82,14 +82,14 @@ The dashboard auto-refreshes every 5 seconds and displays:
 
 **Example Queries**:
 ```promql
-# Total execution rate
-rate(vajrapulse_executions_total[1m])
+# Total execution rate (per minute)
+sum by (task_name) (rate(vajrapulse_execution_count[1m])) * 60
 
-# Success rate percentage
+# Success rate percentage (gauge)
 vajrapulse_success_rate
 
-# P95 latency
-histogram_quantile(0.95, rate(vajrapulse_latency_success_bucket[1m]))
+# P95 duration for successes (ms)
+vajrapulse_execution_duration{status="success", percentile="0.95"}
 ```
 
 ### Grafana (Port 3000)
@@ -164,10 +164,11 @@ TaskIdentity identity = new TaskIdentity(
 OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
     .endpoint("http://localhost:4317")
     .taskIdentity(identity)
-    .resourceAttributes(Map.of(
-        "service.name", "my-service",
-        "environment", "staging"
-    ))
+   .resourceAttributes(Map.of(
+      "service.name", "my-service",
+      "deployment.environment", "staging",
+      "cloud.region", "us-east-1"
+   ))
     .build();
 ```
 
@@ -183,7 +184,8 @@ Resource attributes are added as metric labels:
 |-----------|-------------|---------|
 | `service_name` | Service identifier | `vajrapulse-http-example` |
 | `service_version` | Version | `1.0.0` |
-| `environment` | Deployment env | `dev`, `staging`, `prod` |
+| `deployment_environment` | Deployment env | `dev`, `staging`, `prod` |
+| `cloud_region` | Cloud region | `us-east-1` |
 | `task_name` | Task identifier | `http-load-test` |
 | `task_*` | Task tags | `task_scenario=baseline` |
 
@@ -305,12 +307,15 @@ If panels show "prometheus datasource does not exist" or Grafana logs contain `D
    ```
 4. Dashboard JSON should reference `"uid": "prometheus"` in each panel datasource block. Adjust if different.
 
-### Histogram Metric Naming
-Prometheus sanitizes metric names (dots become underscores) and appends `_milliseconds_bucket` for latency histogram buckets. Use queries like:
+### Duration Series and Percentiles
+VajraPulse exports pre-aggregated percentile values as a histogram time series named `vajrapulse_execution_duration` with labels `status` and `percentile`. Query directly by percentile label (values are strings such as `"0.95"`). Examples:
 ```promql
-histogram_quantile(0.95, rate(vajrapulse_latency_success_milliseconds_bucket[5m]))
+vajrapulse_execution_duration{status="success", percentile="0.5"}
+vajrapulse_execution_duration{status="success", percentile="0.9"}
+vajrapulse_execution_duration{status="success", percentile="0.95"}
+vajrapulse_execution_duration{status="success", percentile="0.99"}
 ```
-If buckets are missing, verify the exporter configuration and that histograms are registered (look for `_bucket`, `_sum`, `_count` variants with the `vajrapulse_latency_success_milliseconds` prefix).
+Note: These represent snapshot values recorded each export interval, not Prometheus-computed quantiles over bucketed histograms.
 
 ### Port Conflicts
 
@@ -381,12 +386,9 @@ For production environments:
 
 | Metric Name | Type | Description |
 |-------------|------|-------------|
-| `vajrapulse_executions_total` | Counter | Total task executions |
-| `vajrapulse_executions_success` | Counter | Successful executions |
-| `vajrapulse_executions_failure` | Counter | Failed executions |
+| `vajrapulse_execution_count` | Counter | Executions with `status=success|failure` |
 | `vajrapulse_success_rate` | Gauge | Success rate (0-100%) |
-| `vajrapulse_latency_success` | Histogram | Success latency distribution |
-| `vajrapulse_latency_failure` | Histogram | Failure latency distribution |
+| `vajrapulse_execution_duration` | Histogram | Duration values (ms) with `status` and `percentile` labels |
 
 All metrics include resource attributes as labels.
 
