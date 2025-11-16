@@ -141,6 +141,78 @@ class OpenTelemetryExporterSpec extends Specification {
         exporter?.close()
     }
     
+    def "should build exporter with gRPC protocol (default)"() {
+        when: "building with default gRPC protocol"
+        def exporter = OpenTelemetryExporter.builder()
+            .protocol(OpenTelemetryExporter.Protocol.GRPC)
+            .build()
+        
+        then: "exporter is created successfully"
+        exporter != null
+        
+        cleanup:
+        exporter?.close()
+    }
+    
+    def "should build exporter with HTTP protocol"() {
+        when: "building with HTTP protocol"
+        def exporter = OpenTelemetryExporter.builder()
+            .protocol(OpenTelemetryExporter.Protocol.HTTP)
+            .endpoint("http://localhost:4318")
+            .build()
+        
+        then: "exporter is created successfully"
+        exporter != null
+        
+        cleanup:
+        exporter?.close()
+    }
+    
+    def "should export metrics with HTTP protocol"() {
+        given: "an exporter configured with HTTP protocol"
+        def exporter = OpenTelemetryExporter.builder()
+            .protocol(OpenTelemetryExporter.Protocol.HTTP)
+            .endpoint("http://localhost:4318")
+            .build()
+        
+        and: "sample metrics"
+        def metrics = createSampleMetrics(totalExecutions: 30L, successCount: 28L, failureCount: 2L)
+        
+        when: "exporting via HTTP"
+        exporter.export("HTTP Test", metrics)
+        
+        then: "no exceptions are thrown"
+        noExceptionThrown()
+        
+        cleanup:
+        exporter?.close()
+    }
+    
+    def "should handle protocol switching between gRPC and HTTP"() {
+        given: "exporters with different protocols"
+        def grpcExporter = OpenTelemetryExporter.builder()
+            .protocol(OpenTelemetryExporter.Protocol.GRPC)
+            .build()
+        def httpExporter = OpenTelemetryExporter.builder()
+            .protocol(OpenTelemetryExporter.Protocol.HTTP)
+            .endpoint("http://localhost:4318")
+            .build()
+        
+        and: "metrics"
+        def metrics = createSampleMetrics(totalExecutions: 20L, successCount: 20L, failureCount: 0L)
+        
+        when: "exporting with both protocols"
+        grpcExporter.export("gRPC test", metrics)
+        httpExporter.export("HTTP test", metrics)
+        
+        then: "both exporters work without errors"
+        noExceptionThrown()
+        
+        cleanup:
+        grpcExporter?.close()
+        httpExporter?.close()
+    }
+    
     def "should fail to build with blank endpoint"() {
         when: "building with blank endpoint"
         OpenTelemetryExporter.builder()

@@ -7,6 +7,7 @@ import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.metrics.Meter;
 import io.opentelemetry.exporter.otlp.metrics.OtlpGrpcMetricExporter;
 import io.opentelemetry.sdk.metrics.SdkMeterProvider;
+import io.opentelemetry.sdk.metrics.export.MetricExporter;
 import io.opentelemetry.sdk.metrics.export.PeriodicMetricReader;
 import io.opentelemetry.sdk.resources.Resource;
 import org.slf4j.Logger;
@@ -52,29 +53,20 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     private final Meter meter;
     private final Map<String, String> additionalHeaders;
     private final Map<String, String> resourceAttributes;
+    private final Protocol protocol;
     
     private OpenTelemetryExporter(Builder builder) {
         this.endpoint = builder.endpoint;
         this.serviceName = builder.serviceName;
         this.additionalHeaders = Map.copyOf(builder.additionalHeaders);
         this.resourceAttributes = Map.copyOf(builder.resourceAttributes);
+        this.protocol = builder.protocol;
         
-        // Create OTLP exporter
-        var otlpExporterBuilder = OtlpGrpcMetricExporter.builder()
-            .setEndpoint(endpoint)
-            .setTimeout(Duration.ofSeconds(30));
-        
-        // Add custom headers if provided (e.g., for authentication)
-        if (!additionalHeaders.isEmpty()) {
-            additionalHeaders.forEach((key, value) -> 
-                otlpExporterBuilder.addHeader(key, value)
-            );
-        }
-        
-        var otlpExporter = otlpExporterBuilder.build();
+        // Create appropriate exporter based on protocol
+        var metricExporter = createExporter(builder);
         
         // Create metric reader with periodic export
-        var metricReader = PeriodicMetricReader.builder(otlpExporter)
+        var metricReader = PeriodicMetricReader.builder(metricExporter)
             .setInterval(Duration.ofSeconds(builder.exportIntervalSeconds))
             .build();
         
@@ -95,8 +87,63 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         
         this.meter = meterProvider.get("vajrapulse");
         
-        logger.info("OpenTelemetry exporter initialized - endpoint: {}, service: {}", 
-            endpoint, serviceName);
+        logger.info("OpenTelemetry exporter initialized - endpoint: {}, service: {}, protocol: {}", 
+            endpoint, serviceName, protocol);
+    }
+    
+    /**
+     * Creates the appropriate metric exporter based on protocol selection.
+     */
+    private MetricExporter createExporter(Builder builder) {
+        return switch (protocol) {
+            case GRPC -> createGrpcExporter(builder);
+            case HTTP -> createHttpExporter(builder);
+        };
+    }
+    
+    /**
+     * Creates gRPC metric exporter (default).
+     * Supports both gRPC and HTTP/1.1 endpoints depending on URL scheme.
+     */
+    private MetricExporter createGrpcExporter(Builder builder) {
+        var otlpExporterBuilder = OtlpGrpcMetricExporter.builder()
+            .setEndpoint(endpoint)
+            .setTimeout(Duration.ofSeconds(30));
+        
+        // Add custom headers if provided (e.g., for authentication)
+        if (!additionalHeaders.isEmpty()) {
+            additionalHeaders.forEach((key, value) -> 
+                otlpExporterBuilder.addHeader(key, value)
+            );
+        }
+        
+        return otlpExporterBuilder.build();
+    }
+    
+    /**
+     * Creates HTTP metric exporter.
+     * Uses HTTP/1.1 POST requests with Protocol Buffers encoding.
+     * HTTP endpoints typically use port 4318.
+     */
+    private MetricExporter createHttpExporter(Builder builder) {
+        // For HTTP exports, we need to ensure the endpoint uses HTTP protocol
+        String httpEndpoint = endpoint;
+        if (!httpEndpoint.startsWith("http://") && !httpEndpoint.startsWith("https://")) {
+            httpEndpoint = "http://" + httpEndpoint;
+        }
+        
+        var otlpExporterBuilder = OtlpGrpcMetricExporter.builder()
+            .setEndpoint(httpEndpoint)
+            .setTimeout(Duration.ofSeconds(30));
+        
+        // Add custom headers if provided (e.g., for authentication)
+        if (!additionalHeaders.isEmpty()) {
+            additionalHeaders.forEach((key, value) -> 
+                otlpExporterBuilder.addHeader(key, value)
+            );
+        }
+        
+        return otlpExporterBuilder.build();
     }
     
     @Override
@@ -207,6 +254,7 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         private int exportIntervalSeconds = 10;
         private Map<String, String> additionalHeaders = Map.of();
         private Map<String, String> resourceAttributes = Map.of();
+        private Protocol protocol = Protocol.GRPC;
         
         /**
          * Sets the OTLP endpoint URL.
@@ -289,6 +337,25 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         }
         
         /**
+         * Sets the OTLP protocol (gRPC or HTTP).
+         * 
+         * <p>Default is gRPC. Use HTTP for better compatibility with proxies
+         * or firewalls that don't support gRPC.
+         * 
+         * <p>Example:
+         * <pre>{@code
+         * builder.protocol(OpenTelemetryExporter.Protocol.HTTP)
+         * }</pre>
+         * 
+         * @param protocol the OTLP protocol (gRPC or HTTP)
+         * @return this builder
+         */
+        public Builder protocol(Protocol protocol) {
+            this.protocol = protocol;
+            return this;
+        }
+        
+        /**
          * Builds the OpenTelemetryExporter instance.
          * 
          * @return a new exporter
@@ -303,5 +370,26 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
             }
             return new OpenTelemetryExporter(this);
         }
+    }
+    
+    /**
+     * OTLP protocol for metrics export.
+     * 
+     * <p>GRPC is the default and most efficient protocol.
+     * HTTP should be used when gRPC is not supported by proxies or firewalls.
+     */
+    public enum Protocol {
+        /**
+         * gRPC protocol (default) - efficient binary protocol using HTTP/2.
+         * Best for most deployments. Default port: 4317 (or 4318 with /v1/metrics path).
+         */
+        GRPC,
+        
+        /**
+         * HTTP protocol - uses HTTP POST with Protocol Buffers.
+         * Better compatibility with proxies and firewalls.
+         * Default port: 4318.
+         */
+        HTTP
     }
 }

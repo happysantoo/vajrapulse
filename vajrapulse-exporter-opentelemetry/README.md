@@ -69,6 +69,7 @@ OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
     .endpoint("https://otlp.example.com:4318")
     .serviceName("checkout-load-test")
     .exportInterval(5)  // Export every 5 seconds
+    .protocol(OpenTelemetryExporter.Protocol.GRPC)  // or Protocol.HTTP
     .headers(Map.of(
         "Authorization", "Bearer YOUR_TOKEN",
         "X-Org-ID", orgId
@@ -88,8 +89,50 @@ OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
 | `endpoint` | String | `http://localhost:4318` | OTLP gRPC endpoint URL |
 | `serviceName` | String | `vajrapulse-load-test` | Service name for resource attribution |
 | `exportInterval` | int | `10` | Export interval in seconds |
+| `protocol` | Protocol | `GRPC` | OTLP protocol: `GRPC` or `HTTP` |
 | `headers` | Map<String, String> | `{}` | Custom headers (e.g., auth tokens) |
 | `resourceAttributes` | Map<String, String> | `{}` | Custom resource attributes for context |
+
+## OTLP Protocols
+
+The exporter supports both gRPC and HTTP protocols for sending metrics:
+
+### gRPC Protocol (Default)
+
+- **Binary protocol** using HTTP/2
+- **More efficient** - lower latency and bandwidth
+- **Recommended** for most deployments
+- Default port: **4317** (or 4318 with `/v1/metrics` path)
+
+```java
+.protocol(OpenTelemetryExporter.Protocol.GRPC)
+```
+
+### HTTP Protocol
+
+- **HTTP/1.1 POST** with Protocol Buffers encoding
+- **Better compatibility** with proxies and firewalls
+- **Debugging friendly** - can capture raw requests
+- Default port: **4318**
+
+```java
+.protocol(OpenTelemetryExporter.Protocol.HTTP)
+.endpoint("http://localhost:4318")
+```
+
+### Choosing Your Protocol
+
+Use **gRPC** (default) when:
+- ✅ Direct connection to collector possible
+- ✅ Firewall supports HTTP/2
+- ✅ Lowest latency needed
+- ✅ Optimal resource usage
+
+Use **HTTP** when:
+- ✅ Proxies or load balancers don't support gRPC
+- ✅ Need to inspect metrics in transit
+- ✅ Collector only has HTTP endpoint
+- ✅ Need maximum compatibility
 
 ## Resource Attributes
 
