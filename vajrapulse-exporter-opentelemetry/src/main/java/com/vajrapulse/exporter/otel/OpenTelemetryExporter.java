@@ -33,7 +33,8 @@ import java.util.concurrent.TimeUnit;
  * <p>Example usage:
  * <pre>{@code
  * OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
- *     .endpoint("http://localhost:4318/v1/metrics")
+ *     // gRPC (default protocol) uses port 4317 and no path
+ *     .endpoint("http://localhost:4317")
  *     .resourceAttributes(Map.of(
  *         "service.name", "my-load-test",
  *         "service.version", "1.0.0"
@@ -269,7 +270,8 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
      * Builder for creating OpenTelemetryExporter instances.
      */
     public static final class Builder {
-        private String endpoint = "http://localhost:4318";
+         // Default to gRPC endpoint for OTLP metrics
+         private String endpoint = "http://localhost:4317";
         private int exportIntervalSeconds = 10;
         private Map<String, String> additionalHeaders = Map.of();
         private Map<String, String> resourceAttributes = Map.of();
@@ -406,14 +408,14 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     public enum Protocol {
         /**
          * gRPC protocol (default) - efficient binary protocol using HTTP/2.
-         * Best for most deployments. Default port: 4317 (or 4318 with /v1/metrics path).
+         * Best for most deployments. Default port: 4317.
          */
         GRPC,
         
         /**
-         * HTTP protocol - uses HTTP POST with Protocol Buffers.
-         * Better compatibility with proxies and firewalls.
-         * Default port: 4318.
+         * HTTP protocol - uses HTTP/1.1 POST with Protocol Buffers encoding.
+         * Better compatibility with proxies and firewalls. Default port: 4318 with path
+         * "/v1/metrics" (e.g., http://localhost:4318/v1/metrics).
          */
         HTTP
     }
