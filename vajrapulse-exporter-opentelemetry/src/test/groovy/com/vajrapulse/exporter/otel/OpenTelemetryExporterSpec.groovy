@@ -97,6 +97,50 @@ class OpenTelemetryExporterSpec extends Specification {
         exporter?.close()
     }
     
+    def "should build exporter with custom resource attributes"() {
+        given: "custom resource attributes"
+        def attributes = [
+            "environment": "production",
+            "region": "us-east-1",
+            "test.name": "checkout-flow",
+            "team": "platform"
+        ]
+        
+        when: "building with custom resource attributes"
+        def exporter = OpenTelemetryExporter.builder()
+            .resourceAttributes(attributes)
+            .build()
+        
+        then: "exporter is created successfully"
+        exporter != null
+        
+        cleanup:
+        exporter?.close()
+    }
+    
+    def "should export with custom resource attributes included"() {
+        given: "an exporter with custom resource attributes"
+        def attributes = [
+            "environment": "staging",
+            "datacenter": "aws-eu-west-1"
+        ]
+        def exporter = OpenTelemetryExporter.builder()
+            .resourceAttributes(attributes)
+            .build()
+        
+        and: "sample metrics"
+        def metrics = createSampleMetrics(totalExecutions: 50L, successCount: 50L, failureCount: 0L)
+        
+        when: "exporting with resource attributes"
+        exporter.export("Test with Attributes", metrics)
+        
+        then: "no exceptions are thrown"
+        noExceptionThrown()
+        
+        cleanup:
+        exporter?.close()
+    }
+    
     def "should fail to build with blank endpoint"() {
         when: "building with blank endpoint"
         OpenTelemetryExporter.builder()

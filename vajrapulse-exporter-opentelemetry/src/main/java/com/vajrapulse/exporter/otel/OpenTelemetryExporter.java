@@ -51,11 +51,13 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     private final SdkMeterProvider meterProvider;
     private final Meter meter;
     private final Map<String, String> additionalHeaders;
+    private final Map<String, String> resourceAttributes;
     
     private OpenTelemetryExporter(Builder builder) {
         this.endpoint = builder.endpoint;
         this.serviceName = builder.serviceName;
         this.additionalHeaders = Map.copyOf(builder.additionalHeaders);
+        this.resourceAttributes = Map.copyOf(builder.resourceAttributes);
         
         // Create OTLP exporter
         var otlpExporterBuilder = OtlpGrpcMetricExporter.builder()
@@ -77,13 +79,17 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
             .build();
         
         // Create meter provider with service resource
+        var attributesBuilder = Attributes.builder()
+            .put(AttributeKey.stringKey("service.name"), serviceName)
+            .put(AttributeKey.stringKey("service.version"), "1.0.0");
+        
+        // Add custom resource attributes
+        resourceAttributes.forEach((key, value) ->
+            attributesBuilder.put(AttributeKey.stringKey(key), value)
+        );
+        
         this.meterProvider = SdkMeterProvider.builder()
-            .setResource(Resource.create(
-                Attributes.of(
-                    AttributeKey.stringKey("service.name"), serviceName,
-                    AttributeKey.stringKey("service.version"), "1.0.0"
-                )
-            ))
+            .setResource(Resource.create(attributesBuilder.build()))
             .registerMetricReader(metricReader)
             .build();
         
@@ -200,6 +206,7 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         private String serviceName = "vajrapulse-load-test";
         private int exportIntervalSeconds = 10;
         private Map<String, String> additionalHeaders = Map.of();
+        private Map<String, String> resourceAttributes = Map.of();
         
         /**
          * Sets the OTLP endpoint URL.
@@ -247,6 +254,37 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
          */
         public Builder headers(Map<String, String> headers) {
             this.additionalHeaders = headers;
+            return this;
+        }
+        
+        /**
+         * Adds custom resource attributes to be sent with metrics.
+         * 
+         * <p>Resource attributes provide context about the load test environment.
+         * These are sent with every metric to the OTLP backend and can be used
+         * for filtering, grouping, and correlation.
+         * 
+         * <p>Example:
+         * <pre>{@code
+         * builder.resourceAttributes(Map.of(
+         *     "environment", "production",
+         *     "region", "us-east-1",
+         *     "test.name", "checkout-flow",
+         *     "team", "platform"
+         * ))
+         * }</pre>
+         * 
+         * <p>Built-in resource attributes (always included):
+         * <ul>
+         *   <li>service.name - from serviceName()</li>
+         *   <li>service.version - "1.0.0"</li>
+         * </ul>
+         * 
+         * @param attributes map of attribute names to values
+         * @return this builder
+         */
+        public Builder resourceAttributes(Map<String, String> attributes) {
+            this.resourceAttributes = attributes;
             return this;
         }
         

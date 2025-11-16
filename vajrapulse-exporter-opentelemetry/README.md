@@ -70,8 +70,13 @@ OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
     .serviceName("checkout-load-test")
     .exportInterval(5)  // Export every 5 seconds
     .headers(Map.of(
-        "Authorization", "Bearer " + apiKey,
+        "Authorization", "Bearer YOUR_TOKEN",
         "X-Org-ID", orgId
+    ))
+    .resourceAttributes(Map.of(
+        "environment", "production",
+        "region", "us-east-1",
+        "team", "platform"
     ))
     .build();
 ```
@@ -84,6 +89,65 @@ OpenTelemetryExporter exporter = OpenTelemetryExporter.builder()
 | `serviceName` | String | `vajrapulse-load-test` | Service name for resource attribution |
 | `exportInterval` | int | `10` | Export interval in seconds |
 | `headers` | Map<String, String> | `{}` | Custom headers (e.g., auth tokens) |
+| `resourceAttributes` | Map<String, String> | `{}` | Custom resource attributes for context |
+
+## Resource Attributes
+
+Resource attributes provide contextual information about your load test environment. These are sent with every metric batch and can be used by the OTLP backend for:
+- **Filtering** - Query metrics by environment, region, team, etc.
+- **Correlation** - Link metrics to specific deployments or test runs
+- **Alerting** - Create rules based on resource context
+- **Dashboard scoping** - Filter dashboards to specific environments
+
+### Built-in Attributes
+
+The following attributes are always included:
+- `service.name` - Your service name (from `serviceName()`)
+- `service.version` - Always "1.0.0"
+
+### Custom Attributes
+
+Pass any custom attributes via the builder:
+
+```java
+.resourceAttributes(Map.of(
+    "environment", "staging",
+    "region", "us-west-2",
+    "test.run_id", "load-test-2024-11-15",
+    "team", "platform",
+    "datacenter", "aws-us-west-2a"
+))
+```
+
+These attributes appear in your OTLP backend as:
+```
+Resource attributes:
+  service.name: "my-load-test"
+  service.version: "1.0.0"
+  environment: "staging"
+  region: "us-west-2"
+  test.run_id: "load-test-2024-11-15"
+  team: "platform"
+  datacenter: "aws-us-west-2a"
+```
+
+### Resource Attributes Best Practices
+
+1. **Keep attribute keys consistent** - Use snake_case for custom attributes
+2. **Avoid high-cardinality values** - Don't use unique IDs per execution
+3. **Use semantic conventions** - Follow OpenTelemetry naming when possible
+4. **Document your attributes** - Document what each attribute represents
+
+Good examples:
+- ✅ `environment: "production"`
+- ✅ `region: "us-east-1"`
+- ✅ `test.name: "checkout-flow"`
+- ✅ `team: "platform"`
+
+Avoid:
+- ❌ `execution_id: "abc123def456"` (too many unique values)
+- ❌ `timestamp: "2024-11-15T10:30:00Z"` (use timestamps in metrics instead)
+- ❌ `all_lowercase_without_meaningful_names`
 
 ## Exported Metrics
 
