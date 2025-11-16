@@ -65,10 +65,9 @@ check_service "grafana" "http://localhost:3000/api/health" "Grafana"
 echo ""
 
 echo "3. Checking Prometheus Metrics..."
-check_metrics "vajrapulse_executions_total" "Total Executions"
-check_metrics "vajrapulse_executions_success" "Successful Executions"
-check_metrics "vajrapulse_success_rate" "Success Rate"
-check_metrics "vajrapulse_latency_success_bucket" "Success Latency Histogram"
+check_metrics "vajrapulse_execution_count" "Execution Count (status-labeled)"
+check_metrics "vajrapulse_success_rate" "Success Rate Gauge"
+check_metrics "vajrapulse_execution_duration" "Execution Duration Percentiles (gauge series)"
 echo ""
 
 echo "4. Checking Grafana Dashboard..."

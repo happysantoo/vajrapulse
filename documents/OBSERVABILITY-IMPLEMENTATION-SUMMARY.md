@@ -122,7 +122,7 @@ TaskIdentity identity = new TaskIdentity(
 | Metric | Type | Description |
 |--------|------|-------------|
 | `vajrapulse_execution_count` | Counter | Count of task executions, with `status=success|failure` |
-| `vajrapulse_execution_duration` | Histogram | Execution duration values in ms, with `status` and `percentile` attributes |
+| `vajrapulse_execution_duration` | Gauge | Execution duration percentiles (ms), with `status` and `percentile` attributes |
 | `vajrapulse_success_rate` | Gauge | Success percentage (0-100) |
 
 ---
@@ -177,7 +177,7 @@ examples/http-load-test/src/main/java/com/example/http/
 1. ✅ Started full stack with `docker-compose up -d`
 2. ✅ All 3 containers running and healthy
 3. ✅ Ran load test with `./gradlew :examples:http-load-test:runOtel`
-4. ✅ Verified metrics in Prometheus: `vajrapulse_executions_total` = 16,214
+4. ✅ Verified metrics in Prometheus: `vajrapulse_execution_count` present with `status` labels
 5. ✅ Verified Grafana dashboard auto-provisioned
 6. ✅ Confirmed task identity tags present in metrics
 7. ✅ Health check script working: `./verify-stack.sh`

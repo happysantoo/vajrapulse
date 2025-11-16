@@ -63,8 +63,7 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     // Pre-created unified instruments (semantic conventions applied)
     // Counter: vajrapulse.execution.count {status=success|failure}
     private final io.opentelemetry.api.metrics.LongCounter executionCount;
-    // Histogram: vajrapulse.execution.duration {status=success|failure, percentile=<p>}
-    private final io.opentelemetry.api.metrics.DoubleHistogram executionDuration;
+    // Gauge (async): vajrapulse.execution.duration {status=success|failure, percentile=<p>}
 
     // Track last cumulative counts to emit deltas for monotonic counter per status
     private long lastSuccess;
@@ -114,10 +113,34 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         this.executionCount = meter.counterBuilder("vajrapulse.execution.count")
             .setDescription("Count of task executions partitioned by status (success|failure)")
             .build();
-        this.executionDuration = meter.histogramBuilder("vajrapulse.execution.duration")
-            .setDescription("Execution duration distribution (percentile snapshot values) partitioned by status and percentile")
+        // Asynchronous gauge for duration percentiles (snapshot series)
+        meter.gaugeBuilder("vajrapulse.execution.duration")
+            .setDescription("Execution duration percentiles in milliseconds (snapshot) by status and percentile")
             .setUnit("ms")
-            .build();
+            .buildWithCallback(measurement -> {
+                var snapshot = lastMetrics.get();
+                if (snapshot == null) return;
+                if (snapshot.successCount() > 0) {
+                    for (var entry : snapshot.successPercentiles().entrySet()) {
+                        String p = String.valueOf(entry.getKey());
+                        double ms = entry.getValue() / 1_000_000.0;
+                        measurement.record(ms, Attributes.builder()
+                            .put(AttributeKey.stringKey("status"), "success")
+                            .put(AttributeKey.stringKey("percentile"), p)
+                            .build());
+                    }
+                }
+                if (snapshot.failureCount() > 0) {
+                    for (var entry : snapshot.failurePercentiles().entrySet()) {
+                        String p = String.valueOf(entry.getKey());
+                        double ms = entry.getValue() / 1_000_000.0;
+                        measurement.record(ms, Attributes.builder()
+                            .put(AttributeKey.stringKey("status"), "failure")
+                            .put(AttributeKey.stringKey("percentile"), p)
+                            .build());
+                    }
+                }
+            });
 
         // Asynchronous gauge for success rate referencing latest metrics snapshot
         meter.gaugeBuilder("vajrapulse.success.rate")
@@ -209,30 +232,7 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
             lastSuccess = success;
             lastFailure = failure;
 
-            // Record success latency percentile snapshot values
-            if (success > 0) {
-                for (var entry : metrics.successPercentiles().entrySet()) {
-                    double percentile = entry.getKey();
-                    double latencyMs = entry.getValue() / 1_000_000.0; // nanos -> millis
-                    executionDuration.record(latencyMs,
-                        Attributes.builder()
-                            .put(AttributeKey.stringKey("status"), "success")
-                            .put(AttributeKey.doubleKey("percentile"), percentile)
-                            .build());
-                }
-            }
-            // Record failure latency percentile snapshot values
-            if (failure > 0) {
-                for (var entry : metrics.failurePercentiles().entrySet()) {
-                    double percentile = entry.getKey();
-                    double latencyMs = entry.getValue() / 1_000_000.0;
-                    executionDuration.record(latencyMs,
-                        Attributes.builder()
-                            .put(AttributeKey.stringKey("status"), "failure")
-                            .put(AttributeKey.doubleKey("percentile"), percentile)
-                            .build());
-                }
-            }
+            // Duration percentiles are recorded via async gauge callback above
 
             // Flush is deferred to periodic reader; avoid heavy forceFlush each call.
             logger.debug("Metrics recorded for export batch: successDelta={}, failureDelta={}, successTotal={}, failureTotal={}", deltaSuccess, deltaFailure, success, failure);

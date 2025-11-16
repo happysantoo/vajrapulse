@@ -236,7 +236,7 @@ docker-compose down -v
 curl http://localhost:8889/metrics
 
 # Prometheus API
-curl http://localhost:9090/api/v1/query?query=vajrapulse_executions_total
+curl http://localhost:9090/api/v1/query?query=vajrapulse_execution_count
 ```
 
 ## 📁 Directory Structure
@@ -388,7 +388,7 @@ For production environments:
 |-------------|------|-------------|
 | `vajrapulse_execution_count` | Counter | Executions with `status=success|failure` |
 | `vajrapulse_success_rate` | Gauge | Success rate (0-100%) |
-| `vajrapulse_execution_duration` | Histogram | Duration values (ms) with `status` and `percentile` labels |
+| `vajrapulse_execution_duration` | Gauge | Duration percentiles (ms) with `status` and `percentile` labels |
 
 All metrics include resource attributes as labels.
 
