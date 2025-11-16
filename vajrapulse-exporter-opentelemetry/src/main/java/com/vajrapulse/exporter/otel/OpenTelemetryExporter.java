@@ -6,6 +6,7 @@ import com.vajrapulse.api.TaskIdentity;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.metrics.Meter;
+import io.opentelemetry.exporter.otlp.http.metrics.OtlpHttpMetricExporter;
 import io.opentelemetry.exporter.otlp.metrics.OtlpGrpcMetricExporter;
 import io.opentelemetry.sdk.metrics.SdkMeterProvider;
 import io.opentelemetry.sdk.metrics.export.MetricExporter;
@@ -189,20 +190,24 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     /**
      * Creates HTTP metric exporter.
      * Uses HTTP/1.1 POST requests with Protocol Buffers encoding.
-     * HTTP endpoints typically use port 4318.
+     * HTTP endpoints typically use port 4318 with path /v1/metrics.
      */
     private MetricExporter createHttpExporter(Builder builder) {
-        // HTTP metrics export may fall back to gRPC exporter when HTTP metrics exporter is unavailable in dependency version.
         String httpEndpoint = endpoint;
         if (!httpEndpoint.startsWith("http://") && !httpEndpoint.startsWith("https://")) {
             httpEndpoint = "http://" + httpEndpoint;
         }
-        var otlpExporterBuilder = OtlpGrpcMetricExporter.builder()
+        
+        var otlpExporterBuilder = OtlpHttpMetricExporter.builder()
             .setEndpoint(httpEndpoint)
             .setTimeout(Duration.ofSeconds(30));
+        
         if (!additionalHeaders.isEmpty()) {
-            additionalHeaders.forEach(otlpExporterBuilder::addHeader);
+            additionalHeaders.forEach((key, value) -> 
+                otlpExporterBuilder.addHeader(key, value)
+            );
         }
+        
         return otlpExporterBuilder.build();
     }
     
