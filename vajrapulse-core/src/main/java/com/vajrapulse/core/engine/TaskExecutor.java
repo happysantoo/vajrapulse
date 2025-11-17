@@ -1,7 +1,9 @@
 package com.vajrapulse.core.engine;
 
-import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskLifecycle;
 import com.vajrapulse.api.TaskResult;
+import com.vajrapulse.core.tracing.Tracing;
+import io.opentelemetry.api.trace.Span;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,10 +29,10 @@ import org.slf4j.LoggerFactory;
 public final class TaskExecutor {
     private static final Logger logger = LoggerFactory.getLogger(TaskExecutor.class);
     
-    private final Task task;
+    private final TaskLifecycle taskLifecycle;
     
-    public TaskExecutor(Task task) {
-        this.task = task;
+    public TaskExecutor(TaskLifecycle taskLifecycle) {
+        this.taskLifecycle = taskLifecycle;
     }
     
     /**
@@ -39,7 +41,7 @@ public final class TaskExecutor {
      * <p>This method:
      * <ol>
      *   <li>Captures start time</li>
-     *   <li>Calls task.execute()</li>
+     *   <li>Calls taskLifecycle.execute(iteration)</li>
      *   <li>Catches any exceptions</li>
      *   <li>Captures end time</li>
      *   <li>Logs execution details at TRACE level</li>
@@ -52,9 +54,14 @@ public final class TaskExecutor {
     public ExecutionMetrics executeWithMetrics(long iteration) {
         long startNanos = System.nanoTime();
         TaskResult result;
+        Span execSpan = Span.getInvalid();
+        // Parent scenario span not tracked here yet; execution spans stand-alone for now.
+        if (Tracing.isEnabled()) {
+            execSpan = Tracing.startExecutionSpan(null, "unknown", iteration); // runId injected by caller soon
+        }
         
         try {
-            result = task.execute();
+            result = taskLifecycle.execute(iteration);
             long endNanos = System.nanoTime();
             long durationNanos = endNanos - startNanos;
             
@@ -66,6 +73,8 @@ public final class TaskExecutor {
                     String.format("%.3f", durationNanos / 1_000_000.0));
             }
             
+            Tracing.markSuccess(execSpan);
+            execSpan.end();
             return new ExecutionMetrics(startNanos, endNanos, result, iteration);
             
         } catch (Exception e) {
@@ -85,16 +94,18 @@ public final class TaskExecutor {
             }
             
             result = TaskResult.failure(e);
+            Tracing.markFailure(execSpan, e);
+            execSpan.end();
             return new ExecutionMetrics(startNanos, endNanos, result, iteration);
         }
     }
     
     /**
-     * Returns the underlying task.
+     * Returns the underlying task lifecycle.
      * 
-     * @return the task being executed
+     * @return the task lifecycle being executed
      */
-    public Task getTask() {
-        return task;
+    public TaskLifecycle getTaskLifecycle() {
+        return taskLifecycle;
     }
 }

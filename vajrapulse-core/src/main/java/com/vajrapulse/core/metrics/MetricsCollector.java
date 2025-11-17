@@ -30,17 +30,18 @@ public final class MetricsCollector {
     private final Timer failureTimer;
     private final Counter totalCounter;
     private final double[] configuredPercentiles;
+    private final String runId; // Optional run correlation tag
     
     /**
      * Creates a collector with default SimpleMeterRegistry.
      */
     public MetricsCollector() {
-        this(createDefaultRegistry(), new double[]{0.50, 0.95, 0.99});
+        this(createDefaultRegistry(), null, new double[]{0.50, 0.95, 0.99});
     }
 
     /** Convenience constructor supplying only custom percentiles using default registry. */
     public MetricsCollector(double... percentiles) {
-        this(createDefaultRegistry(), percentiles);
+        this(createDefaultRegistry(), null, percentiles);
     }
     
     private static SimpleMeterRegistry createDefaultRegistry() {
@@ -58,7 +59,16 @@ public final class MetricsCollector {
      * Factory allowing custom registry, percentiles and SLO buckets.
      */
     public static MetricsCollector createWith(MeterRegistry registry, double[] percentiles, Duration... sloBuckets) {
-        return new MetricsCollector(registry, percentiles, sloBuckets);
+        return new MetricsCollector(registry, null, percentiles, sloBuckets);
+    }
+
+    /** Factory including runId tag. */
+    public static MetricsCollector createWithRunId(String runId, double[] percentiles, Duration... sloBuckets) {
+        return createWithRunId(createDefaultRegistry(), runId, percentiles, sloBuckets);
+    }
+
+    public static MetricsCollector createWithRunId(MeterRegistry registry, String runId, double[] percentiles, Duration... sloBuckets) {
+        return new MetricsCollector(registry, runId, percentiles, sloBuckets);
     }
     
     /**
@@ -67,11 +77,12 @@ public final class MetricsCollector {
      * @param registry the meter registry to use
      */
     public MetricsCollector(MeterRegistry registry, double... percentiles) {
-        this(registry, percentiles, (Duration[]) null);
+        this(registry, null, percentiles, (Duration[]) null);
     }
 
-    private MetricsCollector(MeterRegistry registry, double[] percentiles, Duration... sloBuckets) {
+    private MetricsCollector(MeterRegistry registry, String runId, double[] percentiles, Duration... sloBuckets) {
         this.registry = registry;
+        this.runId = runId;
         this.configuredPercentiles = sanitizePercentiles(percentiles);
 
         Duration[] objectives = (sloBuckets != null && sloBuckets.length > 0)
@@ -87,27 +98,32 @@ public final class MetricsCollector {
                 Duration.ofSeconds(5)
             };
         
-        this.successTimer = Timer.builder("vajrapulse.execution.duration")
+        var successBuilder = Timer.builder("vajrapulse.execution.duration")
             .tag("status", "success")
             .description("Successful task execution duration")
             .publishPercentiles(configuredPercentiles)
             .publishPercentileHistogram()
             .percentilePrecision(2)
-            .serviceLevelObjectives(objectives)
-            .register(registry);
-        
-        this.failureTimer = Timer.builder("vajrapulse.execution.duration")
+            .serviceLevelObjectives(objectives);
+        var failureBuilder = Timer.builder("vajrapulse.execution.duration")
             .tag("status", "failure")
             .description("Failed task execution duration")
             .publishPercentiles(configuredPercentiles)
             .publishPercentileHistogram()
             .percentilePrecision(2)
-            .serviceLevelObjectives(objectives)
-            .register(registry);
-        
-        this.totalCounter = Counter.builder("vajrapulse.execution.total")
-            .description("Total task executions")
-            .register(registry);
+            .serviceLevelObjectives(objectives);
+        if (runId != null && !runId.isBlank()) {
+            successBuilder.tag("run_id", runId);
+            failureBuilder.tag("run_id", runId);
+        }
+        this.successTimer = successBuilder.register(registry);
+        this.failureTimer = failureBuilder.register(registry);
+        var totalBuilder = Counter.builder("vajrapulse.execution.total")
+            .description("Total task executions");
+        if (runId != null && !runId.isBlank()) {
+            totalBuilder.tag("run_id", runId);
+        }
+        this.totalCounter = totalBuilder.register(registry);
     }
     
     /**
@@ -175,6 +191,9 @@ public final class MetricsCollector {
     public MeterRegistry getRegistry() {
         return registry;
     }
+
+    /** Returns runId if present, else null. */
+    public String getRunId() { return runId; }
 
     private double[] sanitizePercentiles(double[] input) {
         if (input == null || input.length == 0) {

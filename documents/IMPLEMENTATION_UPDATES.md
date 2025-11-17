@@ -1,6 +1,43 @@
-# Phase 1 Implementation Plan - Updates Summary
+# VajraPulse Implementation Updates
 
-## Changes Made
+## Latest: ✅ P0 (Stabilize Core) - COMPLETE
+
+**Date**: 2025-01-XX  
+**Status**: All P0 items complete, ready for 0.9 release
+
+### P0.1 TaskLifecycle API ✅
+- Explicit lifecycle contract with `init()`, `execute(long iteration)`, `teardown()`
+- Replaces legacy `Task` interface with setup/cleanup
+- Automatic adapter for backwards compatibility
+- 7 comprehensive tests, all passing
+- **Details**: See `documents/P0_LIFECYCLE_SHUTDOWN_COMPLETE.md`
+
+### P0.2 Graceful Shutdown ✅
+- ShutdownManager with signal handling (SIGINT/SIGTERM)
+- Configurable drain timeout (5s default) and force timeout (10s default)
+- Shutdown callbacks and hook registration
+- Thread-safe shutdown state tracking
+- 12 comprehensive tests covering graceful drain, force shutdown, callbacks
+- **Details**: See `documents/P0_LIFECYCLE_SHUTDOWN_COMPLETE.md`
+
+### P0.3 Configuration System ✅
+- YAML-based configuration with SnakeYAML 2.2
+- Environment variable overrides (VAJRAPULSE_ prefix)
+- Duration parsing (500ms, 30s, 2m, 1h formats)
+- Immutable Java 21 records (VajraPulseConfig)
+- Search paths: ./vajrapulse.conf.yml, ~/.vajrapulse/, /etc/vajrapulse/
+- ExecutionEngine integration (shutdown timeouts, thread pool strategy)
+- 31 comprehensive tests (24 unit + 5 integration + 2 documented/skipped)
+- **Details**: See `documents/P0_CONFIGURATION_COMPLETE.md`
+
+**P0 Summary**:
+- **Total Tests Added**: 50 (TaskLifecycle: 7, Shutdown: 12, Config: 31)
+- **Coverage**: 90.5% maintained across all modules
+- **Build Status**: ✅ BUILD SUCCESSFUL
+
+---
+
+## Phase 1 Implementation - Previous Updates
 
 ### 0. ✅ Metrics Abstraction & Pipeline (Recent)
 - Introduced `MetricsExporter` interface in `vajrapulse-core` for pluggable output strategies.

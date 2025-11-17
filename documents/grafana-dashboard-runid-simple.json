@@ -1,0 +1,54 @@
+{
+  "title": "VajraPulse Run Overview",
+  "tags": ["vajrapulse", "run_id"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Total Executions",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(vajrapulse_executions_total{run_id=\"$run_id\"})"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4}
+    },
+    {
+      "type": "stat",
+      "title": "Success Rate %",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "(sum(vajrapulse_executions_success{run_id=\"$run_id\"}) / sum(vajrapulse_executions_total{run_id=\"$run_id\"})) * 100"
+        }
+      ],
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4}
+    },
+    {
+      "type": "graph",
+      "title": "Latency Percentiles (ms)",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "histogram_quantile(0.5, sum by (le) (rate(vajrapulse_latency_success_bucket{run_id=\"$run_id\"}[1m])))", "legendFormat": "P50"},
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate(vajrapulse_latency_success_bucket{run_id=\"$run_id\"}[1m])))", "legendFormat": "P95"},
+        {"expr": "histogram_quantile(0.99, sum by (le) (rate(vajrapulse_latency_success_bucket{run_id=\"$run_id\"}[1m])))", "legendFormat": "P99"}
+      ],
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8}
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "run_id",
+        "type": "query",
+        "datasource": "Prometheus",
+        "query": "label_values(vajrapulse_executions_total, run_id)",
+        "refresh": 2
+      }
+    ]
+  },
+  "time": {"from": "now-15m", "to": "now"},
+  "schemaVersion": 38,
+  "version": 1
+}

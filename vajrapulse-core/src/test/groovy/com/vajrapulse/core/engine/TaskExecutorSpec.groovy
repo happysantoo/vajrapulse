@@ -1,6 +1,6 @@
 package com.vajrapulse.core.engine
 
-import com.vajrapulse.api.Task
+import com.vajrapulse.api.TaskLifecycle
 import com.vajrapulse.api.TaskResult
 import spock.lang.Specification
 
@@ -8,11 +8,17 @@ class TaskExecutorSpec extends Specification {
 
     def "should execute task successfully and capture metrics"() {
         given: "a simple successful task"
-        Task task = new Task() {
+        TaskLifecycle task = new TaskLifecycle() {
             @Override
-            TaskResult execute() {
+            void init() {}
+            
+            @Override
+            TaskResult execute(long iteration) {
                 return TaskResult.success("test-data")
             }
+            
+            @Override
+            void teardown() {}
         }
         def executor = new TaskExecutor(task)
         
@@ -31,11 +37,17 @@ class TaskExecutorSpec extends Specification {
     def "should capture failure when task fails"() {
         given: "a task that returns failure"
         def error = new RuntimeException("test error")
-        Task task = new Task() {
+        TaskLifecycle task = new TaskLifecycle() {
             @Override
-            TaskResult execute() {
+            void init() {}
+            
+            @Override
+            TaskResult execute(long iteration) {
                 return TaskResult.failure(error)
             }
+            
+            @Override
+            void teardown() {}
         }
         def executor = new TaskExecutor(task)
         
@@ -52,11 +64,17 @@ class TaskExecutorSpec extends Specification {
     def "should catch exceptions and wrap in failure"() {
         given: "a task that throws exception"
         def error = new RuntimeException("uncaught exception")
-        Task task = new Task() {
+        TaskLifecycle task = new TaskLifecycle() {
             @Override
-            TaskResult execute() throws Exception {
+            void init() {}
+            
+            @Override
+            TaskResult execute(long iteration) throws Exception {
                 throw error
             }
+            
+            @Override
+            void teardown() {}
         }
         def executor = new TaskExecutor(task)
         
@@ -71,11 +89,17 @@ class TaskExecutorSpec extends Specification {
     
     def "should track iteration number"() {
         given: "a simple task"
-        Task task = new Task() {
+        TaskLifecycle task = new TaskLifecycle() {
             @Override
-            TaskResult execute() {
+            void init() {}
+            
+            @Override
+            TaskResult execute(long iteration) {
                 return TaskResult.success()
             }
+            
+            @Override
+            void teardown() {}
         }
         def executor = new TaskExecutor(task)
         
