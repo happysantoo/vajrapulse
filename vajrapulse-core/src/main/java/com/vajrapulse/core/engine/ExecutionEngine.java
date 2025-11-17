@@ -54,9 +54,8 @@ public final class ExecutionEngine implements AutoCloseable {
     private final LoadPattern loadPattern;
     private final MetricsCollector metricsCollector;
     private final ExecutorService executor;
-    private final ShutdownManager shutdownManager;
-    private final String runId;
-    private final VajraPulseConfig config;
+    private final String runId; // Correlates metrics/traces/logs
+    private final java.util.concurrent.atomic.AtomicBoolean stopRequested = new java.util.concurrent.atomic.AtomicBoolean(false);
     
     /**
      * Creates a new execution engine with automatic run ID generation.
@@ -66,62 +65,17 @@ public final class ExecutionEngine implements AutoCloseable {
      * @param metricsCollector the metrics collector
      */
     public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector) {
-        this(
-            task,
-            loadPattern,
-            metricsCollector,
-            (metricsCollector.getRunId() != null && !metricsCollector.getRunId().isBlank())
-                ? metricsCollector.getRunId()
-                : java.util.UUID.randomUUID().toString()
-        );
-    }
-    
-    /**
-     * Creates a new execution engine with automatic run ID generation.
-     * 
-     * @param taskLifecycle the task lifecycle to execute
-     * @param loadPattern the load pattern
-     * @param metricsCollector the metrics collector
-     */
-    public ExecutionEngine(TaskLifecycle taskLifecycle, LoadPattern loadPattern, MetricsCollector metricsCollector) {
-        this(
-            taskLifecycle,
-            loadPattern,
-            metricsCollector,
-            (metricsCollector.getRunId() != null && !metricsCollector.getRunId().isBlank())
-                ? metricsCollector.getRunId()
-                : java.util.UUID.randomUUID().toString()
-        );
+        String effectiveRunId = (metricsCollector.getRunId() != null && !metricsCollector.getRunId().isBlank())
+            ? metricsCollector.getRunId()
+            : java.util.UUID.randomUUID().toString();
+        this(task, loadPattern, metricsCollector, effectiveRunId);
     }
 
-    /**
-     * Creates a new execution engine with explicit run ID.
-     * 
-     * @param task the task to execute (will be adapted to TaskLifecycle)
-     * @param loadPattern the load pattern
-     * @param metricsCollector the metrics collector
-     * @param runId the run identifier for correlation
-     */
     public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId) {
-        this(task, loadPattern, metricsCollector, runId, null);
-    }
-    
-    /**
-     * Creates a new execution engine with explicit run ID and configuration.
-     * 
-     * @param task the task to execute (will be adapted to TaskLifecycle)
-     * @param loadPattern the load pattern
-     * @param metricsCollector the metrics collector
-     * @param runId the run identifier for correlation
-     * @param config configuration, or null to load from default locations
-     */
-    public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId, VajraPulseConfig config) {
-        // Adapt Task to TaskLifecycle
-        this.taskLifecycle = adaptToLifecycle(task);
+        this.task = task;
         this.loadPattern = loadPattern;
         this.metricsCollector = metricsCollector;
         this.runId = runId;
-        this.config = config != null ? config : ConfigLoader.load();
         
         // Determine thread strategy from annotations
         Class<?> taskClass = task.getClass();
@@ -202,6 +156,12 @@ public final class ExecutionEngine implements AutoCloseable {
                 }
             };
         }
+        // Register JVM shutdown hook for graceful termination
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (stopRequested.compareAndSet(false, true)) {
+                logger.info("Shutdown hook triggered for runId={} - initiating graceful stop", runId);
+            }
+        }, "vajrapulse-shutdown-hook"));
     }
     
     private ShutdownManager createShutdownManager(String runId, MetricsCollector metricsCollector) {
@@ -275,8 +235,7 @@ public final class ExecutionEngine implements AutoCloseable {
      * @throws Exception if init or teardown fails
      */
     public void run() throws Exception {
-        logger.info("Starting load test runId={} pattern={} duration={}", 
-            runId, loadPattern.getClass().getSimpleName(), loadPattern.getDuration());
+        logger.info("Starting load test runId={} pattern={} duration={}", runId, loadPattern.getClass().getSimpleName(), loadPattern.getDuration());
         
         // Initialize task
         try {
@@ -296,19 +255,17 @@ public final class ExecutionEngine implements AutoCloseable {
             long testDurationMillis = loadPattern.getDuration().toMillis();
             long iteration = 0;
             
-            // Main execution loop - check shutdown flag
-            while (!shutdownManager.isShutdownRequested() && 
-                   rateController.getElapsedMillis() < testDurationMillis) {
+            while (!stopRequested.get() && rateController.getElapsedMillis() < testDurationMillis) {
                 rateController.waitForNext();
                 
                 long currentIteration = iteration++;
                 executor.submit(new ExecutionCallable(taskExecutor, metricsCollector, currentIteration));
             }
             
-            if (shutdownManager.isShutdownRequested()) {
-                logger.info("Shutdown requested - draining executor for runId={}", runId);
+            if (stopRequested.get()) {
+                logger.info("Stop requested - draining executor runId={}", runId);
             } else {
-                logger.info("Test duration completed - shutting down executor for runId={}", runId);
+                logger.info("Test duration completed, shutting down executor runId={}", runId);
             }
             
         } finally {
@@ -324,7 +281,12 @@ public final class ExecutionEngine implements AutoCloseable {
                 // Don't rethrow - shutdown should complete
             }
             
-            logger.info("Load test finished runId={} graceful={}", runId, graceful);
+            try {
+                task.cleanup();
+                logger.info("Task cleanup completed runId={}", runId);
+            } finally {
+                logger.info("Run finished runId={}", runId);
+            }
         }
     }
     
@@ -385,4 +347,36 @@ public final class ExecutionEngine implements AutoCloseable {
             return null;
         }
     }
+
+    /**
+     * Convenience static helper to execute a task with a load pattern and metrics
+     * collection without manually managing the engine lifecycle.
+     * <p>Usage:
+     * <pre>{@code
+     * AggregatedMetrics metrics = ExecutionEngine.execute(task, loadPattern, collector);
+     * }</pre>
+     * @param task the task to execute
+     * @param loadPattern the load pattern definition
+     * @param metricsCollector metrics collector instance
+     * @return aggregated metrics snapshot after execution
+     * @throws Exception if setup or cleanup fails
+     */
+    public static com.vajrapulse.core.metrics.AggregatedMetrics execute(
+            Task task,
+            LoadPattern loadPattern,
+            MetricsCollector metricsCollector) throws Exception {
+        try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector)) {
+            engine.run();
+        }
+        return metricsCollector.snapshot();
+    }
+
+    /** Request early stop (graceful). */
+    public void stop() {
+        if (stopRequested.compareAndSet(false, true)) {
+            logger.info("Manual stop invoked runId={}", runId);
+        }
+    }
+
+    public String getRunId() { return runId; }
 }

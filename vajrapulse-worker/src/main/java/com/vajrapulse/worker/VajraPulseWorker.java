@@ -164,9 +164,9 @@ public final class VajraPulseWorker implements Callable<Integer> {
         // Create load pattern
         LoadPattern loadPattern = createLoadPattern();
         logger.info("Load pattern created: {}", loadPattern.getClass().getSimpleName());
-
-        // Determine runId
-        String runId = (runIdOverride != null && !runIdOverride.isBlank()) ? runIdOverride : java.util.UUID.randomUUID().toString();
+        
+        // Create runId and metrics collector tagged with it
+        String runId = java.util.UUID.randomUUID().toString();
         MetricsCollector metricsCollector = MetricsCollector.createWithRunId(runId, new double[]{0.50, 0.95, 0.99});
         logger.info("Run initialized runId={}", runId);
         // Initialize tracing if enabled
