@@ -125,6 +125,8 @@ java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajra
   --duration 10s \
   --run-id demo-static
 
+```
+
 ### Run Sine Pattern
 
 ```bash
@@ -137,7 +139,6 @@ java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajra
   --period 60s \
   --duration 5m \
   --run-id demo-sine
-```
 ```
 
 ## Architecture
