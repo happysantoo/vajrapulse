@@ -3,6 +3,6 @@
  * 
  * <p>This package provides human-readable console output for test results.
  * 
- * @see com.vajra.exporter.console.ConsoleMetricsExporter
+ * @see com.vajrapulse.exporter.console.ConsoleMetricsExporter
  */
 package com.vajrapulse.exporter.console;

@@ -51,6 +51,8 @@ public final class HttpLoadTestOtelRunner {
             .protocol(Protocol.GRPC) // Use gRPC protocol
             .exportInterval(5) // Align with periodic pipeline snapshots
             .taskIdentity(identity)
+            // runId is optional - if not set, a UUID is auto-generated
+            // .runId("http-test-" + System.currentTimeMillis())
             .resourceAttributes(Map.of(
                 "service.name", "vajrapulse-http-example",
                 "service.version", "1.0.0",
@@ -68,6 +70,7 @@ public final class HttpLoadTestOtelRunner {
         System.out.println("  Service Name: vajrapulse-http-example");
         System.out.println("  Protocol:     gRPC (OTLP)");
         System.out.println("  Endpoint:     http://localhost:4317");
+        System.out.println("  Run ID:       " + otelExporter.getRunId());
         System.out.println("  Task Name:    " + identity.name());
         System.out.println("  Tags:         " + identity.tags());
         System.out.println("  TPS:          100");
@@ -77,6 +80,7 @@ public final class HttpLoadTestOtelRunner {
         // Pipeline automatically closes exporter after final metrics are exported
         try (MetricsPipeline pipeline = MetricsPipeline.builder()
             .addExporter(otelExporter) // OTLP export
+            .withRunId(otelExporter.getRunId()) // Use the same run ID from exporter
             .withPeriodic(Duration.ofSeconds(5)) // Still allows periodic aggregation, exporter flush handles send
             .withPercentiles(0.5,0.9,0.95,0.99)
             .build()) {
