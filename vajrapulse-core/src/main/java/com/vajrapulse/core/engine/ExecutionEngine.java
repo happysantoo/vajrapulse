@@ -55,6 +55,8 @@ public final class ExecutionEngine implements AutoCloseable {
     private final MetricsCollector metricsCollector;
     private final ExecutorService executor;
     private final String runId; // Correlates metrics/traces/logs
+    private final VajraPulseConfig config;
+    private final ShutdownManager shutdownManager;
     private final java.util.concurrent.atomic.AtomicBoolean stopRequested = new java.util.concurrent.atomic.AtomicBoolean(false);
     
     /**
@@ -65,35 +67,35 @@ public final class ExecutionEngine implements AutoCloseable {
      * @param metricsCollector the metrics collector
      */
     public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector) {
-        String effectiveRunId = (metricsCollector.getRunId() != null && !metricsCollector.getRunId().isBlank())
-            ? metricsCollector.getRunId()
-            : java.util.UUID.randomUUID().toString();
-        this(task, loadPattern, metricsCollector, effectiveRunId);
+        this(adaptToLifecycle(task), loadPattern, metricsCollector, deriveRunId(metricsCollector), null);
     }
 
     public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId) {
-        this.task = task;
-        this.loadPattern = loadPattern;
-        this.metricsCollector = metricsCollector;
-        this.runId = runId;
-        
-        // Determine thread strategy from annotations
-        Class<?> taskClass = task.getClass();
-        this.executor = createExecutor(taskClass);
-        this.shutdownManager = createShutdownManager(runId, metricsCollector);
-        shutdownManager.registerShutdownHook();
+        this(adaptToLifecycle(task), loadPattern, metricsCollector, runId, null);
     }
     
     /**
-     * Creates a new execution engine with explicit run ID.
+     * Creates a new execution engine with automatic run ID generation.
      * 
      * @param taskLifecycle the task lifecycle to execute
      * @param loadPattern the load pattern
      * @param metricsCollector the metrics collector
-     * @param runId the run identifier for correlation
      */
-    public ExecutionEngine(TaskLifecycle taskLifecycle, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId) {
-        this(taskLifecycle, loadPattern, metricsCollector, runId, null);
+    public ExecutionEngine(TaskLifecycle taskLifecycle, LoadPattern loadPattern, MetricsCollector metricsCollector) {
+        this(taskLifecycle, loadPattern, metricsCollector, deriveRunId(metricsCollector), null);
+    }
+
+    /**
+     * Creates a new execution engine for a legacy Task with explicit run ID and configuration.
+     * 
+     * @param task the legacy task to adapt
+     * @param loadPattern the load pattern
+     * @param metricsCollector the metrics collector
+     * @param runId the run identifier for correlation
+     * @param config configuration, or null to load from default locations
+     */
+    public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId, VajraPulseConfig config) {
+        this(adaptToLifecycle(task), loadPattern, metricsCollector, runId, config);
     }
     
     /**
@@ -111,12 +113,18 @@ public final class ExecutionEngine implements AutoCloseable {
         this.metricsCollector = metricsCollector;
         this.runId = runId;
         this.config = config != null ? config : ConfigLoader.load();
-        
+
         // Determine thread strategy from annotations
         Class<?> taskClass = taskLifecycle.getClass();
         this.executor = createExecutor(taskClass);
         this.shutdownManager = createShutdownManager(runId, metricsCollector);
         shutdownManager.registerShutdownHook();
+    }
+
+    private static String deriveRunId(MetricsCollector metricsCollector) {
+        return (metricsCollector.getRunId() != null && !metricsCollector.getRunId().isBlank())
+            ? metricsCollector.getRunId()
+            : java.util.UUID.randomUUID().toString();
     }
     
     private ExecutorService createExecutor(Class<?> taskClass) {
@@ -156,12 +164,6 @@ public final class ExecutionEngine implements AutoCloseable {
                 }
             };
         }
-        // Register JVM shutdown hook for graceful termination
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            if (stopRequested.compareAndSet(false, true)) {
-                logger.info("Shutdown hook triggered for runId={} - initiating graceful stop", runId);
-            }
-        }, "vajrapulse-shutdown-hook"));
     }
     
     private ShutdownManager createShutdownManager(String runId, MetricsCollector metricsCollector) {
@@ -278,12 +280,6 @@ public final class ExecutionEngine implements AutoCloseable {
                 logger.info("Task teardown completed for runId={}", runId);
             } catch (Exception e) {
                 logger.error("Task teardown failed for runId={}: {}", runId, e.getMessage(), e);
-                // Don't rethrow - shutdown should complete
-            }
-            
-            try {
-                task.cleanup();
-                logger.info("Task cleanup completed runId={}", runId);
             } finally {
                 logger.info("Run finished runId={}", runId);
             }
@@ -313,7 +309,10 @@ public final class ExecutionEngine implements AutoCloseable {
      * but running iterations will complete. This method is idempotent.
      */
     public void stop() {
-        shutdownManager.initiateShutdown();
+        if (stopRequested.compareAndSet(false, true)) {
+            logger.info("Manual stop invoked runId={}", runId);
+            shutdownManager.initiateShutdown();
+        }
     }
     
     /**
@@ -371,12 +370,5 @@ public final class ExecutionEngine implements AutoCloseable {
         return metricsCollector.snapshot();
     }
 
-    /** Request early stop (graceful). */
-    public void stop() {
-        if (stopRequested.compareAndSet(false, true)) {
-            logger.info("Manual stop invoked runId={}", runId);
-        }
-    }
-
-    public String getRunId() { return runId; }
+    
 }

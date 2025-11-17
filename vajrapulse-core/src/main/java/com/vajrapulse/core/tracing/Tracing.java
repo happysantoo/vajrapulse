@@ -11,7 +11,7 @@ import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
-import io.opentelemetry.semconv.ResourceAttributes;
+import io.opentelemetry.context.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,8 +53,8 @@ public final class Tracing {
         try {
             OtlpGrpcSpanExporter exporter = OtlpGrpcSpanExporter.builder().setEndpoint(endpoint).build();
             Resource resource = Resource.getDefault().merge(Resource.create(Attributes.of(
-                ResourceAttributes.SERVICE_NAME, "vajrapulse",
-                ResourceAttributes.SERVICE_VERSION, "0.9.0-SNAPSHOT"
+                AttributeKey.stringKey("service.name"), "vajrapulse",
+                AttributeKey.stringKey("service.version"), "0.9.0-SNAPSHOT"
             )));
             SdkTracerProvider provider = SdkTracerProvider.builder()
                 .addSpanProcessor(SimpleSpanProcessor.create(exporter))
@@ -84,8 +84,9 @@ public final class Tracing {
     /** Starts an execution span child of a parent scenario span. */
     public static Span startExecutionSpan(Span parent, String runId, long iteration) {
         if (!isEnabled()) return Span.getInvalid();
+        Context parentCtx = parent != null ? parent.storeInContext(Context.current()) : Context.current();
         return tracer.spanBuilder("execution")
-            .setParent(parent != null ? parent.getSpanContext() : null)
+            .setParent(parentCtx)
             .setSpanKind(SpanKind.INTERNAL)
             .setAttribute(RUN_ID, runId)
             .setAttribute(ITERATION, iteration)
