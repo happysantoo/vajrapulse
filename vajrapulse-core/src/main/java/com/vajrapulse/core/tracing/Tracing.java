@@ -11,7 +11,8 @@ import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
-import io.opentelemetry.semconv.ResourceAttributes;
+import io.opentelemetry.semconv.resource.attributes.ResourceAttributes;
+import io.opentelemetry.context.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,7 +86,7 @@ public final class Tracing {
     public static Span startExecutionSpan(Span parent, String runId, long iteration) {
         if (!isEnabled()) return Span.getInvalid();
         return tracer.spanBuilder("execution")
-            .setParent(parent != null ? parent.getSpanContext() : null)
+            .setParent(parent != null ? Context.current().with(parent) : Context.current())
             .setSpanKind(SpanKind.INTERNAL)
             .setAttribute(RUN_ID, runId)
             .setAttribute(ITERATION, iteration)

@@ -1,0 +1,232 @@
+package com.vajrapulse.core.engine
+
+import com.vajrapulse.api.LoadPattern
+import com.vajrapulse.api.Task
+import com.vajrapulse.api.TaskResult
+import com.vajrapulse.core.config.VajraPulseConfig
+import com.vajrapulse.core.metrics.MetricsCollector
+import spock.lang.Specification
+import spock.lang.Timeout
+
+import java.time.Duration
+
+/**
+ * Tests covering ExecutionEngine run path, stop behaviour and runId propagation.
+ */
+@Timeout(10)
+class ExecutionEngineSpec extends Specification {
+
+    private static final class ShortStaticLoad implements LoadPattern {
+        private final double tps
+        private final Duration duration
+        private final long start = System.nanoTime()
+        ShortStaticLoad(double tps, Duration duration) { this.tps = tps; this.duration = duration }
+        @Override double calculateTps(long elapsedMillis) { return elapsedMillis < duration.toMillis() ? tps : 0.0 }
+        @Override Duration getDuration() { return duration }
+    }
+
+    def "should run execution engine and record metrics"() {
+        given: "a simple always-success task and short load pattern"
+        Task task = new Task() {
+            @Override
+            TaskResult execute() throws Exception { return TaskResult.success("ok") }
+            @Override void setup() {}
+            @Override void cleanup() {}
+        }
+        def load = new ShortStaticLoad(20.0, Duration.ofMillis(150))
+        def collector = MetricsCollector.createWithRunId("run-123", [0.50d, 0.95d] as double[])
+
+        when: "running the engine"
+        def engine = new ExecutionEngine(task, load, collector)
+        engine.run()
+        def snapshot = collector.snapshot()
+
+        then: "metrics captured and runId propagated"
+        snapshot.totalExecutions() > 0
+        snapshot.successCount() == snapshot.totalExecutions()
+        snapshot.failureCount() == 0
+        engine.runId != null
+        engine.runId == collector.runId
+    }
+
+    def "should generate runId when collector has none"() {
+        given:
+        Task task = new Task() {
+            @Override TaskResult execute() { return TaskResult.success(null) }
+            @Override void setup() {}
+            @Override void cleanup() {}
+        }
+        def load = new ShortStaticLoad(5.0, Duration.ofMillis(60))
+        def collector = new MetricsCollector() // no run id
+
+        when:
+        def engine = new ExecutionEngine(task, load, collector)
+        engine.run()
+
+        then:
+        engine.runId != null
+        collector.runId == null
+    }
+
+    def "should stop early when stop invoked"() {
+        given:
+        Task task = new Task() {
+            @Override TaskResult execute() { return TaskResult.success(null) }
+            @Override void setup() {}
+            @Override void cleanup() {}
+        }
+        def load = new ShortStaticLoad(100.0, Duration.ofMillis(1000)) // long enough to stop early
+        def collector = MetricsCollector.createWith([0.50d] as double[])
+        def engine = new ExecutionEngine(task, load, collector)
+
+        when: "invoke stop after brief delay"
+        Thread.start { sleep 100; engine.stop() }
+        engine.run()
+        def snapshot = collector.snapshot()
+
+        then: "fewer executions than theoretical max and some recorded"
+        snapshot.totalExecutions() > 0
+        snapshot.totalExecutions() < 100 // would be >100 if full second ran at 100 TPS
+    }
+
+    def "should use configured drain timeout from config"() {
+        given: "a task and custom config with 2s drain timeout"
+        Task task = new Task() {
+            @Override TaskResult execute() { return TaskResult.success(null) }
+            @Override void setup() {}
+            @Override void cleanup() {}
+        }
+        def customConfig = new VajraPulseConfig(
+            new VajraPulseConfig.ExecutionConfig(
+                Duration.ofSeconds(2),  // custom drain timeout
+                Duration.ofSeconds(5),  // force timeout
+                VajraPulseConfig.ThreadPoolStrategy.VIRTUAL,
+                -1
+            ),
+            VajraPulseConfig.ObservabilityConfig.defaults()
+        )
+        def load = new ShortStaticLoad(5.0, Duration.ofMillis(50))
+        def collector = MetricsCollector.createWithRunId("cfg-test", [0.50d] as double[])
+
+        when: "creating engine with config"
+        def engine = new ExecutionEngine(task, load, collector, "cfg-test", customConfig)
+
+        then: "engine created successfully with config applied"
+        engine.runId == "cfg-test"
+        engine.config.execution().drainTimeout() == Duration.ofSeconds(2)
+    }
+
+    def "should use configured force timeout from config"() {
+        given: "a task and custom config with 15s force timeout"
+        Task task = new Task() {
+            @Override TaskResult execute() { return TaskResult.success(null) }
+            @Override void setup() {}
+            @Override void cleanup() {}
+        }
+        def customConfig = new VajraPulseConfig(
+            new VajraPulseConfig.ExecutionConfig(
+                Duration.ofSeconds(5),
+                Duration.ofSeconds(15),  // custom force timeout
+                VajraPulseConfig.ThreadPoolStrategy.VIRTUAL,
+                -1
+            ),
+            VajraPulseConfig.ObservabilityConfig.defaults()
+        )
+        def load = new ShortStaticLoad(5.0, Duration.ofMillis(50))
+        def collector = MetricsCollector.createWithRunId("force-test", [0.50d] as double[])
+
+        when: "creating engine with config"
+        def engine = new ExecutionEngine(task, load, collector, "force-test", customConfig)
+
+        then: "engine created with config applied"
+        engine.config.execution().forceTimeout() == Duration.ofSeconds(15)
+    }
+
+    def "should respect VIRTUAL thread pool strategy from config"() {
+        given: "a task without thread annotations and config set to VIRTUAL"
+        Task task = new Task() {
+            @Override TaskResult execute() { return TaskResult.success(null) }
+            @Override void setup() {}
+            @Override void cleanup() {}
+        }
+        def customConfig = new VajraPulseConfig(
+            new VajraPulseConfig.ExecutionConfig(
+                Duration.ofSeconds(5),
+                Duration.ofSeconds(10),
+                VajraPulseConfig.ThreadPoolStrategy.VIRTUAL,  // explicit virtual
+                -1
+            ),
+            VajraPulseConfig.ObservabilityConfig.defaults()
+        )
+        def load = new ShortStaticLoad(5.0, Duration.ofMillis(50))
+        def collector = MetricsCollector.createWithRunId("virtual-test", [0.50d] as double[])
+
+        when: "creating and running engine"
+        def engine = new ExecutionEngine(task, load, collector, "virtual-test", customConfig)
+        engine.run()
+        def snapshot = collector.snapshot()
+
+        then: "engine runs successfully with virtual threads"
+        snapshot.totalExecutions() > 0
+        engine.config.execution().defaultThreadPool() == VajraPulseConfig.ThreadPoolStrategy.VIRTUAL
+    }
+
+    def "should respect PLATFORM thread pool strategy from config"() {
+        given: "a task without thread annotations and config set to PLATFORM with pool size 4"
+        Task task = new Task() {
+            @Override TaskResult execute() { return TaskResult.success(null) }
+            @Override void setup() {}
+            @Override void cleanup() {}
+        }
+        def customConfig = new VajraPulseConfig(
+            new VajraPulseConfig.ExecutionConfig(
+                Duration.ofSeconds(5),
+                Duration.ofSeconds(10),
+                VajraPulseConfig.ThreadPoolStrategy.PLATFORM,  // explicit platform
+                4  // pool size
+            ),
+            VajraPulseConfig.ObservabilityConfig.defaults()
+        )
+        def load = new ShortStaticLoad(5.0, Duration.ofMillis(50))
+        def collector = MetricsCollector.createWithRunId("platform-test", [0.50d] as double[])
+
+        when: "creating and running engine"
+        def engine = new ExecutionEngine(task, load, collector, "platform-test", customConfig)
+        engine.run()
+        def snapshot = collector.snapshot()
+
+        then: "engine runs successfully with platform threads"
+        snapshot.totalExecutions() > 0
+        engine.config.execution().defaultThreadPool() == VajraPulseConfig.ThreadPoolStrategy.PLATFORM
+        engine.config.execution().platformThreadPoolSize() == 4
+    }
+
+    def "should use AUTO strategy which defaults to virtual threads"() {
+        given: "a task without thread annotations and config set to AUTO"
+        Task task = new Task() {
+            @Override TaskResult execute() { return TaskResult.success(null) }
+            @Override void setup() {}
+            @Override void cleanup() {}
+        }
+        def customConfig = new VajraPulseConfig(
+            new VajraPulseConfig.ExecutionConfig(
+                Duration.ofSeconds(5),
+                Duration.ofSeconds(10),
+                VajraPulseConfig.ThreadPoolStrategy.AUTO,  // auto defaults to virtual
+                -1
+            ),
+            VajraPulseConfig.ObservabilityConfig.defaults()
+        )
+        def load = new ShortStaticLoad(5.0, Duration.ofMillis(50))
+        def collector = MetricsCollector.createWithRunId("auto-test", [0.50d] as double[])
+
+        when: "creating and running engine"
+        def engine = new ExecutionEngine(task, load, collector, "auto-test", customConfig)
+        engine.run()
+        def snapshot = collector.snapshot()
+
+        then: "engine runs successfully with AUTO strategy"
+        snapshot.totalExecutions() > 0
+        engine.config.execution().defaultThreadPool() == VajraPulseConfig.ThreadPoolStrategy.AUTO
+    }
+}

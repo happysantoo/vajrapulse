@@ -1,27 +1,64 @@
-# VajraPulse - Java 21 Load Testing Framework
+# VajraPulse – Java 21 Load Testing
+
+<p align="center"><img src="./vajrapulse_logo.png" alt="VajraPulse Logo" width="360"/></p>
 
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Gradle](https://img.shields.io/badge/Gradle-9.0-blue.svg)](https://gradle.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
-VajraPulse is a modern, high-performance load testing framework built for Java 21, leveraging **virtual threads** for massive concurrency with minimal resource overhead.
+High-concurrency load testing using Java 21 virtual threads. Minimal dependencies, clear API.
+
+Pre-1.0: breaking changes allowed (clean architecture over compatibility).
+
+## Highlights (0.9)
+• Patterns: static, ramp, ramp-sustain, step, spike, sine
+• Auto/override `run_id` tagging (metrics & traces)
+• Micrometer + optional OpenTelemetry (OTLP)
+• YAML/JSON config + env overrides
+• Virtual vs platform thread annotations
+• Performance harness
+• ≥90% coverage gate (Jacoco)
+• Console + OTEL exporters
+• Zero-dependency API module
+• Spock BDD tests
 
 ## Features
 
-✅ **Java 21 Native** - Records, sealed interfaces, pattern matching, virtual threads  
-✅ **Minimal Dependencies** - ~1.6MB fat JAR, only essential libraries  
-✅ **Virtual Thread Support** - Handle 10,000+ concurrent requests with ease  
-✅ **Flexible Load Patterns** - Static, ramp-up, ramp-sustain modes  
-✅ **Micrometer Metrics** - Industry-standard metrics with percentiles  
-✅ **Simple Task API** - Implement `Task`, return `TaskResult`, done  
-✅ **Comprehensive Tests** - 23 Spock tests, all passing  
+✅ Java 21 features (records, sealed types, virtual threads)
+✅ Minimal dependencies (~1.6MB fat JAR)
+✅ Flexible load patterns (static, ramp, sustain, step, spike, sine)
+✅ Micrometer metrics + percentiles
+✅ Simple Task API (implement `Task`)
+✅ ≥90% coverage enforced
+
+## Installation
+
+Snapshot coordinates (until 0.9.0 release is staged):
+
+Gradle (Kotlin DSL):
+```kotlin
+dependencies {
+  implementation("com.vajrapulse:vajrapulse-core:0.9.0-SNAPSHOT")
+  implementation("com.vajrapulse:vajrapulse-worker:0.9.0-SNAPSHOT") // For CLI runnable
+}
+```
+
+Maven:
+```xml
+<dependency>
+  <groupId>com.vajrapulse</groupId>
+  <artifactId>vajrapulse-core</artifactId>
+  <version>0.9.0-SNAPSHOT</version>
+</dependency>
+```
+
+Replace `-SNAPSHOT` with `0.9.0` after release.
+
+Coordinate migration: old `io.github.happysantoo.vajrapulse` → new `com.vajrapulse`.
 
 ## Quick Start
 
-### Prerequisites
-
-- Java 21 or later
-- Gradle 9.0 (or use included wrapper)
+Requires: Java 21+, Gradle 9 (wrapper included).
 
 ### Build
 
@@ -29,23 +66,36 @@ VajraPulse is a modern, high-performance load testing framework built for Java 2
 ./gradlew clean build shadowJar
 ```
 
-This produces:
-- Core modules in `vajrapulse-*/build/libs/`
-- **Fat JAR**: `vajrapulse-worker/build/libs/vajrapulse-worker-1.0.0-SNAPSHOT-all.jar` (1.6MB)
+Produces module JARs + fat worker JAR under `vajrapulse-worker/build/libs/`.
 
-### Run Example
+### Run Static Pattern
 
 ```bash
 cd examples/http-load-test
 gradle build
 
 # Run load test: 10 TPS for 10 seconds
-java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajrapulse-worker-1.0.0-SNAPSHOT-all.jar" \
+java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajrapulse-worker-0.9.0-SNAPSHOT-all.jar" \
   com.vajrapulse.worker.VajraPulseWorker \
   com.example.http.HttpLoadTest \
   --mode static \
   --tps 10 \
-  --duration 10s
+  --duration 10s \
+  --run-id demo-static
+
+### Run Sine Pattern
+
+```bash
+java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajrapulse-worker-0.9.0-SNAPSHOT-all.jar" \
+  com.vajrapulse.worker.VajraPulseWorker \
+  com.example.http.HttpLoadTest \
+  --mode sine \
+  --mean-rate 150 \
+  --amplitude 75 \
+  --period 60s \
+  --duration 5m \
+  --run-id demo-sine
+```
 ```
 
 ## Architecture
@@ -73,8 +123,7 @@ vajra/
 ```
 
 ## Creating a Task
-
-### 1. Implement the Task Interface
+Implement `Task` with optional setup/cleanup and use virtual threads for I/O:
 
 ```java
 import com.vajrapulse.api.*;
@@ -116,7 +165,7 @@ public class MyHttpTask implements Task {
 }
 ```
 
-### 2. Choose Thread Strategy
+Thread strategy annotations:
 
 ```java
 @VirtualThreads              // For I/O-bound (HTTP, DB, files)
@@ -129,7 +178,7 @@ public class CpuTask implements Task { }
 public class DefaultTask implements Task { }
 ```
 
-### 3. Run Your Test
+Run test:
 
 ```bash
 java -jar vajrapulse-worker-all.jar \
@@ -141,7 +190,7 @@ java -jar vajrapulse-worker-all.jar \
 
 ## Load Patterns
 
-### Static Load
+### Static
 
 Constant TPS for specified duration:
 
@@ -157,7 +206,7 @@ Linear increase from 0 to max TPS:
 --mode ramp --tps 200 --ramp-duration 30s
 ```
 
-### Ramp then Sustain
+### Ramp-Sustain
 
 Ramp to max, then sustain:
 
@@ -167,10 +216,43 @@ Ramp to max, then sustain:
   --ramp-duration 30s \
   --duration 5m
 ```
+### Step
 
-## Metrics
+Discrete phases with different target TPS values:
 
-VajraPulse uses **Micrometer** for metrics collection. Output includes:
+```bash
+--mode step \
+  --steps "50@30s,200@1m,500@2m,100@30s"
+```
+
+### Spike
+
+Baseline TPS plus periodic spikes:
+
+```bash
+--mode spike \
+  --base-rate 100 \
+  --spike-rate 800 \
+  --spike-interval 60s \
+  --spike-duration 5s \
+  --duration 10m
+```
+
+### Sine
+
+Smooth oscillation around a mean:
+
+```bash
+--mode sine \
+  --mean-rate 300 \
+  --amplitude 150 \
+  --period 120s \
+  --duration 15m
+```
+
+## Metrics & Observability
+
+VajraPulse uses **Micrometer** for metrics; optional OpenTelemetry exporter attaches `run_id`, task identity, and pattern info. Output includes:
 
 ```
 ========================================
@@ -192,9 +274,9 @@ Failure Latency (ms):
 ========================================
 ```
 
-## Module Details
+## Modules (Summary)
 
-### vajrapulse-api (0 dependencies)
+### API (no deps)
 
 Pure API module with no external dependencies:
 
@@ -207,7 +289,7 @@ Pure API module with no external dependencies:
 **Dependency**: None
 **Size**: ~15 KB
 
-### vajrapulse-core (3 dependencies)
+### Core
 
 Execution engine with minimal dependencies:
 
@@ -223,7 +305,7 @@ Execution engine with minimal dependencies:
 
 **Size**: ~150 KB + dependencies
 
-### vajrapulse-exporter-console
+### Console Exporter
 
 Console metrics exporter:
 
@@ -233,7 +315,7 @@ Console metrics exporter:
 
 **Size**: ~30 KB
 
-### vajrapulse-worker (Fat JAR)
+### Worker CLI
 
 CLI application bundling everything:
 
@@ -243,7 +325,7 @@ CLI application bundling everything:
 
 **Total Size**: ~1.6 MB (all-in-one)
 
-## Design Principles
+## Principles
 
 1. **Java 21 First** - Use all modern features (records, sealed types, virtual threads)
 2. **Minimal Dependencies** - Every dependency must be justified
@@ -255,13 +337,13 @@ CLI application bundling everything:
 
 ## Performance
 
-With Java 21 virtual threads, VajraPulse can handle:
+Handles high TPS with virtual threads:
 
 - **10,000+ TPS** on typical hardware
 - **Millions of concurrent requests** with minimal memory
 - **1,000,000+ iterations** in a single test run
 
-Example: 100,000 HTTP requests at 1000 TPS:
+Harness example (100k HTTP @1000 TPS):
 - Memory: ~200 MB
 - Duration: 100 seconds
 - Virtual Threads: 1000+ concurrent
@@ -274,10 +356,7 @@ Run all tests:
 ./gradlew test
 ```
 
-Test results:
-- vajrapulse-api: 12 tests ✅
-- vajrapulse-core: 11 tests ✅
-- **Total**: 23 tests, all passing
+Coverage gate ensures ≥90%; run `./gradlew test`.
 
 ## Examples
 
@@ -286,13 +365,14 @@ See `examples/` directory:
 - **http-load-test** - HTTP load test with virtual threads
 - *More examples coming soon*
 
-## Roadmap
+## Roadmap (Excerpt)
 
-- [x] Phase 1: Core framework (Java 21, virtual threads, Micrometer)
-- [ ] Phase 2: Distributed testing (P2P coordination)
-- [ ] Phase 3: Additional exporters (Prometheus, JSON)
-- [ ] Phase 4: Advanced load patterns
-- [ ] Phase 5: GraalVM native compilation
+- [x] Core + Patterns + Observability (0.9 scope)
+- [ ] Distributed execution layer
+- [ ] Additional exporters (Prometheus / JSON / CSV)
+- [ ] Adaptive patterns (feedback-based)
+- [ ] Native image (GraalVM) validation
+- [ ] Scenario scripting DSL
 
 ## Contributing
 
@@ -314,4 +394,4 @@ Built with:
 
 ---
 
-**VajraPulse** (वज्र) - Sanskrit for "thunderbolt" - symbolizing the power and speed of this load testing framework.
+**VajraPulse** (वज्र) – "thunderbolt". Pre‑1.0: expect iteration.

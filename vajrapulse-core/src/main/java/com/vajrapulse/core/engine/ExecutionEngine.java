@@ -3,11 +3,16 @@ package com.vajrapulse.core.engine;
 import com.vajrapulse.api.LoadPattern;
 import com.vajrapulse.api.PlatformThreads;
 import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskLifecycle;
+import com.vajrapulse.api.TaskResult;
 import com.vajrapulse.api.VirtualThreads;
+import com.vajrapulse.core.config.ConfigLoader;
+import com.vajrapulse.core.config.VajraPulseConfig;
 import com.vajrapulse.core.metrics.MetricsCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -18,15 +23,19 @@ import java.util.concurrent.TimeUnit;
  * 
  * <p>This class orchestrates:
  * <ul>
- *   <li>Task lifecycle (setup/execute/cleanup)</li>
+ *   <li>Task lifecycle (init/execute/teardown)</li>
  *   <li>Thread pool management (virtual or platform)</li>
  *   <li>Rate control according to load pattern</li>
  *   <li>Metrics collection</li>
+ *   <li>Graceful shutdown handling</li>
  * </ul>
+ * 
+ * <p>Supports both legacy {@link Task} and new {@link TaskLifecycle} interfaces.
+ * Tasks are automatically adapted to the lifecycle model.
  * 
  * <p>Example usage:
  * <pre>{@code
- * Task task = new MyHttpTask();
+ * TaskLifecycle task = new MyHttpTask();
  * LoadPattern load = new StaticLoad(100.0, Duration.ofMinutes(5));
  * MetricsCollector metrics = new MetricsCollector();
  * 
@@ -35,118 +44,293 @@ import java.util.concurrent.TimeUnit;
  * 
  * AggregatedMetrics results = metrics.snapshot();
  * }</pre>
+ * 
+ * @since 0.9.0
  */
 public final class ExecutionEngine implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(ExecutionEngine.class);
     
-    private final Task task;
+    private final TaskLifecycle taskLifecycle;
     private final LoadPattern loadPattern;
     private final MetricsCollector metricsCollector;
     private final ExecutorService executor;
-    private final String runId; // Correlates metrics/traces/logs
-    private final java.util.concurrent.atomic.AtomicBoolean stopRequested = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final ShutdownManager shutdownManager;
+    private final String runId;
+    private final VajraPulseConfig config;
     
+    /**
+     * Creates a new execution engine with automatic run ID generation.
+     * 
+     * @param task the task to execute (will be adapted to TaskLifecycle)
+     * @param loadPattern the load pattern
+     * @param metricsCollector the metrics collector
+     */
     public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector) {
-        String effectiveRunId = (metricsCollector.getRunId() != null && !metricsCollector.getRunId().isBlank())
-            ? metricsCollector.getRunId()
-            : java.util.UUID.randomUUID().toString();
-        this(task, loadPattern, metricsCollector, effectiveRunId);
+        this(
+            task,
+            loadPattern,
+            metricsCollector,
+            (metricsCollector.getRunId() != null && !metricsCollector.getRunId().isBlank())
+                ? metricsCollector.getRunId()
+                : java.util.UUID.randomUUID().toString()
+        );
+    }
+    
+    /**
+     * Creates a new execution engine with automatic run ID generation.
+     * 
+     * @param taskLifecycle the task lifecycle to execute
+     * @param loadPattern the load pattern
+     * @param metricsCollector the metrics collector
+     */
+    public ExecutionEngine(TaskLifecycle taskLifecycle, LoadPattern loadPattern, MetricsCollector metricsCollector) {
+        this(
+            taskLifecycle,
+            loadPattern,
+            metricsCollector,
+            (metricsCollector.getRunId() != null && !metricsCollector.getRunId().isBlank())
+                ? metricsCollector.getRunId()
+                : java.util.UUID.randomUUID().toString()
+        );
     }
 
+    /**
+     * Creates a new execution engine with explicit run ID.
+     * 
+     * @param task the task to execute (will be adapted to TaskLifecycle)
+     * @param loadPattern the load pattern
+     * @param metricsCollector the metrics collector
+     * @param runId the run identifier for correlation
+     */
     public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId) {
-        this.task = task;
+        this(task, loadPattern, metricsCollector, runId, null);
+    }
+    
+    /**
+     * Creates a new execution engine with explicit run ID and configuration.
+     * 
+     * @param task the task to execute (will be adapted to TaskLifecycle)
+     * @param loadPattern the load pattern
+     * @param metricsCollector the metrics collector
+     * @param runId the run identifier for correlation
+     * @param config configuration, or null to load from default locations
+     */
+    public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId, VajraPulseConfig config) {
+        // Adapt Task to TaskLifecycle
+        this.taskLifecycle = adaptToLifecycle(task);
         this.loadPattern = loadPattern;
         this.metricsCollector = metricsCollector;
         this.runId = runId;
+        this.config = config != null ? config : ConfigLoader.load();
         
         // Determine thread strategy from annotations
-        if (task.getClass().isAnnotationPresent(VirtualThreads.class)) {
-            this.executor = Executors.newVirtualThreadPerTaskExecutor();
-            logger.info("Using virtual threads for task: {}", task.getClass().getSimpleName());
-        } else if (task.getClass().isAnnotationPresent(PlatformThreads.class)) {
-            PlatformThreads annotation = task.getClass().getAnnotation(PlatformThreads.class);
+        Class<?> taskClass = task.getClass();
+        this.executor = createExecutor(taskClass);
+        this.shutdownManager = createShutdownManager(runId, metricsCollector);
+        shutdownManager.registerShutdownHook();
+    }
+    
+    /**
+     * Creates a new execution engine with explicit run ID.
+     * 
+     * @param taskLifecycle the task lifecycle to execute
+     * @param loadPattern the load pattern
+     * @param metricsCollector the metrics collector
+     * @param runId the run identifier for correlation
+     */
+    public ExecutionEngine(TaskLifecycle taskLifecycle, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId) {
+        this(taskLifecycle, loadPattern, metricsCollector, runId, null);
+    }
+    
+    /**
+     * Creates a new execution engine with explicit run ID and configuration.
+     * 
+     * @param taskLifecycle the task lifecycle to execute
+     * @param loadPattern the load pattern
+     * @param metricsCollector the metrics collector
+     * @param runId the run identifier for correlation
+     * @param config configuration, or null to load from default locations
+     */
+    public ExecutionEngine(TaskLifecycle taskLifecycle, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId, VajraPulseConfig config) {
+        this.taskLifecycle = taskLifecycle;
+        this.loadPattern = loadPattern;
+        this.metricsCollector = metricsCollector;
+        this.runId = runId;
+        this.config = config != null ? config : ConfigLoader.load();
+        
+        // Determine thread strategy from annotations
+        Class<?> taskClass = taskLifecycle.getClass();
+        this.executor = createExecutor(taskClass);
+        this.shutdownManager = createShutdownManager(runId, metricsCollector);
+        shutdownManager.registerShutdownHook();
+    }
+    
+    private ExecutorService createExecutor(Class<?> taskClass) {
+        if (taskClass.isAnnotationPresent(VirtualThreads.class)) {
+            logger.info("Using virtual threads for task: {}", taskClass.getSimpleName());
+            return Executors.newVirtualThreadPerTaskExecutor();
+        } else if (taskClass.isAnnotationPresent(PlatformThreads.class)) {
+            PlatformThreads annotation = taskClass.getAnnotation(PlatformThreads.class);
             int poolSize = annotation.poolSize();
             if (poolSize == -1) {
                 poolSize = Runtime.getRuntime().availableProcessors();
             }
-            this.executor = Executors.newFixedThreadPool(poolSize);
             logger.info("Using platform threads (pool size: {}) for task: {}", 
-                poolSize, task.getClass().getSimpleName());
+                poolSize, taskClass.getSimpleName());
+            return Executors.newFixedThreadPool(poolSize);
         } else {
-            // Default to virtual threads
-            this.executor = Executors.newVirtualThreadPerTaskExecutor();
-            logger.info("No thread annotation found, defaulting to virtual threads for task: {}", 
-                task.getClass().getSimpleName());
+            // Use default from config when no annotation present
+            return switch (config.execution().defaultThreadPool()) {
+                case VIRTUAL -> {
+                    logger.info("No thread annotation found, using configured default VIRTUAL threads for task: {}", 
+                        taskClass.getSimpleName());
+                    yield Executors.newVirtualThreadPerTaskExecutor();
+                }
+                case PLATFORM -> {
+                    int poolSize = config.execution().platformThreadPoolSize();
+                    if (poolSize == -1) {
+                        poolSize = Runtime.getRuntime().availableProcessors();
+                    }
+                    logger.info("No thread annotation found, using configured default PLATFORM threads (pool size: {}) for task: {}", 
+                        poolSize, taskClass.getSimpleName());
+                    yield Executors.newFixedThreadPool(poolSize);
+                }
+                case AUTO -> {
+                    logger.info("No thread annotation found, using configured default AUTO (virtual) threads for task: {}", 
+                        taskClass.getSimpleName());
+                    yield Executors.newVirtualThreadPerTaskExecutor();
+                }
+            };
         }
-        // Register JVM shutdown hook for graceful termination
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            if (stopRequested.compareAndSet(false, true)) {
-                logger.info("Shutdown hook triggered for runId={} - initiating graceful stop", runId);
-            }
-        }, "vajrapulse-shutdown-hook"));
+    }
+    
+    private ShutdownManager createShutdownManager(String runId, MetricsCollector metricsCollector) {
+        return ShutdownManager.builder()
+            .withRunId(runId)
+            .withDrainTimeout(config.execution().drainTimeout())
+            .withForceTimeout(config.execution().forceTimeout())
+            .onShutdown(() -> {
+                // Flush metrics before shutdown
+                try {
+                    logger.debug("Flushing metrics for runId={}", runId);
+                    // MetricsCollector doesn't have explicit flush, but snapshot captures state
+                    metricsCollector.snapshot();
+                } catch (Exception e) {
+                    logger.error("Failed to flush metrics for runId={}: {}", runId, e.getMessage(), e);
+                }
+            })
+            .build();
     }
     
     /**
-     * Runs the load test.
+     * Adapts a Task to TaskLifecycle interface.
+     * If task is already TaskLifecycle, returns it directly.
+     * Otherwise, creates an adapter that maps setup/execute/cleanup to init/execute/teardown.
+     */
+    private static TaskLifecycle adaptToLifecycle(Task task) {
+        if (task instanceof TaskLifecycle) {
+            return (TaskLifecycle) task;
+        }
+        
+        // Adapter for legacy Task interface
+        return new TaskLifecycle() {
+            @Override
+            public void init() throws Exception {
+                task.setup();
+            }
+            
+            @Override
+            public TaskResult execute(long iteration) throws Exception {
+                return task.execute();
+            }
+            
+            @Override
+            public void teardown() throws Exception {
+                task.cleanup();
+            }
+        };
+    }
+    
+    /**
+     * Runs the load test with full lifecycle management.
      * 
      * <p>This method:
      * <ol>
-     *   <li>Calls task.setup()</li>
+     *   <li>Calls {@code taskLifecycle.init()}</li>
      *   <li>Submits executions according to load pattern</li>
-     *   <li>Waits for test duration</li>
-     *   <li>Shuts down executor</li>
-     *   <li>Calls task.cleanup()</li>
+     *   <li>Monitors for shutdown signals</li>
+     *   <li>Gracefully drains running tasks</li>
+     *   <li>Calls {@code taskLifecycle.teardown()}</li>
      * </ol>
      * 
-     * @throws Exception if setup, execution, or cleanup fails
+     * <p><strong>Shutdown Behavior:</strong> If a shutdown signal (SIGINT/SIGTERM)
+     * is received or {@link #stop()} is called:
+     * <ul>
+     *   <li>No new iterations are scheduled</li>
+     *   <li>Running iterations complete (up to 5s timeout)</li>
+     *   <li>Teardown is called to clean up resources</li>
+     *   <li>Metrics are flushed</li>
+     * </ul>
+     * 
+     * @throws Exception if init or teardown fails
      */
     public void run() throws Exception {
-        logger.info("Starting load test runId={} pattern={} duration={}", runId, loadPattern.getClass().getSimpleName(), loadPattern.getDuration());
+        logger.info("Starting load test runId={} pattern={} duration={}", 
+            runId, loadPattern.getClass().getSimpleName(), loadPattern.getDuration());
         
-        // Setup
-        task.setup();
-        logger.info("Task setup completed");
+        // Initialize task
+        try {
+            taskLifecycle.init();
+            logger.info("Task initialization completed for runId={}", runId);
+        } catch (Exception e) {
+            logger.error("Task initialization failed for runId={}: {}", runId, e.getMessage(), e);
+            // Don't call teardown if init failed
+            shutdownManager.removeShutdownHook();
+            throw e;
+        }
         
         try {
-            TaskExecutor taskExecutor = new TaskExecutor(task);
+            TaskExecutor taskExecutor = new TaskExecutor(taskLifecycle);
             RateController rateController = new RateController(loadPattern);
             
             long testDurationMillis = loadPattern.getDuration().toMillis();
             long iteration = 0;
             
-            while (!stopRequested.get() && rateController.getElapsedMillis() < testDurationMillis) {
+            // Main execution loop - check shutdown flag
+            while (!shutdownManager.isShutdownRequested() && 
+                   rateController.getElapsedMillis() < testDurationMillis) {
                 rateController.waitForNext();
                 
                 long currentIteration = iteration++;
                 executor.submit(new ExecutionCallable(taskExecutor, metricsCollector, currentIteration));
             }
             
-            if (stopRequested.get()) {
-                logger.info("Stop requested - draining executor runId={}", runId);
+            if (shutdownManager.isShutdownRequested()) {
+                logger.info("Shutdown requested - draining executor for runId={}", runId);
             } else {
-                logger.info("Test duration completed, shutting down executor runId={}", runId);
+                logger.info("Test duration completed - shutting down executor for runId={}", runId);
             }
             
         } finally {
-            // Cleanup
-            executor.shutdown();
-            boolean terminated = executor.awaitTermination(60, TimeUnit.SECONDS);
-            if (!terminated) {
-                logger.warn("Executor did not terminate in time, forcing shutdown");
-                executor.shutdownNow();
+            // Graceful shutdown sequence
+            boolean graceful = shutdownManager.awaitShutdown(executor);
+            
+            // Always call teardown (cleanup resources)
+            try {
+                taskLifecycle.teardown();
+                logger.info("Task teardown completed for runId={}", runId);
+            } catch (Exception e) {
+                logger.error("Task teardown failed for runId={}: {}", runId, e.getMessage(), e);
+                // Don't rethrow - shutdown should complete
             }
             
-            try {
-                task.cleanup();
-                logger.info("Task cleanup completed runId={}", runId);
-            } finally {
-                logger.info("Run finished runId={}", runId);
-            }
+            logger.info("Load test finished runId={} graceful={}", runId, graceful);
         }
     }
     
     @Override
     public void close() {
+        shutdownManager.removeShutdownHook();
         if (!executor.isShutdown()) {
             executor.shutdown();
             try {
@@ -158,6 +342,25 @@ public final class ExecutionEngine implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         }
+    }
+    
+    /**
+     * Requests early stop of the load test.
+     * 
+     * <p>This is a graceful stop - no new iterations will be scheduled,
+     * but running iterations will complete. This method is idempotent.
+     */
+    public void stop() {
+        shutdownManager.initiateShutdown();
+    }
+    
+    /**
+     * Returns the run ID for this execution.
+     * 
+     * @return the run identifier
+     */
+    public String getRunId() {
+        return runId;
     }
     
     /**
@@ -182,36 +385,4 @@ public final class ExecutionEngine implements AutoCloseable {
             return null;
         }
     }
-
-    /**
-     * Convenience static helper to execute a task with a load pattern and metrics
-     * collection without manually managing the engine lifecycle.
-     * <p>Usage:
-     * <pre>{@code
-     * AggregatedMetrics metrics = ExecutionEngine.execute(task, loadPattern, collector);
-     * }</pre>
-     * @param task the task to execute
-     * @param loadPattern the load pattern definition
-     * @param metricsCollector metrics collector instance
-     * @return aggregated metrics snapshot after execution
-     * @throws Exception if setup or cleanup fails
-     */
-    public static com.vajrapulse.core.metrics.AggregatedMetrics execute(
-            Task task,
-            LoadPattern loadPattern,
-            MetricsCollector metricsCollector) throws Exception {
-        try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector)) {
-            engine.run();
-        }
-        return metricsCollector.snapshot();
-    }
-
-    /** Request early stop (graceful). */
-    public void stop() {
-        if (stopRequested.compareAndSet(false, true)) {
-            logger.info("Manual stop invoked runId={}", runId);
-        }
-    }
-
-    public String getRunId() { return runId; }
 }

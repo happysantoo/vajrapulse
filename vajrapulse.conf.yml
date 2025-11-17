@@ -1,0 +1,55 @@
+# VajraPulse Configuration File
+#
+# This file configures the VajraPulse load testing framework.
+# All settings can be overridden via environment variables using the VAJRAPULSE_ prefix.
+#
+# Example environment variable overrides:
+#   VAJRAPULSE_EXECUTION_DRAIN_TIMEOUT=10s
+#   VAJRAPULSE_EXECUTION_DEFAULT_THREAD_POOL=PLATFORM
+#   VAJRAPULSE_OBSERVABILITY_TRACING_ENABLED=true
+
+execution:
+  # Timeout to wait for running tasks to complete during graceful shutdown
+  # Supports: ms, s, m, h (e.g., 500ms, 30s, 2m, 1h)
+  # Default: 5s
+  drainTimeout: 5s
+  
+  # Maximum time to wait before forcefully terminating tasks
+  # Must be >= drainTimeout
+  # Default: 10s
+  forceTimeout: 10s
+  
+  # Default thread pool strategy when task has no @VirtualThreads or @PlatformThreads annotation
+  # Options: VIRTUAL, PLATFORM, AUTO
+  # - VIRTUAL: Uses virtual threads (recommended for I/O-bound tasks)
+  # - PLATFORM: Uses platform thread pool (for CPU-bound tasks)
+  # - AUTO: Automatically selects (defaults to VIRTUAL)
+  # Default: VIRTUAL
+  defaultThreadPool: VIRTUAL
+  
+  # Platform thread pool size when using PLATFORM strategy
+  # -1 means use Runtime.getRuntime().availableProcessors()
+  # Default: -1
+  platformThreadPoolSize: -1
+
+observability:
+  # Enable distributed tracing (OpenTelemetry)
+  # Default: false
+  tracingEnabled: false
+  
+  # Enable metrics collection (Micrometer)
+  # Default: true
+  metricsEnabled: true
+  
+  # Enable structured logging (JSON format)
+  # Default: false
+  structuredLogging: false
+  
+  # OpenTelemetry Protocol (OTLP) endpoint for traces
+  # Default: http://localhost:4317
+  otlpEndpoint: http://localhost:4317
+  
+  # Tracing sample rate (0.0 to 1.0)
+  # 1.0 = trace all requests, 0.1 = trace 10%
+  # Default: 0.1
+  tracingSampleRate: 0.1

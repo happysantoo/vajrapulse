@@ -1,6 +1,6 @@
 package com.vajrapulse.core.engine;
 
-import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskLifecycle;
 import com.vajrapulse.api.TaskResult;
 import com.vajrapulse.core.tracing.Tracing;
 import io.opentelemetry.api.trace.Span;
@@ -29,10 +29,10 @@ import org.slf4j.LoggerFactory;
 public final class TaskExecutor {
     private static final Logger logger = LoggerFactory.getLogger(TaskExecutor.class);
     
-    private final Task task;
+    private final TaskLifecycle taskLifecycle;
     
-    public TaskExecutor(Task task) {
-        this.task = task;
+    public TaskExecutor(TaskLifecycle taskLifecycle) {
+        this.taskLifecycle = taskLifecycle;
     }
     
     /**
@@ -41,7 +41,7 @@ public final class TaskExecutor {
      * <p>This method:
      * <ol>
      *   <li>Captures start time</li>
-     *   <li>Calls task.execute()</li>
+     *   <li>Calls taskLifecycle.execute(iteration)</li>
      *   <li>Catches any exceptions</li>
      *   <li>Captures end time</li>
      *   <li>Logs execution details at TRACE level</li>
@@ -61,7 +61,7 @@ public final class TaskExecutor {
         }
         
         try {
-            result = task.execute();
+            result = taskLifecycle.execute(iteration);
             long endNanos = System.nanoTime();
             long durationNanos = endNanos - startNanos;
             
@@ -101,11 +101,11 @@ public final class TaskExecutor {
     }
     
     /**
-     * Returns the underlying task.
+     * Returns the underlying task lifecycle.
      * 
-     * @return the task being executed
+     * @return the task lifecycle being executed
      */
-    public Task getTask() {
-        return task;
+    public TaskLifecycle getTaskLifecycle() {
+        return taskLifecycle;
     }
 }

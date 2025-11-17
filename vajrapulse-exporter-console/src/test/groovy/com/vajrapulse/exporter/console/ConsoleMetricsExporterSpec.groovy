@@ -8,6 +8,15 @@ import java.io.PrintStream
 
 class ConsoleMetricsExporterSpec extends Specification {
 
+    def "should use System.out by default"() {
+        when:
+        def exporter = new ConsoleMetricsExporter()
+
+        then:
+        exporter != null
+        noExceptionThrown()
+    }
+
     def "should display all configured percentiles"() {
         given: "metrics with custom percentiles"
         Map<Double, Double> successPercentiles = [
@@ -203,5 +212,34 @@ class ConsoleMetricsExporterSpec extends Specification {
         output.contains("P99:")
         output.indexOf("P50:") < output.indexOf("P97.125:")
         output.indexOf("P97.125:") < output.indexOf("P99:")
+    }
+
+    def "should show failure percentiles when failures exist"() {
+        given:
+        Map<Double, Double> successPercentiles = [0.50d: 10_000_000.0d]
+        Map<Double, Double> failurePercentiles = [
+            0.50d: 200_000_000.0d,
+            0.95d: 500_000_000.0d
+        ]
+        AggregatedMetrics metrics = new AggregatedMetrics(
+            100,
+            90,
+            10,
+            successPercentiles,
+            failurePercentiles
+        )
+
+        and:
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream()
+        ConsoleMetricsExporter exporter = new ConsoleMetricsExporter(new PrintStream(outputStream))
+
+        when:
+        exporter.export(metrics)
+        String output = outputStream.toString()
+
+        then:
+        output.contains("Failure Latency")
+        output.contains("P50:  200.00")
+        output.contains("P95:  500.00")
     }
 }
