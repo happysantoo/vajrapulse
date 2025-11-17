@@ -4,12 +4,13 @@ plugins {
     id("com.gradleup.shadow") version "9.0.0-beta4" apply false
     jacoco
     id("maven-publish")
+    signing
 }
 
 allprojects {
     // Artifact coordinates moved to 'com.vajrapulse' for 0.9 release alignment.
     group = "com.vajrapulse"
-    version = "0.9.1"
+    version = "0.9.2"
 
     repositories {
         mavenCentral()
@@ -29,6 +30,7 @@ subprojects {
     apply(plugin = "groovy")
     apply(plugin = "jacoco")
     apply(plugin = "maven-publish")
+    apply(plugin = "signing")
 
     java {
         toolchain {
@@ -48,7 +50,7 @@ subprojects {
         // Include Groovy compilation if present (Spock tests / Groovy sources)
         tasks.findByName("compileGroovy")?.let { dependsOn(it) }
         dependsOn(tasks.named("test"))
-        executionData.setFrom(files("$buildDir/jacoco/test.exec"))
+        executionData.setFrom(files(layout.buildDirectory.dir("jacoco/test.exec")))
         val fileFilter = listOf("**/module-info.class")
         classDirectories.setFrom(
             files(project.layout.buildDirectory.dir("classes"))
@@ -94,7 +96,7 @@ subprojects {
         )
         // Default source directories (Groovy may not exist in all modules)
         sourceDirectories.setFrom(files("src/main/java", "src/main/groovy"))
-        executionData.setFrom(files("$buildDir/jacoco/test.exec"))
+        executionData.setFrom(files(layout.buildDirectory.dir("jacoco/test.exec")))
     }
 
     // Ensure 'check' depends on coverage verification for CI gating
@@ -113,6 +115,13 @@ subprojects {
     if (project.name in publishable) {
 
         java { withSourcesJar(); withJavadocJar() }
+
+        // Include LICENSE in all JAR files (main, sources, javadoc)
+        tasks.withType<Jar> {
+            from(rootProject.file("LICENSE")) {
+                into("META-INF")
+            }
+        }
 
         publishing {
             publications {
@@ -144,6 +153,15 @@ subprojects {
                 }
             }
             // No repositories: JReleaser handles bundle + portal upload.
+        }
+
+        // Configure signing for Maven Central compliance
+        signing {
+            // Use in-memory ASCII-armored key from gradle.properties
+            val signingKey: String? by project
+            val signingPassword: String? by project
+            useInMemoryPgpKeys(signingKey, signingPassword)
+            sign(publishing.publications["mavenJava"])
         }
     }
 }
