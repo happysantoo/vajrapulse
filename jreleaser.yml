@@ -1,0 +1,41 @@
+project:
+  name: vajrapulse
+  version: 0.9.1
+  description: VajraPulse distributed load testing framework (pre-1.0, Java 21 virtual threads)
+  authors:
+    - Santhosh Kuppusamy
+  license: Apache-2.0
+  copyright: "Copyright © 2025 Santhosh Kuppusamy"
+  links:
+    homepage: https://github.com/happysantoo/vajrapulse
+    scm: https://github.com/happysantoo/vajrapulse
+    documentation: https://github.com/happysantoo/vajrapulse
+  java:
+    groupId: com.vajrapulse
+
+signing:
+  active: ALWAYS
+  armored: true
+  # secretKey & passphrase sourced from gradle properties (signingKey, signingPassword)
+
+release:
+  github:
+    enabled: false  # disabled for 0.9.1 Maven Central deployment; enable later when token available
+
+deploy:
+  maven:
+    mavenCentral:
+      active: ALWAYS
+      stage: FULL          # UPLOAD | PUBLISH | FULL
+      username: '{{mavenCentralUsername}}'
+      password: '{{mavenCentralPassword}}'
+      retryDelay: 10       # seconds between polls
+      maxRetries: 10
+
+# Environment variable / Gradle properties mapping:
+# - mavenCentralUsername / mavenCentralPassword -> portal credentials
+# - signingKey / signingPassword -> PGP key & passphrase (in ~/.gradle/gradle.properties)
+
+# To run:
+#   ./gradlew prepareRelease jreleaserDeploy --dry-run   # validate
+#   ./gradlew prepareRelease jreleaserDeploy            # full upload + publish

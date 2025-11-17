@@ -5,6 +5,7 @@
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Gradle](https://img.shields.io/badge/Gradle-9.0-blue.svg)](https://gradle.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
+[![Maven Central](https://img.shields.io/maven-central/v/com.vajrapulse/vajrapulse-core.svg)](https://search.maven.org/search?q=g:com.vajrapulse)
 [![JitPack](https://jitpack.io/v/happysantoo/vajrapulse.svg)](https://jitpack.io/#happysantoo/vajrapulse)
 
 High-concurrency load testing using Java 21 virtual threads. Minimal dependencies, clear API.
@@ -34,13 +35,24 @@ Pre-1.0: breaking changes allowed (clean architecture over compatibility).
 
 ## Installation
 
-Snapshot coordinates (until 0.9.0 release is staged):
+### Maven Central (Recommended)
 
 Gradle (Kotlin DSL):
 ```kotlin
 dependencies {
-  implementation("com.vajrapulse:vajrapulse-core:0.9.0-SNAPSHOT")
-  implementation("com.vajrapulse:vajrapulse-worker:0.9.0-SNAPSHOT") // For CLI runnable
+  implementation("com.vajrapulse:vajrapulse-core:0.9.1")
+  implementation("com.vajrapulse:vajrapulse-worker:0.9.1") // For CLI runnable
+  // Optional exporters
+  implementation("com.vajrapulse:vajrapulse-exporter-console:0.9.1")
+  implementation("com.vajrapulse:vajrapulse-exporter-opentelemetry:0.9.1")
+}
+```
+
+Gradle (Groovy DSL):
+```groovy
+dependencies {
+  implementation 'com.vajrapulse:vajrapulse-core:0.9.1'
+  implementation 'com.vajrapulse:vajrapulse-worker:0.9.1'
 }
 ```
 
@@ -49,13 +61,14 @@ Maven:
 <dependency>
   <groupId>com.vajrapulse</groupId>
   <artifactId>vajrapulse-core</artifactId>
-  <version>0.9.0-SNAPSHOT</version>
+  <version>0.9.1</version>
+</dependency>
+<dependency>
+  <groupId>com.vajrapulse</groupId>
+  <artifactId>vajrapulse-worker</artifactId>
+  <version>0.9.1</version>
 </dependency>
 ```
-
-Replace `-SNAPSHOT` with `0.9.0` after release.
-
-Coordinate migration: old `io.github.happysantoo.vajrapulse` → new `com.vajrapulse`.
 
 ### JitPack (Latest tag, immediate)
 
@@ -65,9 +78,9 @@ Gradle (Groovy DSL):
 ```groovy
 repositories { maven { url 'https://jitpack.io' } }
 dependencies {
-  implementation 'com.github.happysantoo.vajrapulse:vajrapulse-core:v0.9.0'
+  implementation 'com.github.happysantoo.vajrapulse:vajrapulse-core:v0.9.1'
   // optional exporters
-  implementation 'com.github.happysantoo.vajrapulse:vajrapulse-exporter-opentelemetry:v0.9.0'
+  implementation 'com.github.happysantoo.vajrapulse:vajrapulse-exporter-opentelemetry:v0.9.1'
 }
 ```
 
@@ -75,9 +88,9 @@ Gradle (Kotlin DSL):
 ```kotlin
 repositories { maven { url = uri("https://jitpack.io") } }
 dependencies {
-  implementation("com.github.happysantoo.vajrapulse:vajrapulse-core:v0.9.0")
+  implementation("com.github.happysantoo.vajrapulse:vajrapulse-core:v0.9.1")
   // optional exporters
-  implementation("com.github.happysantoo.vajrapulse:vajrapulse-exporter-opentelemetry:v0.9.0")
+  implementation("com.github.happysantoo.vajrapulse:vajrapulse-exporter-opentelemetry:v0.9.1")
 }
 ```
 
@@ -88,12 +101,12 @@ Maven:
     <id>jitpack.io</id>
     <url>https://jitpack.io</url>
   </repository>
-  </repositories>
+</repositories>
 <dependencies>
   <dependency>
     <groupId>com.github.happysantoo.vajrapulse</groupId>
     <artifactId>vajrapulse-core</artifactId>
-    <version>v0.9.0</version>
+    <version>v0.9.1</version>
   </dependency>
 </dependencies>
 ```
@@ -117,7 +130,7 @@ cd examples/http-load-test
 gradle build
 
 # Run load test: 10 TPS for 10 seconds
-java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajrapulse-worker-0.9.0-SNAPSHOT-all.jar" \
+java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajrapulse-worker-0.9.1-all.jar" \
   com.vajrapulse.worker.VajraPulseWorker \
   com.example.http.HttpLoadTest \
   --mode static \
@@ -130,7 +143,7 @@ java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajra
 ### Run Sine Pattern
 
 ```bash
-java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajrapulse-worker-0.9.0-SNAPSHOT-all.jar" \
+java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajrapulse-worker-0.9.1-all.jar" \
   com.vajrapulse.worker.VajraPulseWorker \
   com.example.http.HttpLoadTest \
   --mode sine \
