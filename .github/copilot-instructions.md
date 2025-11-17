@@ -16,6 +16,7 @@ VajraPulse is a Java 21-based distributed load testing framework leveraging virt
 - **No deprecated code** - Remove immediately, don't deprecate
 - **Simplify aggressively** - Remove unnecessary abstractions
 - **Auto-archive historical docs** - Move phase completion, implementation summaries, and interim tracking docs to `documents/archive/` automatically after major milestones
+- **NEVER merge PRs without explicit user approval** - Always wait for user confirmation before merging any pull request, no matter how complete or tested the code is
 
 ### 1. Language & Version
 - **Java 21** is MANDATORY - use all modern features
