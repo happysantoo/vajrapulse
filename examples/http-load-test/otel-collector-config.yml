@@ -50,9 +50,10 @@ exporters:
       collector: otel
     # Enable OpenMetrics format
     enable_open_metrics: true
-    # Add resource attributes as labels
+    # Disable resource-to-label conversion to avoid duplicate labels
+    # (VajraPulse already includes run_id, task_name as metric labels)
     resource_to_telemetry_conversion:
-      enabled: true
+      enabled: false
 
 service:
   pipelines:
