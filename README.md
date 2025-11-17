@@ -5,6 +5,7 @@
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Gradle](https://img.shields.io/badge/Gradle-9.0-blue.svg)](https://gradle.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
+[![JitPack](https://jitpack.io/v/happysantoo/vajrapulse.svg)](https://jitpack.io/#happysantoo/vajrapulse)
 
 High-concurrency load testing using Java 21 virtual threads. Minimal dependencies, clear API.
 
@@ -56,6 +57,47 @@ Replace `-SNAPSHOT` with `0.9.0` after release.
 
 Coordinate migration: old `io.github.happysantoo.vajrapulse` → new `com.vajrapulse`.
 
+### JitPack (Latest tag, immediate)
+
+If you want to consume the latest Git tag via JitPack now:
+
+Gradle (Groovy DSL):
+```groovy
+repositories { maven { url 'https://jitpack.io' } }
+dependencies {
+  implementation 'com.github.happysantoo.vajrapulse:vajrapulse-core:v0.9.0'
+  // optional exporters
+  implementation 'com.github.happysantoo.vajrapulse:vajrapulse-exporter-opentelemetry:v0.9.0'
+}
+```
+
+Gradle (Kotlin DSL):
+```kotlin
+repositories { maven { url = uri("https://jitpack.io") } }
+dependencies {
+  implementation("com.github.happysantoo.vajrapulse:vajrapulse-core:v0.9.0")
+  // optional exporters
+  implementation("com.github.happysantoo.vajrapulse:vajrapulse-exporter-opentelemetry:v0.9.0")
+}
+```
+
+Maven:
+```xml
+<repositories>
+  <repository>
+    <id>jitpack.io</id>
+    <url>https://jitpack.io</url>
+  </repository>
+  </repositories>
+<dependencies>
+  <dependency>
+    <groupId>com.github.happysantoo.vajrapulse</groupId>
+    <artifactId>vajrapulse-core</artifactId>
+    <version>v0.9.0</version>
+  </dependency>
+</dependencies>
+```
+
 ## Quick Start
 
 Requires: Java 21+, Gradle 9 (wrapper included).
@@ -83,6 +125,8 @@ java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajra
   --duration 10s \
   --run-id demo-static
 
+```
+
 ### Run Sine Pattern
 
 ```bash
@@ -95,7 +139,6 @@ java -cp "build/libs/http-load-test.jar:../../vajrapulse-worker/build/libs/vajra
   --period 60s \
   --duration 5m \
   --run-id demo-sine
-```
 ```
 
 ## Architecture
