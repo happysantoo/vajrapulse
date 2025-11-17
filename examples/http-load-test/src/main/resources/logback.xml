@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    
+    <!-- Console appender with colored output -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    
+    <!-- ============================================================================ -->
+    <!-- TRACE LOGGING FOR MANUAL VALIDATION                                         -->
+    <!-- ============================================================================ -->
+    <!-- Uncomment the logger below to enable detailed per-request logging           -->
+    <!-- This will log every single request with iteration number, status, duration  -->
+    <!--                                                                              -->
+    <!-- Example output:                                                              -->
+    <!--   TRACE TaskExecutor - Iteration=0 Status=SUCCESS Duration=245678912ns (245.679ms) -->
+    <!--   TRACE TaskExecutor - Iteration=1 Status=SUCCESS Duration=156234567ns (156.235ms) -->
+    <!--                                                                              -->
+    <!-- WARNING: This generates MASSIVE log output at high TPS!                     -->
+    <!-- Use only for debugging/validation with low TPS or short durations.          -->
+    <!-- ============================================================================ -->
+    
+    <!-- <logger name="com.vajrapulse.core.engine.TaskExecutor" level="TRACE"/> -->
+    
+    <!-- ============================================================================ -->
+    <!-- Alternative: Enable TRACE for specific validation runs                      -->
+    <!-- ============================================================================ -->
+    <!-- For validating percentile calculations, enable TRACE temporarily:           -->
+    <!-- 1. Uncomment the logger above                                               -->
+    <!-- 2. Run test with low TPS (e.g., 10 TPS for 10 seconds = 100 requests)       -->
+    <!-- 3. Manually calculate percentiles from logged durations                     -->
+    <!-- 4. Compare with reported metrics                                            -->
+    <!-- ============================================================================ -->
+    
+    <!-- VajraPulse framework logging -->
+    <logger name="com.vajrapulse" level="INFO"/>
+
+    <logger name="com.vajrapulse.core.engine.TaskExecutor" level="INFO"/>
+    
+    <!-- Example application logging -->
+    <logger name="com.example" level="INFO"/>
+    
+    <!-- Root logger -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+    
+</configuration>
