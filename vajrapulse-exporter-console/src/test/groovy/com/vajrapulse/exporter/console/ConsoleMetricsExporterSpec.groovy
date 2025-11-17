@@ -158,7 +158,9 @@ class ConsoleMetricsExporterSpec extends Specification {
         
         and: "summary still shown with new format"
         output.contains("Requests:")
-        output.contains("Total:             0 (0.0 TPS)")
+        output.contains("Total:             0")
+        output.contains("Request TPS:")
+        output.contains("Response TPS:")
         output.contains("Elapsed Time:        0.0s")
     }
     

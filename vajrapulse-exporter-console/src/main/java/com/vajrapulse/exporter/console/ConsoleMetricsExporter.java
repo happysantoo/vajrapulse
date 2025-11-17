@@ -25,9 +25,16 @@ import java.io.PrintStream;
  * Elapsed Time:        30.5s
  * 
  * Requests:
- *   Total:             3050 (100.0 TPS)
- *   Successful:        2995 (98.2%, 98.2 TPS)
- *   Failed:            55 (1.8%, 1.8 TPS)
+ *   Total:             3050
+ *   Successful:        2995 (98.2%)
+ *   Failed:            55 (1.8%)
+ * 
+ * Request TPS:         100.0
+ * 
+ * Response TPS:
+ *   Total:             100.0
+ *   Successful:        98.2
+ *   Failed:            1.8
  * 
  * Success Latency (ms):
  *   P50:  12.5
@@ -97,14 +104,25 @@ public final class ConsoleMetricsExporter implements MetricsExporter {
         out.printf("Elapsed Time:        %.1fs%n", metrics.elapsedMillis() / 1000.0);
         out.println();
         
-        // Request counts and TPS
+        // Request counts
         out.println("Requests:");
-        out.printf("  Total:             %d (%.1f TPS)%n", 
-            metrics.totalExecutions(), metrics.responseTps());
-        out.printf("  Successful:        %d (%.1f%%, %.1f TPS)%n", 
-            metrics.successCount(), metrics.successRate(), metrics.successTps());
-        out.printf("  Failed:            %d (%.1f%%, %.1f TPS)%n", 
-            metrics.failureCount(), metrics.failureRate(), metrics.failureTps());
+        out.printf("  Total:             %d%n", metrics.totalExecutions());
+        out.printf("  Successful:        %d (%.1f%%)%n", 
+            metrics.successCount(), metrics.successRate());
+        out.printf("  Failed:            %d (%.1f%%)%n", 
+            metrics.failureCount(), metrics.failureRate());
+        out.println();
+        
+        // Request TPS (target/intended rate)
+        double requestTps = metrics.responseTps();
+        out.printf("Request TPS:         %.1f%n", requestTps);
+        out.println();
+        
+        // Response TPS (actual achieved throughput)
+        out.println("Response TPS:");
+        out.printf("  Total:             %.1f%n", metrics.responseTps());
+        out.printf("  Successful:        %.1f%n", metrics.successTps());
+        out.printf("  Failed:            %.1f%n", metrics.failureTps());
         out.println();
         
         // Success latencies - display all configured percentiles
