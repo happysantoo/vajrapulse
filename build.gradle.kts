@@ -2,16 +2,14 @@ plugins {
     java
     groovy
     id("com.gradleup.shadow") version "9.0.0-beta4" apply false
-    // Coverage plugin (applied to subprojects explicitly)
     jacoco
     id("maven-publish")
-    id("signing")
 }
 
 allprojects {
     // Artifact coordinates moved to 'com.vajrapulse' for 0.9 release alignment.
     group = "com.vajrapulse"
-    version = "0.9.0"
+    version = "0.9.1"
 
     repositories {
         mavenCentral()
@@ -31,7 +29,6 @@ subprojects {
     apply(plugin = "groovy")
     apply(plugin = "jacoco")
     apply(plugin = "maven-publish")
-    apply(plugin = "signing")
 
     java {
         toolchain {
@@ -146,30 +143,15 @@ subprojects {
                     }
                 }
             }
-            repositories {
-                maven {
-                    name = "OSSRH"
-                    url = uri(if (version.toString().endsWith("SNAPSHOT"))
-                        "https://s01.oss.sonatype.org/content/repositories/snapshots/"
-                    else
-                        "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
-                    credentials {
-                        username = findProperty("ossrhUsername") as String? ?: System.getenv("OSSRH_USERNAME")
-                        password = findProperty("ossrhPassword") as String? ?: System.getenv("OSSRH_PASSWORD")
-                    }
-                }
-            }
-        }
-
-        signing {
-            val signingKey: String? = findProperty("signingKey") as String? ?: System.getenv("SIGNING_KEY")
-            val signingPassword: String? = findProperty("signingPassword") as String? ?: System.getenv("SIGNING_PASSWORD")
-            if (signingKey != null && signingPassword != null) {
-                useInMemoryPgpKeys(signingKey, signingPassword)
-                sign(publishing.publications["mavenJava"])
-            } else {
-                logger.warn("[publishing] Skipping signing for ${project.path}; SIGNING_KEY/SIGNING_PASSWORD not provided")
-            }
+            // No repositories: JReleaser handles bundle + portal upload.
         }
     }
 }
+
+// Convenience task: aggregate build before release
+tasks.register("prepareRelease") {
+    group = "release"
+    description = "Assemble all publishable modules for Maven Central release"
+    dependsOn(subprojects.filter { it.name.startsWith("vajrapulse") }.map { it.tasks.named("build") })
+}
+
