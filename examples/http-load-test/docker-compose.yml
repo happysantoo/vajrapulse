@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # OpenTelemetry Collector - receives metrics from VajraPulse via OTLP
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    container_name: otel-collector
+    command:
+      - "--config=/etc/otel-collector-config.yml"
+    ports:
+      # OTLP gRPC
+      - "4317:4317"
+      # OTLP HTTP
+      - "4318:4318"
+      # Prometheus exporter (scraped by Prometheus)
+      - "8889:8889"
+      # Health check
+      - "13133:13133"
+    volumes:
+      - ./otel-collector-config.yml:/etc/otel-collector-config.yml:ro
+      - ./otel-collector-data:/tmp/otel-collector-data
+    environment:
+      - GOGC=80
+    networks:
+      - observability
+    restart: unless-stopped
+    # Note: No healthcheck as collector doesn't expose standard health endpoint
+
+  # Prometheus - scrapes metrics from OTEL Collector
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - observability
+    depends_on:
+      - otel-collector
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # Grafana - visualizes metrics from Prometheus
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      # Default admin credentials
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=vajrapulse
+      # Anonymous access for demo purposes
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      # Disable usage analytics
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      # Logging
+      - GF_LOG_LEVEL=info
+      # Provisioning
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+    networks:
+      - observability
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+networks:
+  observability:
+    driver: bridge
+    name: vajrapulse-observability
+
+volumes:
+  otel-collector-data:
+  prometheus-data:
+  grafana-data:

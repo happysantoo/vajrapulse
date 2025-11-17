@@ -1,0 +1,67 @@
+# OpenTelemetry Collector configuration for VajraPulse testing
+# Receives metrics from OTLP (gRPC and HTTP) and exports to logging and file
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch processor for efficiency
+  batch:
+    send_batch_size: 10
+    timeout: 5s
+
+  # Attributes processor to add deployment info
+  attributes:
+    actions:
+      - key: deployment.environment
+        value: test
+        action: upsert
+      - key: collector.name
+        value: vajrapulse-test-collector
+        action: upsert
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+
+exporters:
+  # Debug exporter - prints metrics to stdout (replaces deprecated logging)
+  debug:
+    verbosity: normal
+    sampling_initial: 5
+    sampling_thereafter: 100
+
+  # File exporter - writes metrics to JSON file for validation
+  file:
+    path: /tmp/otel-collector-data/metrics.json
+    format: json
+
+  # Prometheus exporter - exposes metrics for Prometheus to scrape
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    # Don't add namespace prefix since metrics already have vajrapulse prefix
+    const_labels:
+      collector: otel
+    # Enable OpenMetrics format
+    enable_open_metrics: true
+    # Add resource attributes as labels
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes, batch]
+      exporters: [debug, file, prometheus]
+
+  # Telemetry for collector's own metrics
+  telemetry:
+    logs:
+      level: info
