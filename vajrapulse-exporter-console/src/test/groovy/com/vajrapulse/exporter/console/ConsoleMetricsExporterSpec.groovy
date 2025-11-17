@@ -37,8 +37,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             950,
             50,
             successPercentiles,
-            failurePercentiles,
-            1000L  // 1 second elapsed
+            failurePercentiles
         )
         
         and: "a console exporter capturing output"
@@ -76,8 +75,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             100,
             0,
             defaultPercentiles,
-            [:] as Map<Double, Double>, // no failures
-            1000L  // 1 second elapsed
+            [:] as Map<Double, Double> // no failures
         )
         
         and: "a console exporter"
@@ -112,8 +110,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             1000,
             0,
             customPercentiles,
-            [:] as Map<Double, Double>,
-            1000L  // 1 second elapsed
+            [:] as Map<Double, Double>
         )
         
         and: "a console exporter"
@@ -140,8 +137,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             0,
             0,
             [:] as Map<Double, Double>,
-            [:] as Map<Double, Double>,
-            0L  // No time elapsed
+            [:] as Map<Double, Double>
         )
         
         and: "a console exporter"
@@ -156,10 +152,8 @@ class ConsoleMetricsExporterSpec extends Specification {
         !output.contains("Success Latency")
         !output.contains("Failure Latency")
         
-        and: "summary still shown with new format"
-        output.contains("Requests:")
-        output.contains("Total:             0 (0.0 TPS)")
-        output.contains("Elapsed Time:        0.0s")
+        and: "summary still shown"
+        output.contains("Total Executions:    0")
     }
     
     def "should show title when provided"() {
@@ -174,8 +168,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             50,
             0,
             percentiles,
-            [:] as Map<Double, Double>,
-            1000L  // 1 second elapsed
+            [:] as Map<Double, Double>
         )
         
         and: "a console exporter"
@@ -202,8 +195,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             3,
             0,
             successPercentiles,
-            [:] as Map<Double, Double>,
-            1000L  // 1 second elapsed
+            [:] as Map<Double, Double>
         )
 
         and: "a console exporter"
@@ -234,8 +226,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             90,
             10,
             successPercentiles,
-            failurePercentiles,
-            1000L  // 1 second elapsed
+            failurePercentiles
         )
 
         and:

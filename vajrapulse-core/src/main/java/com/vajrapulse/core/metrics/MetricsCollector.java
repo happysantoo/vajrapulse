@@ -31,7 +31,6 @@ public final class MetricsCollector {
     private final Counter totalCounter;
     private final double[] configuredPercentiles;
     private final String runId; // Optional run correlation tag
-    private final long startMillis; // Track when collection started
     
     /**
      * Creates a collector with default SimpleMeterRegistry.
@@ -85,7 +84,6 @@ public final class MetricsCollector {
         this.registry = registry;
         this.runId = runId;
         this.configuredPercentiles = sanitizePercentiles(percentiles);
-        this.startMillis = System.currentTimeMillis();
 
         Duration[] objectives = (sloBuckets != null && sloBuckets.length > 0)
             ? sloBuckets
@@ -153,7 +151,6 @@ public final class MetricsCollector {
         long successCount = successTimer.count();
         long failureCount = failureTimer.count();
         long totalCount = (long) totalCounter.count();
-        long elapsedMillis = System.currentTimeMillis() - startMillis;
 
         var successSnapshot = successTimer.takeSnapshot();
         var failureSnapshot = failureTimer.takeSnapshot();
@@ -173,8 +170,7 @@ public final class MetricsCollector {
             successCount,
             failureCount,
             successMap,
-            failureMap,
-            elapsedMillis
+            failureMap
         );
     }
 

@@ -381,8 +381,7 @@ class OpenTelemetryExporterSpec extends Specification {
             90L,
             10L,
             successPercentiles,
-            failurePercentiles,
-            1000L  // 1 second elapsed
+            failurePercentiles
         )
         
         when: "exporting metrics with percentiles"
@@ -439,8 +438,7 @@ class OpenTelemetryExporterSpec extends Specification {
             successCount,
             failureCount,
             successPercentiles,
-            failurePercentiles,
-            1000L  // 1 second elapsed
+            failurePercentiles
         )
     }
 }
