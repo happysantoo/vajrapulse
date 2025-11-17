@@ -58,7 +58,10 @@ public final class MetricsPipeline implements AutoCloseable {
 
         AggregatedMetrics finalSnapshot;
         try {
-            finalSnapshot = ExecutionEngine.execute(task, loadPattern, collector);
+            try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, collector)) {
+                engine.run();
+                finalSnapshot = collector.snapshot();
+            }
         } finally {
             if (reporter != null) {
                 reporter.close();

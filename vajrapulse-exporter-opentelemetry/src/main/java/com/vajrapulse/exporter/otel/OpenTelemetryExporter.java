@@ -61,6 +61,7 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     private final Map<String, String> resourceAttributes;
     private final Protocol protocol;
     private final TaskIdentity taskIdentity;
+    private final String runId;
 
     // Pre-created unified instruments (semantic conventions applied)
     // Counter: vajrapulse.execution.count {status=success|failure}
@@ -80,6 +81,10 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         this.resourceAttributes = Map.copyOf(builder.resourceAttributes);
         this.protocol = builder.protocol;
         this.taskIdentity = builder.taskIdentity;
+        // Auto-generate run_id if not provided
+        this.runId = (builder.runId != null && !builder.runId.isBlank()) 
+            ? builder.runId 
+            : java.util.UUID.randomUUID().toString();
         
         // Create appropriate exporter based on protocol
         var metricExporter = createExporter(builder);
@@ -95,6 +100,8 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
             String translatedKey = translateResourceKey(key);
             attributesBuilder.put(AttributeKey.stringKey(translatedKey), value);
         });
+        // Add run_id as a resource attribute for correlation (always present, auto-generated if needed)
+        attributesBuilder.put(AttributeKey.stringKey("run.id"), runId);
         if (taskIdentity != null) {
             // Task name under namespaced key
             attributesBuilder.put(AttributeKey.stringKey("task.name"), taskIdentity.name());
@@ -129,6 +136,7 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
                         measurement.record(ms, Attributes.builder()
                             .put(AttributeKey.stringKey("status"), "success")
                             .put(AttributeKey.stringKey("percentile"), p)
+                            .put(AttributeKey.stringKey("run_id"), runId)
                             .build());
                     }
                 }
@@ -139,6 +147,7 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
                         measurement.record(ms, Attributes.builder()
                             .put(AttributeKey.stringKey("status"), "failure")
                             .put(AttributeKey.stringKey("percentile"), p)
+                            .put(AttributeKey.stringKey("run_id"), runId)
                             .build());
                     }
                 }
@@ -150,7 +159,8 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
             .buildWithCallback(measurement -> {
                 var snapshot = lastMetrics.get();
                 if (snapshot != null && snapshot.totalExecutions() > 0) {
-                    measurement.record(snapshot.successRate());
+                    measurement.record(snapshot.successRate(), 
+                        Attributes.of(AttributeKey.stringKey("run_id"), runId));
                 }
             });
         
@@ -230,10 +240,16 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
                 deltaFailure = failure;
             }
             if (deltaSuccess > 0) {
-                executionCount.add(deltaSuccess, Attributes.of(AttributeKey.stringKey("status"), "success"));
+                executionCount.add(deltaSuccess, Attributes.builder()
+                    .put(AttributeKey.stringKey("status"), "success")
+                    .put(AttributeKey.stringKey("run_id"), runId)
+                    .build());
             }
             if (deltaFailure > 0) {
-                executionCount.add(deltaFailure, Attributes.of(AttributeKey.stringKey("status"), "failure"));
+                executionCount.add(deltaFailure, Attributes.builder()
+                    .put(AttributeKey.stringKey("status"), "failure")
+                    .put(AttributeKey.stringKey("run_id"), runId)
+                    .build());
             }
             lastSuccess = success;
             lastFailure = failure;
@@ -263,6 +279,16 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     }
     
     /**
+     * Returns the run ID used by this exporter.
+     * <p>This may be a user-provided ID or an auto-generated UUID if none was set.
+     * 
+     * @return the run ID (never null)
+     */
+    public String getRunId() {
+        return runId;
+    }
+    
+    /**
      * Creates a new builder for configuring the OpenTelemetry exporter.
      * 
      * @return a new builder instance
@@ -282,6 +308,7 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
         private Map<String, String> resourceAttributes = Map.of();
         private Protocol protocol = Protocol.GRPC;
         private TaskIdentity taskIdentity;
+        private String runId;
         
         /**
          * Sets the OTLP endpoint URL.
@@ -387,6 +414,21 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
          */
         public Builder taskIdentity(TaskIdentity identity) {
             this.taskIdentity = identity;
+            return this;
+        }
+        
+        /**
+         * Sets the run ID for correlation across metrics and traces.
+         * <p>The run_id is added both as a resource attribute (run.id) and as a
+         * metric attribute (run_id) to enable filtering and grouping in Grafana.
+         * <p>If not set, a random UUID will be automatically generated to ensure
+         * every test run has a unique identifier.
+         * 
+         * @param runId the unique run identifier (if null/blank, a UUID is auto-generated)
+         * @return this builder
+         */
+        public Builder runId(String runId) {
+            this.runId = runId;
             return this;
         }
         

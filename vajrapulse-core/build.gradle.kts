@@ -3,6 +3,7 @@ dependencies {
     
     implementation("io.micrometer:micrometer-core:1.12.0")
     implementation("org.slf4j:slf4j-api:2.0.9")
+    implementation("org.yaml:snakeyaml:2.2")
     // Minimal OpenTelemetry tracing dependencies
     implementation("io.opentelemetry:opentelemetry-api:1.41.0")
     implementation("io.opentelemetry:opentelemetry-sdk:1.41.0")

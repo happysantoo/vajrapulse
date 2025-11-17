@@ -4,7 +4,12 @@ import com.vajrapulse.api.LoadPattern;
 import com.vajrapulse.api.RampUpLoad;
 import com.vajrapulse.api.RampUpToMaxLoad;
 import com.vajrapulse.api.StaticLoad;
+import com.vajrapulse.api.StepLoad;
+import com.vajrapulse.api.SineWaveLoad;
+import com.vajrapulse.api.SpikeLoad;
 import com.vajrapulse.api.Task;
+import com.vajrapulse.core.config.ConfigLoader;
+import com.vajrapulse.core.config.VajraPulseConfig;
 import com.vajrapulse.core.engine.ExecutionEngine;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.core.metrics.MetricsCollector;
@@ -58,31 +63,91 @@ public final class VajraPulseWorker implements Callable<Integer> {
     
     @Option(
         names = {"-m", "--mode"},
-        description = "Load pattern mode: static, ramp, ramp-sustain (default: ${DEFAULT-VALUE})",
+        description = "Load pattern mode: static, ramp, ramp-sustain, step, sine, spike (default: ${DEFAULT-VALUE})",
         defaultValue = "static"
     )
     private String mode;
     
     @Option(
         names = {"-t", "--tps"},
-        description = "Target transactions per second (default: ${DEFAULT-VALUE})",
+        description = "Target transactions per second (static/ramp/ramp-sustain base TPS) (default: ${DEFAULT-VALUE})",
         defaultValue = "100"
     )
     private double tps;
     
     @Option(
         names = {"-d", "--duration"},
-        description = "Test duration (e.g., 30s, 5m, 1h) (default: ${DEFAULT-VALUE})",
+        description = "Test duration (static/ramp-sustain total, sine totalDuration, spike totalDuration) e.g. 30s, 5m, 1h (default: ${DEFAULT-VALUE})",
         defaultValue = "1m"
     )
     private String duration;
     
     @Option(
         names = {"-r", "--ramp-duration"},
-        description = "Ramp-up duration for ramp modes (e.g., 30s, 1m) (default: ${DEFAULT-VALUE})",
+        description = "Ramp-up duration for ramp / ramp-sustain (default: ${DEFAULT-VALUE})",
         defaultValue = "30s"
     )
     private String rampDuration;
+
+    // Step pattern specific: steps formatted as rate:duration,rate:duration
+    @Option(
+        names = {"--steps"},
+        description = "Comma separated steps for step mode: rate:duration,... (duration units: ms,s,m,h)"
+    )
+    private String stepsSpec;
+
+    // Sine pattern specific
+    @Option(
+        names = {"--mean-rate"},
+        description = "Mean TPS for sine mode"
+    )
+    private Double sineMeanRate;
+    @Option(
+        names = {"--amplitude"},
+        description = "Amplitude (positive) for sine mode"
+    )
+    private Double sineAmplitude;
+    @Option(
+        names = {"--period"},
+        description = "Period for sine mode (e.g. 10s)"
+    )
+    private String sinePeriod;
+
+    // Spike pattern specific
+    @Option(
+        names = {"--base-rate"},
+        description = "Base TPS for spike mode"
+    )
+    private Double spikeBaseRate;
+    @Option(
+        names = {"--spike-rate"},
+        description = "Spike TPS for spike mode"
+    )
+    private Double spikeSpikeRate;
+    @Option(
+        names = {"--spike-interval"},
+        description = "Interval between spikes (e.g. 30s)"
+    )
+    private String spikeInterval;
+    @Option(
+        names = {"--spike-duration"},
+        description = "Duration of each spike (e.g. 2s)"
+    )
+    private String spikeDuration;
+
+    // Run ID override
+    @Option(
+        names = {"--run-id"},
+        description = "Explicit run id to use (UUID or custom string). If omitted a UUID is generated."
+    )
+    private String runIdOverride;
+
+    // External configuration file
+    @Option(
+        names = {"--config"},
+        description = "Path to configuration file (yaml/json). Overrides defaults + env vars."
+    )
+    private String configPath;
     
     @Override
     public Integer call() throws Exception {
@@ -115,7 +180,11 @@ public final class VajraPulseWorker implements Callable<Integer> {
         ));
         
         // Run load test
-        try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector)) {
+        VajraPulseConfig config = (configPath != null && !configPath.isBlank())
+            ? ConfigLoader.load(java.nio.file.Paths.get(configPath))
+            : ConfigLoader.load();
+
+        try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector, runId, config)) {
             engine.run();
             logger.info("Load test completed");
         }
@@ -155,27 +224,66 @@ public final class VajraPulseWorker implements Callable<Integer> {
     private LoadPattern createLoadPattern() {
         Duration testDuration = parseDuration(duration);
         
-        return switch (mode.toLowerCase()) {
+        switch (mode.toLowerCase()) {
             case "static" -> {
                 logger.debug("Creating static load: {} TPS for {}", tps, testDuration);
-                yield new StaticLoad(tps, testDuration);
+                return new StaticLoad(tps, testDuration);
             }
             case "ramp" -> {
                 Duration ramp = parseDuration(rampDuration);
                 logger.debug("Creating ramp-up load: 0 to {} TPS over {}", tps, ramp);
-                yield new RampUpLoad(tps, ramp);
+                return new RampUpLoad(tps, ramp);
             }
             case "ramp-sustain" -> {
                 Duration ramp = parseDuration(rampDuration);
                 Duration sustain = testDuration.minus(ramp);
                 logger.debug("Creating ramp-sustain load: 0 to {} TPS over {}, sustain for {}", 
                     tps, ramp, sustain);
-                yield new RampUpToMaxLoad(tps, ramp, sustain);
+                return new RampUpToMaxLoad(tps, ramp, sustain);
+            }
+            case "step" -> {
+                if (stepsSpec == null || stepsSpec.isBlank()) {
+                    throw new IllegalArgumentException("--steps required for step mode");
+                }
+                java.util.List<StepLoad.Step> steps = new java.util.ArrayList<>();
+                for (String part : stepsSpec.split(",")) {
+                    String trimmed = part.trim();
+                    if (trimmed.isEmpty()) continue;
+                    String[] pieces = trimmed.split(":");
+                    if (pieces.length != 2) {
+                        throw new IllegalArgumentException("Invalid step segment: " + trimmed + " (expected rate:duration)");
+                    }
+                    double rate = Double.parseDouble(pieces[0]);
+                    Duration d = parseDuration(pieces[1]);
+                    steps.add(new StepLoad.Step(rate, d));
+                }
+                if (steps.isEmpty()) {
+                    throw new IllegalArgumentException("No valid steps parsed for step mode");
+                }
+                logger.debug("Creating step load with {} steps totalDuration={}", steps.size(), new StepLoad(steps).getDuration());
+                return new StepLoad(java.util.List.copyOf(steps));
+            }
+            case "sine" -> {
+                if (sineMeanRate == null || sineAmplitude == null || sinePeriod == null) {
+                    throw new IllegalArgumentException("--mean-rate, --amplitude, --period required for sine mode");
+                }
+                Duration period = parseDuration(sinePeriod);
+                logger.debug("Creating sine load mean={} amplitude={} period={} totalDuration={}", sineMeanRate, sineAmplitude, period, testDuration);
+                return new SineWaveLoad(sineMeanRate, sineAmplitude, testDuration, period);
+            }
+            case "spike" -> {
+                if (spikeBaseRate == null || spikeSpikeRate == null || spikeInterval == null || spikeDuration == null) {
+                    throw new IllegalArgumentException("--base-rate, --spike-rate, --spike-interval, --spike-duration required for spike mode");
+                }
+                Duration interval = parseDuration(spikeInterval);
+                Duration spikeDur = parseDuration(spikeDuration);
+                logger.debug("Creating spike load baseRate={} spikeRate={} interval={} spikeDuration={} totalDuration={}", spikeBaseRate, spikeSpikeRate, interval, spikeDur, testDuration);
+                return new SpikeLoad(spikeBaseRate, spikeSpikeRate, testDuration, interval, spikeDur);
             }
             default -> throw new IllegalArgumentException(
-                "Unknown mode: " + mode + ". Valid modes: static, ramp, ramp-sustain"
+                "Unknown mode: " + mode + ". Valid modes: static, ramp, ramp-sustain, step, sine, spike"
             );
-        };
+        }
     }
     
     private Duration parseDuration(String durationStr) {

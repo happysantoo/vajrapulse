@@ -1,366 +1,88 @@
 # HTTP Load Test Example
 
-This example demonstrates how to create a simple HTTP load test using VajraPulse with Java 21 virtual threads.
+Demonstrates the `HttpLoadTest` task with multiple load patterns, console & OpenTelemetry export, run ID correlation, and Java 21 virtual threads.
 
-## What it does
+## Patterns Supported
 
-- Sends HTTP GET requests to `https://httpbin.org/delay/0`
-- Uses virtual threads for efficient I/O handling
-- Runs at 100 TPS for 30 seconds (3,000 total requests)
-- Reports latency percentiles and success/failure rates
-
-## Quick Start
-
-### Prerequisites
-
-- Java 21 or later
-- Built VajraPulse modules (run `./gradlew build` from project root)
-
-### Build and Run
-
-There are three ways to run this example:
-
-#### Option 1: Using the Console Runner (Console Export)
-
+Programmatic runner (`HttpLoadTestRunner`):
 ```bash
-# Build and run directly
-./gradlew run
+./gradlew :examples:http-load-test:run --args="static"
+./gradlew :examples:http-load-test:run --args="step"
+./gradlew :examples:http-load-test:run --args="sine"
+./gradlew :examples:http-load-test:run --args="spike"
 ```
+Defaults to `static` if omitted.
 
-This uses the `HttpLoadTestRunner` class which leverages the high-level `MetricsPipeline` abstraction for minimal boilerplate and prints metrics to the console.
-
-#### Option 1b: Using the OpenTelemetry Runner (OTLP Export)
-
-Run the variant that exports metrics to an OpenTelemetry Collector:
-
+Worker CLI (after `./gradlew :vajrapulse-worker:shadowJar`):
 ```bash
-./gradlew runOtel
+# Static
+java -jar ../../vajrapulse-worker/build/libs/vajrapulse-worker-*-all.jar \
+  com.example.http.HttpLoadTest --mode static --tps 120 --duration 45s
+
+# Ramp then sustain
+java -jar ../../vajrapulse-worker/build/libs/vajrapulse-worker-*-all.jar \
+  com.example.http.HttpLoadTest --mode ramp-sustain --tps 300 --ramp-duration 30s --duration 2m
+
+# Step
+java -jar ../../vajrapulse-worker/build/libs/vajrapulse-worker-*-all.jar \
+  com.example.http.HttpLoadTest --mode step --steps "50:15s,150:15s,300:30s"
+
+# Sine
+java -jar ../../vajrapulse-worker/build/libs/vajrapulse-worker-*-all.jar \
+  com.example.http.HttpLoadTest --mode sine --mean-rate 200 --amplitude 100 --period 20s --duration 2m
+
+# Spike
+java -jar ../../vajrapulse-worker/build/libs/vajrapulse-worker-*-all.jar \
+  com.example.http.HttpLoadTest --mode spike --base-rate 120 --spike-rate 600 --spike-interval 15s --spike-duration 3s --duration 1m
 ```
 
-Requirements:
-1. Running OpenTelemetry Collector (default ports) – simplest via Docker:
-   ```bash
-   docker run --name otel-collector -p 4317:4317 -p 4318:4318 \
-     -e OTEL_EXPORTER_OTLP_LOGS_ENABLED=false \
-     otel/opentelemetry-collector:latest
-   ```
-2. Endpoint used: `http://localhost:4318` (HTTP protocol) – configured in `HttpLoadTestOtelRunner`.
-3. Service/resource attributes applied: `environment=dev`, `example.type=http-load-test`, `team=platform`.
+## Run ID
+- Auto-generated if `--run-id` not provided (UUID)
+- Appears as metric tag `run_id` and resource attribute (OTel exporter)
+- Provide custom value for traceability across runs
 
-The OTLP exporter is automatically closed when the pipeline completes, ensuring final metrics are flushed before shutdown.
-
-You can switch to gRPC by changing:
-```java
-    .protocol(Protocol.GRPC)
-```
-and (optionally) using port 4317.
-
-#### Option 2: Using VajraPulse Worker CLI
-
+## OpenTelemetry Export
+Run with OTLP exporter:
 ```bash
-# Build VajraPulse modules first (from project root)
-cd ../..
-./gradlew build
-
-# Build the example
-cd examples/http-load-test
-./gradlew build
-
-# Run using the worker CLI
-java -cp "build/libs/http-load-test-1.0.0-SNAPSHOT.jar:../../vajrapulse-worker/build/libs/vajrapulse-worker-1.0.0-SNAPSHOT-all.jar" \
-  com.vajrapulse.worker.VajraPulseWorker \
-  com.example.http.HttpLoadTest \
-  --mode static \
-  --tps 100 \
-  --duration 30s
+./gradlew :examples:http-load-test:runOtel
 ```
+Collector expected at `http://localhost:4317` (gRPC). Adjust endpoint in `HttpLoadTestOtelRunner`.
 
-#### Option 3: (Deprecated) Direct Task Main
-Direct invocation via a task `main` method has been deprecated in favor of the `MetricsPipeline` or the worker CLI. Keep tests focused on task logic only.
+Import `documents/grafana-dashboard-runid-simple.json` in Grafana to visualize latency percentiles & success rate by `run_id`.
 
-## Code Walkthrough
+## Configuration Overrides
+Environment vars (e.g. `VAJRAPULSE_EXECUTION_DRAIN_TIMEOUT=5s`) or worker CLI `--config path/to/conf.yml` modify execution semantics.
 
-### Task Implementation
+## Pattern Cheat Sheet
+| Pattern | Key Args | Behavior |
+|---------|----------|----------|
+| static | `--tps`, `--duration` | Constant TPS for full duration |
+| ramp | `--tps`, `--ramp-duration` | Linear 0→TPS then stop at end of ramp |
+| ramp-sustain | `--tps`, `--ramp-duration`, `--duration` | Linear 0→TPS then sustain remainder |
+| step | `--steps` | Discrete TPS steps (rate:duration segments) |
+| sine | `--mean-rate`, `--amplitude`, `--period`, `--duration` | Smooth oscillation around mean |
+| spike | `--base-rate`, `--spike-rate`, `--spike-interval`, `--spike-duration`, `--duration` | Periodic short spikes |
 
-```java
-@VirtualThreads  // Use virtual threads for I/O operations
-public class HttpLoadTest implements Task {
-    private HttpClient client;
-    
-    @Override
-    public void setup() {
-        // Called once before test starts
-        client = HttpClient.newBuilder()
-            .executor(Executors.newVirtualThreadPerTaskExecutor())
-            .build();
-    }
-    
-    @Override
-    public TaskResult execute() throws Exception {
-        // Called for each iteration (100 times)
-        HttpResponse<String> response = client.send(request, ...);
-        
-        if (response.statusCode() == 200) {
-            return TaskResult.success(response.body());
-        } else {
-            return TaskResult.failure(new RuntimeException(...));
-        }
-    }
-    
-    @Override
-    public void cleanup() {
-        // Called once after test completes
-    }
-}
-```
+See `documents/LOAD_PATTERNS.md` for deeper design notes.
 
-### Key Features
+## Example Programmatic Runner Selection
+In `HttpLoadTestRunner` pass the pattern name as first arg; steps, sine, spike examples are hard-coded for quick experimentation.
 
-1. **@VirtualThreads** - Annotation tells Vajra to use virtual threads for this I/O-bound task
-2. **setup()** - Initialize HttpClient once, reuse for all requests
-3. **execute()** - Test logic executed repeatedly
-4. **TaskResult** - Return Success or Failure explicitly
+## Next Exploration Ideas
+- Tune spike frequency to reveal autoscaler lag
+- Use sine pattern to find latency resonance windows
+- Combine step pattern segments mimicking release ramp-ups
 
-## Programmatic Configuration
+## Observability Metrics (OTel)
+Exported counters & histograms include `run_id`, `task.name`, and pattern tags; use them in Grafana for comparative panels.
 
-The `HttpLoadTestRunner` now uses the `MetricsPipeline` for concise orchestration:
+## Performance Note
+Virtual threads keep memory low even with thousands of concurrent requests; use the worker CLI with high TPS to stress outbound latency.
 
-```java
-HttpLoadTest task = new HttpLoadTest();
-LoadPattern pattern = new StaticLoad(100.0, Duration.ofSeconds(30));
+## Troubleshooting
+- Missing metrics: verify collector port (4317 gRPC) and protocol setting
+- Invalid steps format: ensure `rate:duration` pairs comma-separated (e.g. `"50:10s,150:20s"`)
+- Spike validation error: spike duration must be strictly < interval
 
-// Pipeline implements AutoCloseable for automatic cleanup
-try (MetricsPipeline pipeline = MetricsPipeline.builder()
-    .addExporter(new ConsoleMetricsExporter())       // final + live exports
-    .withPeriodic(Duration.ofSeconds(5))             // live updates every 5s
-    .build()) {                                      // creates MetricsCollector internally
-    
-    pipeline.run(task, pattern);
-} // Automatic final export + cleanup
-```
-
-Internals handled by the pipeline:
-1. Task setup/cleanup
-2. Thread strategy annotation resolution
-3. Rate-controlled submission
-4. Metrics collection & aggregation
-5. Optional periodic live snapshot export
-6. Final snapshot export (guaranteed before close)
-7. Automatic exporter cleanup (AutoCloseable exporters)
-
-## OpenTelemetry Export Details
-
-### Metrics Sent
-- `vajrapulse.executions.total` – Counter
-- `vajrapulse.executions.success` – Counter
-- `vajrapulse.executions.failure` – Counter
-- `vajrapulse.success.rate` – Gauge (0-100)
-- `vajrapulse.latency.success` – Histogram (ms) with `percentile` attribute
-- `vajrapulse.latency.failure` – Histogram (ms) with `percentile` attribute (if failures > 0)
-
-### Custom Resource Attributes
-Configured in the OTLP runner:
-```java
-resourceAttributes(Map.of(
-  "environment", "dev",
-  "example.type", "http-load-test",
-  "team", "platform"
-))
-```
-Use these for filtering and grouping in your observability backend.
-
-### Switching Protocol
-Default is gRPC. In the example we explicitly use HTTP:
-```java
-protocol(Protocol.HTTP)
-```
-Change to `Protocol.GRPC` when collector supports gRPC or for improved efficiency.
-
-### Manual Endpoint Override
-Update `.endpoint("http://collector-host:4318")` to point at remote collectors. For gRPC use typical port `4317`.
-
-## Load Patterns via CLI
-
-### Static Load
-```bash
-java -cp ... com.vajrapulse.worker.VajraPulseWorker \
-  com.example.http.HttpLoadTest \
-  --mode static \
-  --tps 100 \
-  --duration 5m
-```
-
-### Ramp-Up
-```bash
-java -cp ... com.vajrapulse.worker.VajraPulseWorker \
-  com.example.http.HttpLoadTest \
-  --mode ramp \
-  --tps 200 \
-  --ramp-duration 30s
-```
-
-### Ramp then Sustain
-```bash
-java -cp ... com.vajrapulse.worker.VajraPulseWorker \
-  com.example.http.HttpLoadTest \
-  --mode ramp-sustain \
-  --tps 200 \
-  --ramp-duration 30s \
-  --duration 5m
-```
-
-## Expected Output
-
-```
-╔════════════════════════════════════════════════════════╗
-║        VajraPulse HTTP Load Test Example              ║
-╚════════════════════════════════════════════════════════╝
-
-Configuration:
-  Task:     HttpLoadTest
-  Pattern:  Static Load
-  TPS:      100
-  Duration: 30 seconds
-  Endpoint: https://httpbin.org/delay/0
-
-Starting load test...
-
-[Live metrics updates every 5 seconds...]
-
-Load test completed!
-
-========================================
-HTTP Load Test Results
-========================================
-Total Executions:    3000
-Successful:          2985 (99.5%)
-Failed:              15 (0.5%)
-
-Success Latency (ms):
-  P50:  125.45
-  P95:  245.67
-  P99:  389.12
-
-========================================
-```
-
-## Debugging and Manual Validation
-
-### Enable Trace Logging
-
-To see detailed per-request logs for manual validation of percentile calculations:
-
-1. **Edit** `src/main/resources/logback.xml`
-2. **Uncomment** this line:
-   ```xml
-   <logger name="com.vajrapulse.core.engine.TaskExecutor" level="TRACE"/>
-   ```
-3. **Run** the test with low TPS for manageable output:
-   ```bash
-   # Modify HttpLoadTestRunner.java to use lower TPS temporarily:
-   # LoadPattern loadPattern = new StaticLoad(10.0, Duration.ofSeconds(10));
-   ./gradlew run
-   ```
-
-### Trace Log Format
-
-With TRACE logging enabled, you'll see output like:
-```
-2025-11-15 10:30:45.123 TRACE TaskExecutor - Iteration=0 Status=SUCCESS Duration=245678912ns (245.679ms)
-2025-11-15 10:30:45.234 TRACE TaskExecutor - Iteration=1 Status=SUCCESS Duration=156234567ns (156.235ms)
-2025-11-15 10:30:45.345 TRACE TaskExecutor - Iteration=2 Status=SUCCESS Duration=189456789ns (189.457ms)
-...
-```
-
-### Manual Percentile Validation
-
-1. **Extract durations** from trace logs:
-   ```bash
-   ./gradlew run 2>&1 | grep "TRACE TaskExecutor" | awk '{print $9}' | sed 's/ms)//' | sed 's/(//g' > durations.txt
-   ```
-
-2. **Sort and calculate** percentiles:
-   ```bash
-   # Sort durations
-   sort -n durations.txt > sorted_durations.txt
-   
-   # Count total
-   total=$(wc -l < sorted_durations.txt)
-   
-   # Calculate P50 (50th percentile)
-   p50_line=$((total * 50 / 100))
-   p50=$(sed -n "${p50_line}p" sorted_durations.txt)
-   
-   # Calculate P95 (95th percentile)
-   p95_line=$((total * 95 / 100))
-   p95=$(sed -n "${p95_line}p" sorted_durations.txt)
-   
-   # Calculate P99 (99th percentile)
-   p99_line=$((total * 99 / 100))
-   p99=$(sed -n "${p99_line}p" sorted_durations.txt)
-   
-   echo "Manual Calculations:"
-   echo "P50: ${p50}ms"
-   echo "P95: ${p95}ms"
-   echo "P99: ${p99}ms"
-   ```
-
-3. **Compare** with VajraPulse reported metrics
-
-⚠️ **WARNING**: TRACE logging generates massive output at high TPS! Only use for validation with:
-- Low TPS (10-50 TPS)
-- Short duration (10-30 seconds)
-- Total requests < 1000
-
-### Python Script for Validation
-
-For easier validation, use this Python script:
-
-```python
-#!/usr/bin/env python3
-import sys
-import re
-
-durations = []
-with open(sys.argv[1] if len(sys.argv) > 1 else 'durations.txt', 'r') as f:
-    for line in f:
-        match = re.search(r'\((\d+\.\d+)ms\)', line)
-        if match:
-            durations.append(float(match.group(1)))
-
-durations.sort()
-n = len(durations)
-
-print(f"Total requests: {n}")
-print(f"P50: {durations[int(n * 0.50)]:.2f}ms")
-print(f"P95: {durations[int(n * 0.95)]:.2f}ms")
-print(f"P99: {durations[int(n * 0.99)]:.2f}ms")
-```
-
-Save as `validate_percentiles.py` and run:
-```bash
-./gradlew run 2>&1 | tee test_output.log
-python3 validate_percentiles.py test_output.log
-```
-
-## Customization
-
-To test your own HTTP endpoint:
-
-1. Change the URI in `setup()`:
-   ```java
-   request = HttpRequest.newBuilder()
-       .uri(URI.create("https://your-api.com/endpoint"))
-       .build();
-   ```
-
-2. Add headers, authentication, POST body, etc.
-
-3. Customize success criteria in `execute()`
-
-## Performance
-
-With virtual threads, this example can easily handle:
-- **1,000+ TPS** on a typical laptop
-- **10,000+ concurrent requests** with minimal memory overhead
-- **Millions of requests** in a single test run
+## License & Status
+Pre-1.0: breaking changes expected; this example evolves with core API refinements.
