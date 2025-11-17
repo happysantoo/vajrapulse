@@ -183,24 +183,7 @@ public final class ExecutionEngine implements AutoCloseable {
             })
             .build();
     }
-    
-    private ShutdownManager createShutdownManager(String runId, MetricsCollector metricsCollector) {
-        return ShutdownManager.builder()
-            .withRunId(runId)
-            .withDrainTimeout(config.execution().drainTimeout())
-            .withForceTimeout(config.execution().forceTimeout())
-            .onShutdown(() -> {
-                // Flush metrics before shutdown
-                try {
-                    logger.debug("Flushing metrics for runId={}", runId);
-                    // MetricsCollector doesn't have explicit flush, but snapshot captures state
-                    metricsCollector.snapshot();
-                } catch (Exception e) {
-                    logger.error("Failed to flush metrics for runId={}: {}", runId, e.getMessage(), e);
-                }
-            })
-            .build();
-    }
+
     
     /**
      * Adapts a Task to TaskLifecycle interface.
