@@ -31,6 +31,19 @@ for mod in "${MODULES[@]}"; do
       [[ -f "${artifact}.md5" ]] || md5 -q "${artifact}" > "${artifact}.md5"
       [[ -f "${artifact}.sha1" ]] || shasum -a 1 "${artifact}" | awk '{print $1}' > "${artifact}.sha1"
   done
+
+  # Also generate checksums for any additional JARs (e.g., shadow "-all.jar")
+  # Skip ones we already handled above; guard with existence checks.
+  for extra in "${dir}"/*.jar; do
+    [[ -f "${extra}" ]] || continue
+    # Known standard artifacts already covered
+    case "${extra}" in
+      "${dir}/${mod}-${VERSION}.jar"|"${dir}/${mod}-${VERSION}-sources.jar"|"${dir}/${mod}-${VERSION}-javadoc.jar")
+        continue ;;
+    esac
+    [[ -f "${extra}.md5" ]] || md5 -q "${extra}" > "${extra}.md5"
+    [[ -f "${extra}.sha1" ]] || shasum -a 1 "${extra}" | awk '{print $1}' > "${extra}.sha1"
+  done
 done
 
 OUT="/tmp/vajrapulse-${VERSION}-central.zip"
