@@ -24,6 +24,11 @@ subprojects {
         // Aggregator only; no source sets or plugins applied.
         return@subprojects
     }
+    
+    // BOM uses java-platform plugin, skip standard plugins
+    if (project.path == ":vajrapulse-bom") {
+        return@subprojects
+    }
 
     apply(plugin = "java")
     apply(plugin = "java-library")
@@ -42,6 +47,29 @@ subprojects {
         options.encoding = "UTF-8"
         options.release.set(21)
         options.compilerArgs.addAll(listOf("-parameters", "-Xlint:deprecation"))
+        
+        // Configure JavaDoc linting
+        // Suppress doclint warnings for missing comments in examples (they're educational)
+        if (project.path.startsWith(":examples")) {
+            options.compilerArgs.add("-Xdoclint:none")
+        } else {
+            // For main modules, enforce JavaDoc requirements (warn on malformed, allow missing)
+            options.compilerArgs.add("-Xdoclint:all")
+            options.compilerArgs.add("-Xdoclint:-missing")
+        }
+    }
+    
+    // Configure JavaDoc task to check for documentation issues
+    tasks.withType<Javadoc> {
+        options {
+            (this as StandardJavadocDocletOptions).apply {
+                addStringOption("Xdoclint:all,-missing", "-quiet")
+                // Suppress doclint for examples
+                if (project.path.startsWith(":examples")) {
+                    addStringOption("Xdoclint:none", "-quiet")
+                }
+            }
+        }
     }
 
     // Configure coverage verification: enforce ≥90% for tested modules
@@ -104,8 +132,9 @@ subprojects {
         dependsOn(tasks.named("jacocoTestCoverageVerification"))
     }
 
-    // Simplified publishing/signing for selected modules (API, core, exporters, worker)
+    // Simplified publishing/signing for selected modules (BOM, API, core, exporters, worker)
     val publishable = setOf(
+        "vajrapulse-bom",
         "vajrapulse-api",
         "vajrapulse-core",
         "vajrapulse-exporter-console",

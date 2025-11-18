@@ -1,13 +1,15 @@
 apiVersion: 1
 
+# Default dashboard provisioning - Grafana will auto-load all JSON files in the path
 providers:
-  - name: 'VajraPulse Dashboards'
+  # Load dashboards from mounted volume
+  - name: 'VajraPulse'
     orgId: 1
     folder: 'VajraPulse'
     type: file
     disableDeletion: false
+    editable: true
     updateIntervalSeconds: 10
     allowUiUpdates: true
     options:
       path: /var/lib/grafana/dashboards
-      foldersFromFilesStructure: false

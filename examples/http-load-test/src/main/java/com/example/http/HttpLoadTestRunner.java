@@ -24,6 +24,28 @@ import java.time.Duration;
  */
 public final class HttpLoadTestRunner {
     
+    /**
+     * Default constructor for HttpLoadTestRunner.
+     * This is a utility class with static main method.
+     */
+    private HttpLoadTestRunner() {
+        // Utility class - prevent instantiation
+    }
+    
+    /**
+     * Main entry point for the HTTP load test example.
+     * 
+     * <p>Runs a load test with configurable load patterns. Supports:
+     * <ul>
+     *   <li>static - Constant TPS</li>
+     *   <li>step - Discrete TPS steps</li>
+     *   <li>sine - Sinusoidal TPS pattern</li>
+     *   <li>spike - Periodic spike pattern</li>
+     * </ul>
+     * 
+     * @param args command-line arguments (optional pattern type: static|step|sine|spike)
+     * @throws Exception if test execution fails
+     */
     public static void main(String[] args) throws Exception {
         // Create task instance
         HttpLoadTest task = new HttpLoadTest();

@@ -3,7 +3,7 @@ set -euo pipefail
 
 VERSION="${1:-0.9.0}"
 GROUP_PATH="com/vajrapulse"
-MODULES=(vajrapulse-api vajrapulse-core vajrapulse-exporter-console vajrapulse-exporter-opentelemetry vajrapulse-worker)
+MODULES=(vajrapulse-bom vajrapulse-api vajrapulse-core vajrapulse-exporter-console vajrapulse-exporter-opentelemetry vajrapulse-worker)
 REPO_ROOT="${HOME}/.m2/repository"
 
 echo "[central-bundle] Preparing bundle for version ${VERSION}"
@@ -50,7 +50,14 @@ OUT="/tmp/vajrapulse-${VERSION}-central.zip"
 echo "[central-bundle] Creating zip ${OUT}";
 rm -f "${OUT}"
 cd "${REPO_ROOT}";
-zip -r "${OUT}" "${GROUP_PATH}/vajrapulse-api/${VERSION}" "${GROUP_PATH}/vajrapulse-core/${VERSION}" "${GROUP_PATH}/vajrapulse-exporter-console/${VERSION}" "${GROUP_PATH}/vajrapulse-exporter-opentelemetry/${VERSION}" "${GROUP_PATH}/vajrapulse-worker/${VERSION}" >/dev/null
+
+# Build zip command dynamically for all modules
+ZIP_ARGS=()
+for mod in "${MODULES[@]}"; do
+  ZIP_ARGS+=("${GROUP_PATH}/${mod}/${VERSION}")
+done
+
+zip -r "${OUT}" "${ZIP_ARGS[@]}" >/dev/null
 echo "[central-bundle] Bundle ready: ${OUT}"
 echo "Upload command example:";
 echo "curl -u \"$mavenCentralUsername:$mavenCentralPassword\" -F bundle=@${OUT} \"https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC\""

@@ -37,37 +37,89 @@ Pre-1.0: breaking changes allowed (clean architecture over compatibility).
 
 ### Maven Central (Recommended)
 
+**Using BOM (Recommended)** - Single version to manage all modules:
+
 Gradle (Kotlin DSL):
 ```kotlin
 dependencies {
-  implementation("com.vajrapulse:vajrapulse-core:0.9.1")
-  implementation("com.vajrapulse:vajrapulse-worker:0.9.1") // For CLI runnable
+  // Import BOM
+  implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.3"))
+  
+  // Use modules without versions
+  implementation("com.vajrapulse:vajrapulse-core")
+  implementation("com.vajrapulse:vajrapulse-worker") // For CLI runnable
   // Optional exporters
-  implementation("com.vajrapulse:vajrapulse-exporter-console:0.9.1")
-  implementation("com.vajrapulse:vajrapulse-exporter-opentelemetry:0.9.1")
+  implementation("com.vajrapulse:vajrapulse-exporter-console")
+  implementation("com.vajrapulse:vajrapulse-exporter-opentelemetry")
 }
 ```
 
 Gradle (Groovy DSL):
 ```groovy
 dependencies {
-  implementation 'com.vajrapulse:vajrapulse-core:0.9.1'
-  implementation 'com.vajrapulse:vajrapulse-worker:0.9.1'
+  // Import BOM
+  implementation platform('com.vajrapulse:vajrapulse-bom:0.9.3')
+  
+  // Use modules without versions
+  implementation 'com.vajrapulse:vajrapulse-core'
+  implementation 'com.vajrapulse:vajrapulse-worker'
 }
 ```
 
 Maven:
 ```xml
-<dependency>
-  <groupId>com.vajrapulse</groupId>
-  <artifactId>vajrapulse-core</artifactId>
-  <version>0.9.1</version>
-</dependency>
-<dependency>
-  <groupId>com.vajrapulse</groupId>
-  <artifactId>vajrapulse-worker</artifactId>
-  <version>0.9.1</version>
-</dependency>
+<dependencyManagement>
+  <dependencies>
+    <!-- Import BOM -->
+    <dependency>
+      <groupId>com.vajrapulse</groupId>
+      <artifactId>vajrapulse-bom</artifactId>
+      <version>0.9.3</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+
+<dependencies>
+  <!-- Use modules without versions -->
+  <dependency>
+    <groupId>com.vajrapulse</groupId>
+    <artifactId>vajrapulse-core</artifactId>
+  </dependency>
+  <dependency>
+    <groupId>com.vajrapulse</groupId>
+    <artifactId>vajrapulse-worker</artifactId>
+  </dependency>
+</dependencies>
+```
+
+**Without BOM** - Specify versions for each module:
+
+Gradle (Kotlin DSL):
+```kotlin
+dependencies {
+  implementation("com.vajrapulse:vajrapulse-core:0.9.3")
+  implementation("com.vajrapulse:vajrapulse-worker:0.9.3")
+  implementation("com.vajrapulse:vajrapulse-exporter-console:0.9.3")
+  implementation("com.vajrapulse:vajrapulse-exporter-opentelemetry:0.9.3")
+}
+```
+
+Maven:
+```xml
+<dependencies>
+  <dependency>
+    <groupId>com.vajrapulse</groupId>
+    <artifactId>vajrapulse-core</artifactId>
+    <version>0.9.3</version>
+  </dependency>
+  <dependency>
+    <groupId>com.vajrapulse</groupId>
+    <artifactId>vajrapulse-worker</artifactId>
+    <version>0.9.3</version>
+  </dependency>
+</dependencies>
 ```
 
 ### JitPack (Latest tag, immediate)
