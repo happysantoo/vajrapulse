@@ -168,11 +168,11 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
                 }
             });
 
-        // Asynchronous gauge for request TPS (approximate requested throughput).
-        // For now this mirrors the achieved total response TPS until a target rate is tracked separately.
-        meter.gaugeBuilder("vajrapulse.request.tps")
-            .setDescription("Requested target throughput (requests per second); currently mirrors achieved total")
-            .setUnit("tps")
+        // Asynchronous gauge for request throughput (approximate requested rate).
+        // Follows OTel semantic conventions with unit format {request}/s
+        meter.gaugeBuilder("vajrapulse.request.throughput")
+            .setDescription("Requested target throughput (requests per second)")
+            .setUnit("{request}/s")
             .buildWithCallback(measurement -> {
                 var snapshot = lastMetrics.get();
                 if (snapshot != null && snapshot.elapsedMillis() > 0) {
@@ -181,23 +181,24 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
                 }
             });
 
-        // Asynchronous gauge for response TPS partitioned by type (total, success, failure)
-        meter.gaugeBuilder("vajrapulse.response.tps")
-            .setDescription("Achieved response throughput (requests per second) partitioned by type: total|success|failure")
-            .setUnit("tps")
+        // Asynchronous gauge for response throughput partitioned by result status.
+        // Follows OTel convention with "status" attribute and unit format {response}/s
+        meter.gaugeBuilder("vajrapulse.response.throughput")
+            .setDescription("Achieved response throughput by status (success|failure)")
+            .setUnit("{response}/s")
             .buildWithCallback(measurement -> {
                 var snapshot = lastMetrics.get();
                 if (snapshot != null && snapshot.elapsedMillis() > 0) {
                     measurement.record(snapshot.responseTps(), Attributes.builder()
-                        .put(AttributeKey.stringKey("type"), "total")
+                        .put(AttributeKey.stringKey("status"), "all")
                         .put(AttributeKey.stringKey("run_id"), runId)
                         .build());
                     measurement.record(snapshot.successTps(), Attributes.builder()
-                        .put(AttributeKey.stringKey("type"), "success")
+                        .put(AttributeKey.stringKey("status"), "success")
                         .put(AttributeKey.stringKey("run_id"), runId)
                         .build());
                     measurement.record(snapshot.failureTps(), Attributes.builder()
-                        .put(AttributeKey.stringKey("type"), "failure")
+                        .put(AttributeKey.stringKey("status"), "failure")
                         .put(AttributeKey.stringKey("run_id"), runId)
                         .build());
                 }

@@ -1,4 +1,4 @@
-# VajraPulse – Java 21 Load Testing
+# VajraPulse – Load Testing with Virtual Threads Support
 
 <p align="center"><img src="./vajrapulse_logo.png" alt="VajraPulse Logo" width="360"/></p>
 
