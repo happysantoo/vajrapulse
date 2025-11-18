@@ -394,6 +394,28 @@ class OpenTelemetryExporterSpec extends Specification {
         cleanup:
         exporter?.close()
     }
+
+    def "should compute TPS metrics from snapshot"() {
+        given: "an exporter instance"
+        def exporter = OpenTelemetryExporter.builder().build()
+        and: "aggregated metrics with known counts and elapsed time (1s)"
+        def metrics = new AggregatedMetrics(
+            3050L,
+            2995L,
+            55L,
+            [:] as Map<Double, Double>,
+            [:] as Map<Double, Double>,
+            1000L // 1 second elapsed
+        )
+        when: "exporting metrics"
+        exporter.export("TPS Test", metrics)
+        then: "TPS calculations exposed by exporter match expected values"
+        exporter.getLastResponseTps() == 3050.0
+        exporter.getLastSuccessTps() == 2995.0
+        exporter.getLastFailureTps() == 55.0
+        cleanup:
+        exporter?.close()
+    }
     
     def "should not fail when OTLP endpoint is unreachable"() {
         given: "exporter pointing to unreachable endpoint"

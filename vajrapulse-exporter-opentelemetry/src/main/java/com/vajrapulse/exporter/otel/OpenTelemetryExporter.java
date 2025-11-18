@@ -74,6 +74,10 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
 
     // Store latest snapshot for asynchronous success rate gauge
     private final AtomicReference<AggregatedMetrics> lastMetrics = new AtomicReference<>();
+    // Expose last computed TPS values for testing and potential instrumentation extensions
+    private volatile double lastResponseTps;
+    private volatile double lastSuccessTps;
+    private volatile double lastFailureTps;
     
     private OpenTelemetryExporter(Builder builder) {
         this.endpoint = builder.endpoint;
@@ -163,6 +167,41 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
                         Attributes.of(AttributeKey.stringKey("run_id"), runId));
                 }
             });
+
+        // Asynchronous gauge for request TPS (approximate requested throughput).
+        // For now this mirrors the achieved total response TPS until a target rate is tracked separately.
+        meter.gaugeBuilder("vajrapulse.request.tps")
+            .setDescription("Requested target throughput (requests per second); currently mirrors achieved total")
+            .setUnit("tps")
+            .buildWithCallback(measurement -> {
+                var snapshot = lastMetrics.get();
+                if (snapshot != null && snapshot.elapsedMillis() > 0) {
+                    double tps = snapshot.responseTps();
+                    measurement.record(tps, Attributes.of(AttributeKey.stringKey("run_id"), runId));
+                }
+            });
+
+        // Asynchronous gauge for response TPS partitioned by type (total, success, failure)
+        meter.gaugeBuilder("vajrapulse.response.tps")
+            .setDescription("Achieved response throughput (requests per second) partitioned by type: total|success|failure")
+            .setUnit("tps")
+            .buildWithCallback(measurement -> {
+                var snapshot = lastMetrics.get();
+                if (snapshot != null && snapshot.elapsedMillis() > 0) {
+                    measurement.record(snapshot.responseTps(), Attributes.builder()
+                        .put(AttributeKey.stringKey("type"), "total")
+                        .put(AttributeKey.stringKey("run_id"), runId)
+                        .build());
+                    measurement.record(snapshot.successTps(), Attributes.builder()
+                        .put(AttributeKey.stringKey("type"), "success")
+                        .put(AttributeKey.stringKey("run_id"), runId)
+                        .build());
+                    measurement.record(snapshot.failureTps(), Attributes.builder()
+                        .put(AttributeKey.stringKey("type"), "failure")
+                        .put(AttributeKey.stringKey("run_id"), runId)
+                        .build());
+                }
+            });
         
         logger.info("OpenTelemetry exporter initialized - endpoint: {}, protocol: {}", 
             endpoint, protocol);
@@ -228,6 +267,12 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
 
             // Update last snapshot for asynchronous gauge
             lastMetrics.set(metrics);
+            // Update exposed TPS values for direct access & tests
+            if (metrics.elapsedMillis() > 0) {
+                lastResponseTps = metrics.responseTps();
+                lastSuccessTps = metrics.successTps();
+                lastFailureTps = metrics.failureTps();
+            }
 
             // Compute deltas per status for unified counter
             long success = metrics.successCount();
@@ -286,6 +331,30 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
      */
     public String getRunId() {
         return runId;
+    }
+
+    /**
+     * Returns the last computed total response TPS (requests per second).
+     * @return total response TPS or 0.0 if unavailable
+     */
+    public double getLastResponseTps() {
+        return lastResponseTps;
+    }
+
+    /**
+     * Returns the last computed successful response TPS.
+     * @return success TPS or 0.0 if unavailable
+     */
+    public double getLastSuccessTps() {
+        return lastSuccessTps;
+    }
+
+    /**
+     * Returns the last computed failed response TPS.
+     * @return failure TPS or 0.0 if unavailable
+     */
+    public double getLastFailureTps() {
+        return lastFailureTps;
     }
     
     /**

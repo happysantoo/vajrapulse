@@ -26,6 +26,26 @@
       "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4}
     },
     {
+      "type": "stat",
+      "title": "Request TPS",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "avg(vajrapulse_request_tps{run_id=\"$run_id\"})"}
+      ],
+      "gridPos": {"x": 0, "y": 4, "w": 6, "h": 4}
+    },
+    {
+      "type": "graph",
+      "title": "Response TPS (total/success/failure)",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "avg(vajrapulse_response_tps{run_id=\"$run_id\", type=\"total\"})", "legendFormat": "Total"},
+        {"expr": "avg(vajrapulse_response_tps{run_id=\"$run_id\", type=\"success\"})", "legendFormat": "Success"},
+        {"expr": "avg(vajrapulse_response_tps{run_id=\"$run_id\", type=\"failure\"})", "legendFormat": "Failure"}
+      ],
+      "gridPos": {"x": 6, "y": 4, "w": 6, "h": 8}
+    },
+    {
       "type": "graph",
       "title": "Latency Percentiles (ms)",
       "datasource": "Prometheus",
@@ -34,7 +54,7 @@
         {"expr": "histogram_quantile(0.95, sum by (le) (rate(vajrapulse_latency_success_bucket{run_id=\"$run_id\"}[1m])))", "legendFormat": "P95"},
         {"expr": "histogram_quantile(0.99, sum by (le) (rate(vajrapulse_latency_success_bucket{run_id=\"$run_id\"}[1m])))", "legendFormat": "P99"}
       ],
-      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8}
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8}
     }
   ],
   "templating": {
