@@ -1,5 +1,7 @@
 package com.vajrapulse.core.metrics;
 
+import java.util.Collections;
+
 /**
  * Aggregated metrics snapshot at a point in time.
  * 
@@ -24,6 +26,52 @@ public record AggregatedMetrics(
     long queueSize,
     java.util.Map<Double, Double> queueWaitPercentiles
 ) {
+    /**
+     * Compact constructor that creates defensive copies of mutable collections.
+     */
+    public AggregatedMetrics {
+        // Create unmodifiable defensive copies of Map fields
+        successPercentiles = successPercentiles != null 
+            ? Collections.unmodifiableMap(new java.util.LinkedHashMap<>(successPercentiles))
+            : Collections.emptyMap();
+        failurePercentiles = failurePercentiles != null
+            ? Collections.unmodifiableMap(new java.util.LinkedHashMap<>(failurePercentiles))
+            : Collections.emptyMap();
+        queueWaitPercentiles = queueWaitPercentiles != null
+            ? Collections.unmodifiableMap(new java.util.LinkedHashMap<>(queueWaitPercentiles))
+            : Collections.emptyMap();
+    }
+    
+    /**
+     * Returns an unmodifiable view of success percentiles.
+     * 
+     * @return unmodifiable map of success percentiles
+     */
+    @Override
+    public java.util.Map<Double, Double> successPercentiles() {
+        return successPercentiles; // Already unmodifiable from compact constructor
+    }
+    
+    /**
+     * Returns an unmodifiable view of failure percentiles.
+     * 
+     * @return unmodifiable map of failure percentiles
+     */
+    @Override
+    public java.util.Map<Double, Double> failurePercentiles() {
+        return failurePercentiles; // Already unmodifiable from compact constructor
+    }
+    
+    /**
+     * Returns an unmodifiable view of queue wait percentiles.
+     * 
+     * @return unmodifiable map of queue wait percentiles
+     */
+    @Override
+    public java.util.Map<Double, Double> queueWaitPercentiles() {
+        return queueWaitPercentiles; // Already unmodifiable from compact constructor
+    }
+    
     /**
      * Calculates the success rate as a percentage.
      * 

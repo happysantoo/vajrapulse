@@ -239,6 +239,7 @@ public final class ExecutionEngine implements AutoCloseable {
      * 
      * @throws Exception if init or teardown fails
      */
+    @SuppressWarnings("RV_RETURN_VALUE_IGNORED_BAD_PRACTICE") // Fire-and-forget executor.submit() is intentional
     public void run() throws Exception {
         logger.info("Starting load test runId={} pattern={} duration={}", runId, loadPattern.getClass().getSimpleName(), loadPattern.getDuration());
         

@@ -249,7 +249,11 @@ public final class MetricsCollector {
     /**
      * Returns the underlying meter registry.
      * 
-     * @return the meter registry
+     * <p><strong>Note:</strong> The returned registry is mutable and shared.
+     * Callers should not modify it directly. This method exists for advanced
+     * use cases where direct registry access is needed (e.g., custom metrics).
+     * 
+     * @return the meter registry (mutable, handle with care)
      */
     public MeterRegistry getRegistry() {
         return registry;
