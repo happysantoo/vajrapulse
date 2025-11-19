@@ -3,6 +3,7 @@ plugins {
     groovy
     id("com.gradleup.shadow") version "9.0.0-beta4" apply false
     jacoco
+    id("com.github.spotbugs") version "6.0.14" apply false
     id("maven-publish")
     signing
 }
@@ -34,6 +35,7 @@ subprojects {
     apply(plugin = "java-library")
     apply(plugin = "groovy")
     apply(plugin = "jacoco")
+    apply(plugin = "com.github.spotbugs")
     apply(plugin = "maven-publish")
     apply(plugin = "signing")
 
@@ -127,9 +129,31 @@ subprojects {
         executionData.setFrom(files(layout.buildDirectory.dir("jacoco/test.exec")))
     }
 
-    // Ensure 'check' depends on coverage verification for CI gating
+    // Configure SpotBugs for static code analysis
+    tasks.withType<com.github.spotbugs.snom.SpotBugsTask> {
+        // Skip examples from static analysis
+        enabled = !project.path.startsWith(":examples")
+        
+        // Set exclusion filter
+        excludeFilter = file("${rootProject.projectDir}/spotbugs-exclude.xml")
+        
+        // Configure reports
+        reports {
+            create("html") {
+                required = true
+            }
+        }
+        
+        // Don't fail build on findings - generate report for review instead
+        // Developers should review and fix issues before committing
+        ignoreFailures = false  // Set to true if you want to allow builds with findings
+    }
+    
+    // Ensure 'check' depends on coverage verification and static analysis for CI gating
     tasks.named("check") {
         dependsOn(tasks.named("jacocoTestCoverageVerification"))
+        // Note: spotbugsMain will fail if issues found - this enforces code quality
+        dependsOn(tasks.named("spotbugsMain"))
     }
 
     // Simplified publishing/signing for selected modules (BOM, API, core, exporters, worker)

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SpotBugs exclusion filter for VajraPulse.
+    
+    This file excludes known false positives and acceptable patterns
+    that don't violate our code quality standards.
+-->
+<FindBugsFilter>
+    <!-- Exclude generated code and third-party code -->
+    <Match>
+        <Source name="~.*\.generated\..*"/>
+    </Match>
+    
+    <!-- Allow final fields that are initialized in constructors -->
+    <!-- This is a common pattern in builder classes -->
+    <Match>
+        <Bug pattern="UWF_UNWRITTEN_FIELD"/>
+        <Class name="~.*Builder"/>
+    </Match>
+    
+    <!-- Allow intentional null returns for optional values -->
+    <Match>
+        <Bug pattern="NP_NULL_ON_SOME_PATH"/>
+        <Method name="~.*Optional.*"/>
+    </Match>
+    
+    <!-- Allow intentional null checks before usage -->
+    <Match>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+        <Method name="~.*get.*"/>
+    </Match>
+</FindBugsFilter>
+
