@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Simplified VajraPulse Logo - Favicon Version -->
+  
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#1e40af" stroke="#dc2626" stroke-width="2"/>
+  
+  <!-- Central Vajra symbol (lightning bolt) -->
+  <path d="M 50 20 L 40 50 L 50 45 L 60 50 Z M 50 55 L 40 50 L 50 80 L 60 50 Z" 
+        fill="#dc2626" stroke="#ffffff" stroke-width="1"/>
+  
+  <!-- Pulse line at bottom -->
+  <path d="M 30 85 Q 40 75, 50 85 T 70 85" 
+        stroke="#dc2626" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>
+
