@@ -221,14 +221,16 @@ class ExporterIntegrationSpec extends Specification {
         exporter3.lastMetrics.totalExecutions() == metrics.totalExecutions()
     }
     
+    static class FailingMetricsExporter implements MetricsExporter {
+        @Override
+        void export(String title, AggregatedMetrics metrics) {
+            throw new RuntimeException("Exporter failure simulation")
+        }
+    }
+    
     def "should handle exporter failures gracefully"() {
         given: "a failing exporter and a working exporter"
-        MetricsExporter failingExporter = new MetricsExporter() {
-            @Override
-            void export(String title, AggregatedMetrics metrics) {
-                throw new RuntimeException("Exporter failure simulation")
-            }
-        }
+        MetricsExporter failingExporter = new FailingMetricsExporter()
         StubMetricsExporter workingExporter = new StubMetricsExporter()
         
         and: "a simple task and pattern"
@@ -303,24 +305,27 @@ class ExporterIntegrationSpec extends Specification {
         exporter.allTitles.size() >= 2
     }
     
+    @VirtualThreads
+    static class SlowTask implements Task {
+        @Override
+        void setup() {}
+        
+        @Override
+        TaskResult execute() throws Exception {
+            Thread.sleep(15) // Slow execution
+            return TaskResult.success("ok")
+        }
+        
+        @Override
+        void cleanup() {}
+    }
+    
     def "should export queue metrics correctly"() {
         given: "a stub exporter"
         StubMetricsExporter exporter = new StubMetricsExporter()
         
         and: "a task with slow execution"
-        Task slowTask = new Task() {
-            @Override
-            void setup() {}
-            
-            @Override
-            TaskResult execute() throws Exception {
-                Thread.sleep(15) // Slow execution
-                return TaskResult.success("ok")
-            }
-            
-            @Override
-            void cleanup() {}
-        }
+        Task slowTask = new SlowTask()
         LoadPattern pattern = new StaticLoadPattern(80.0, Duration.ofMillis(150))
         
         and: "a pipeline with exporter"

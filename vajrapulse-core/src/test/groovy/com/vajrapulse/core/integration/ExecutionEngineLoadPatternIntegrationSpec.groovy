@@ -285,6 +285,7 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
     }
     
     @Unroll
+    @Timeout(value = 60, unit = java.util.concurrent.TimeUnit.SECONDS)
     def "should execute RampUpLoad pattern with #patternName"() {
         given: "a task and RampUpLoad pattern"
         Task task = new VirtualThreadSuccessTask()
@@ -309,6 +310,7 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
     }
     
     @Unroll
+    @Timeout(value = 60, unit = java.util.concurrent.TimeUnit.SECONDS)
     def "should execute RampUpToMaxLoad pattern with sustain"() {
         given: "a task and RampUpToMaxLoad pattern"
         Task task = new VirtualThreadSuccessTask()

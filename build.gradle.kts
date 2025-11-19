@@ -149,6 +149,12 @@ subprojects {
         ignoreFailures = false  // Set to true if you want to allow builds with findings
     }
     
+    // Disable spotbugsTest task - we only analyze main source code
+    // Test code (Spock/Groovy) has different patterns that trigger false positives
+    tasks.named("spotbugsTest") {
+        enabled = false
+    }
+    
     // Ensure 'check' depends on coverage verification and static analysis for CI gating
     tasks.named("check") {
         dependsOn(tasks.named("jacocoTestCoverageVerification"))
