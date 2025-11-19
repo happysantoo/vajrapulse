@@ -7,11 +7,11 @@
 </p>
 
 <p align="center">
-  [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
-  [![Gradle](https://img.shields.io/badge/Gradle-9.0-blue.svg)](https://gradle.org/)
-  [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
-  [![Maven Central](https://img.shields.io/maven-central/v/com.vajrapulse/vajrapulse-core.svg)](https://search.maven.org/search?q=g:com.vajrapulse)
-  [![JitPack](https://jitpack.io/v/happysantoo/vajrapulse.svg)](https://jitpack.io/#happysantoo/vajrapulse)
+  <a href="https://openjdk.org/projects/jdk/21/"><img src="https://img.shields.io/badge/Java-21-orange.svg" alt="Java 21"></a>
+  <a href="https://gradle.org/"><img src="https://img.shields.io/badge/Gradle-9.0-blue.svg" alt="Gradle 9.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-green.svg" alt="Apache License 2.0"></a>
+  <a href="https://search.maven.org/search?q=g:com.vajrapulse"><img src="https://img.shields.io/maven-central/v/com.vajrapulse/vajrapulse-core.svg" alt="Maven Central"></a>
+  <a href="https://jitpack.io/#happysantoo/vajrapulse"><img src="https://jitpack.io/v/happysantoo/vajrapulse.svg" alt="JitPack"></a>
 </p>
 
 ---
