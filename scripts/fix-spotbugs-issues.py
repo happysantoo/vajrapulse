@@ -14,9 +14,8 @@ Usage:
 
 import re
 import sys
-import os
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict
 from dataclasses import dataclass
 
 @dataclass
@@ -128,7 +127,6 @@ class BugFixer:
         
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-            lines = content.splitlines(keepends=True)
         
         # Check if it's a record
         if 'public record' not in content:
@@ -176,9 +174,6 @@ class BugFixer:
         if not file_path.exists():
             return False
         
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
         # This is trickier - records have compact constructors
         # We need to add a canonical constructor that creates defensive copies
         # For now, mark as manual review
@@ -205,7 +200,7 @@ class BugFixer:
     
     def _get_indent(self, line: str) -> str:
         """Get the indentation of a line."""
-        return len(line) - len(line.lstrip())
+        return line[:len(line) - len(line.lstrip())]
     
     def fix_all(self, findings: List[SpotBugsFinding]) -> Dict[str, int]:
         """Fix all findings that can be automatically fixed."""

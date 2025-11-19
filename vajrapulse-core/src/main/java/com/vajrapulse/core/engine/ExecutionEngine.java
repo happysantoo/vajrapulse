@@ -365,18 +365,21 @@ public final class ExecutionEngine implements AutoCloseable {
         
         @Override
         public Void call() {
+            // Record queue wait time (time from submission to actual execution start)
+            long queueWaitNanos = System.nanoTime() - queueStartNanos;
+            metricsCollector.recordQueueWait(queueWaitNanos);
+            
+            // Decrement pending count when execution starts (before actual execution)
+            // This ensures queue size metric reflects only tasks waiting in queue,
+            // not tasks that have started executing
+            pendingExecutions.decrementAndGet();
+            metricsCollector.updateQueueSize(pendingExecutions.get());
+            
             try {
-                // Record queue wait time (time from submission to actual execution start)
-                long queueWaitNanos = System.nanoTime() - queueStartNanos;
-                metricsCollector.recordQueueWait(queueWaitNanos);
-                
                 ExecutionMetrics metrics = taskExecutor.executeWithMetrics(iteration);
                 metricsCollector.record(metrics);
             } finally {
-                // Decrement pending count when execution starts
-                pendingExecutions.decrementAndGet();
-                // Update queue size gauge
-                metricsCollector.updateQueueSize(pendingExecutions.get());
+                // No cleanup needed - queue size already updated above
             }
             return null;
         }

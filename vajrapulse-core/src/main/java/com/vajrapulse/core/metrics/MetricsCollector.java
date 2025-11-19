@@ -151,9 +151,10 @@ public final class MetricsCollector {
         this.queueWaitTimer = queueWaitBuilder.register(registry);
         
         // Queue size gauge - will be updated by ExecutionEngine
+        // This tracks tasks that have been submitted but not yet started executing
         this.queueSizeHolder = new AtomicLong(0);
         var queueSizeBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.execution.queue.size", queueSizeHolder, AtomicLong::get)
-            .description("Number of pending task executions in queue");
+            .description("Number of task executions waiting in queue (submitted but not yet started executing)");
         if (runId != null && !runId.isBlank()) {
             queueSizeBuilder.tag("run_id", runId);
         }

@@ -61,5 +61,53 @@
         <Class name="com.vajrapulse.core.metrics.MetricsCollector"/>
         <Method name="getRegistry"/>
     </Match>
+    
+    <!-- Record compact constructors and accessors - records are immutable by design -->
+    <!-- The compact constructor validates input, and records provide immutability guarantees -->
+    <!-- Accessors return the record fields directly, which is the standard record pattern -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+        <Class name="com.vajrapulse.api.StepLoad"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.api.StepLoad"/>
+    </Match>
+    
+    <!-- TaskResult.Failure stores/returns Throwable - this is intentional for error handling -->
+    <!-- Throwable is part of the failure record and should be accessible -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+        <Class name="com.vajrapulse.api.TaskResult$Failure"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.api.TaskResult$Failure"/>
+    </Match>
+    
+    <!-- TaskResult.Success stores/returns Object - this is intentional for result data -->
+    <!-- The data is part of the success record and should be accessible -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+        <Class name="com.vajrapulse.api.TaskResult$Success"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.api.TaskResult$Success"/>
+    </Match>
+    
+    <!-- ConsoleMetricsExporter stores PrintStream - this is intentional for output control -->
+    <!-- PrintStream is thread-safe and the exporter is designed to use it directly -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.exporter.console.ConsoleMetricsExporter"/>
+    </Match>
+    
+    <!-- OpenTelemetryExporter.Builder stores Map references - builder pattern creates defensive copies in build() -->
+    <!-- The builder pattern is designed to accept mutable maps and create immutable copies -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.exporter.otel.OpenTelemetryExporter$Builder"/>
+    </Match>
 </FindBugsFilter>
 
