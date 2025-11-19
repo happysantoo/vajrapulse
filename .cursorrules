@@ -174,7 +174,47 @@ def "should execute task and record metrics"() {
 - Use primitive types when appropriate
 - Avoid unnecessary allocations
 
-### 9. Build Configuration
+### 9. File Organization
+
+#### Markdown Documentation Files
+**All markdown documentation files MUST be created in the `documents/` folder.**
+
+**Allowed Exceptions:**
+- `README.md` in root directory (project overview)
+- `CHANGELOG.md` in root directory (standard changelog)
+- `README.md` in module directories (e.g., `vajrapulse-api/README.md`)
+- `README.md` in example directories (e.g., `examples/http-load-test/README.md`)
+- `README.md` in internal test directories (e.g., `internal-tests/README.md`)
+- `README.md` in script directories (e.g., `scripts/README-*.md`)
+- `.github/*.md` files (GitHub-specific documentation)
+
+**Forbidden Locations:**
+- ❌ Root directory (except README.md and CHANGELOG.md)
+- ❌ Source code directories (`src/main/java/`, `src/test/`)
+- ❌ Build directories
+- ❌ Any location outside `documents/` unless it's a standard README
+
+**Rule**: When creating documentation, planning documents, or any markdown files:
+1. **Always create in `documents/` folder** unless it's a standard README
+2. Use descriptive filenames (e.g., `RELEASE_0.9.3_FEATURES.md`)
+3. Follow existing naming conventions in `documents/`
+4. If unsure, use `documents/` - it's the default location for all documentation
+
+**Examples:**
+```markdown
+✅ documents/RELEASE_0.9.3_FEATURES.md
+✅ documents/BLAZEMETER_INTEGRATION_PLAN.md
+✅ documents/STRATEGIC_ROADMAP.md
+✅ README.md (root - allowed)
+✅ CHANGELOG.md (root - allowed)
+✅ examples/http-load-test/README.md (example README - allowed)
+
+❌ RELEASE_0.9.3_FEATURES.md (root - forbidden)
+❌ src/main/java/com/vajrapulse/DOCS.md (source directory - forbidden)
+❌ BLAZEMETER_PLAN.md (root - forbidden, should be in documents/)
+```
+
+### 10. Build Configuration
 
 #### Gradle Best Practices
 - Use Kotlin DSL
@@ -183,7 +223,7 @@ def "should execute task and record metrics"() {
 - Use `java-platform` plugin for BOM
 - Configure JavaDoc linting: `-Xlint:doclint`
 
-### 10. Module Boundaries
+### 11. Module Boundaries
 
 #### Respect Module Boundaries
 - `vajrapulse-api` - No dependencies on other modules
@@ -191,7 +231,7 @@ def "should execute task and record metrics"() {
 - Exporters - Depend on `vajrapulse-core` and `vajrapulse-api`
 - `vajrapulse-worker` - Can depend on all modules
 
-### 11. Static Code Analysis
+### 12. Static Code Analysis
 
 #### SpotBugs Integration
 - **SpotBugs** is configured to run automatically on build
@@ -231,13 +271,14 @@ When working on code:
 
 **Cursor should remind developers to run static analysis before commits.**
 
-### 12. Code Review Checklist
+### 13. Code Review Checklist
 
 Before submitting code:
 - [ ] Uses Java 21 features (records, sealed types, pattern matching)
 - [ ] Complete JavaDoc on all public APIs
 - [ ] No JavaDoc compiler warnings
 - [ ] **Static analysis passes** (`./gradlew spotbugsMain`)
+- [ ] **Markdown files created in `documents/` folder** (or standard README locations)
 - [ ] No unnecessary dependencies added
 - [ ] Virtual/platform threads used appropriately
 - [ ] No lambdas in hot paths
@@ -249,7 +290,7 @@ Before submitting code:
 - [ ] Module boundaries respected
 - [ ] All tests pass
 
-### 13. Common Patterns
+### 14. Common Patterns
 
 #### Task Implementation
 ```java
