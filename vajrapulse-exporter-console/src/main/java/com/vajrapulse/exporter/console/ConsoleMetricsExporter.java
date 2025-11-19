@@ -148,6 +148,20 @@ public final class ConsoleMetricsExporter implements MetricsExporter {
                 });
             out.println();
         }
+        
+        // Queue metrics
+        out.println("Queue:");
+        out.printf("  Size:              %d%n", metrics.queueSize());
+        if (!metrics.queueWaitPercentiles().isEmpty()) {
+            out.println("  Wait Time (ms):");
+            metrics.queueWaitPercentiles().entrySet().stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .forEach(e -> {
+                    String label = formatPercentileLabel(e.getKey());
+                    out.printf("    %s:  %.2f%n", label, nanosToMillis(e.getValue()));
+                });
+        }
+        out.println();
     }
     
     private double nanosToMillis(double nanos) {

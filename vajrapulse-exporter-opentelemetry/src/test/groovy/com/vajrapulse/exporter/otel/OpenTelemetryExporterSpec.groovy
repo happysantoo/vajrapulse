@@ -382,7 +382,9 @@ class OpenTelemetryExporterSpec extends Specification {
             10L,
             successPercentiles,
             failurePercentiles,
-            1000L  // 1 second elapsed
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         when: "exporting metrics with percentiles"
@@ -405,7 +407,9 @@ class OpenTelemetryExporterSpec extends Specification {
             55L,
             [:] as Map<Double, Double>,
             [:] as Map<Double, Double>,
-            1000L // 1 second elapsed
+            1000L, // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         when: "exporting metrics"
         exporter.export("TPS Test", metrics)
@@ -462,7 +466,9 @@ class OpenTelemetryExporterSpec extends Specification {
             failureCount,
             successPercentiles,
             failurePercentiles,
-            1000L  // 1 second elapsed
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
     }
 }

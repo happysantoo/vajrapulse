@@ -204,6 +204,36 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
                 }
             });
         
+        // Queue size gauge
+        meter.gaugeBuilder("vajrapulse.execution.queue.size")
+            .setDescription("Number of pending task executions in queue")
+            .buildWithCallback(measurement -> {
+                var snapshot = lastMetrics.get();
+                if (snapshot != null) {
+                    measurement.record(snapshot.queueSize(), 
+                        Attributes.of(AttributeKey.stringKey("run_id"), runId));
+                }
+            });
+        
+        // Queue wait time percentiles (asynchronous gauge)
+        meter.gaugeBuilder("vajrapulse.execution.queue.wait_time")
+            .setDescription("Queue wait time percentiles in milliseconds (snapshot)")
+            .setUnit("ms")
+            .buildWithCallback(measurement -> {
+                var snapshot = lastMetrics.get();
+                if (snapshot == null) return;
+                if (!snapshot.queueWaitPercentiles().isEmpty()) {
+                    for (var entry : snapshot.queueWaitPercentiles().entrySet()) {
+                        String p = String.valueOf(entry.getKey());
+                        double ms = entry.getValue() / 1_000_000.0;
+                        measurement.record(ms, Attributes.builder()
+                            .put(AttributeKey.stringKey("percentile"), p)
+                            .put(AttributeKey.stringKey("run_id"), runId)
+                            .build());
+                    }
+                }
+            });
+        
         logger.info("OpenTelemetry exporter initialized - endpoint: {}, protocol: {}", 
             endpoint, protocol);
     }

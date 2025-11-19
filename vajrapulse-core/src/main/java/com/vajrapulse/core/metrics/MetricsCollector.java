@@ -9,6 +9,7 @@ import com.vajrapulse.core.engine.ExecutionMetrics;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.Map;
 import java.util.HashMap;
 
@@ -29,6 +30,10 @@ public final class MetricsCollector {
     private final Timer successTimer;
     private final Timer failureTimer;
     private final Counter totalCounter;
+    private final Timer queueWaitTimer;
+    @SuppressWarnings("unused") // Gauge is registered and used by Micrometer
+    private final io.micrometer.core.instrument.Gauge queueSizeGauge;
+    private final AtomicLong queueSizeHolder; // Holder for queue size gauge
     private final double[] configuredPercentiles;
     private final String runId; // Optional run correlation tag
     private final long startMillis; // Track when collection started
@@ -126,6 +131,33 @@ public final class MetricsCollector {
             totalBuilder.tag("run_id", runId);
         }
         this.totalCounter = totalBuilder.register(registry);
+        
+        // Queue metrics
+        var queueWaitBuilder = Timer.builder("vajrapulse.execution.queue.wait_time")
+            .description("Time tasks wait in queue before execution starts")
+            .publishPercentiles(configuredPercentiles)
+            .publishPercentileHistogram()
+            .percentilePrecision(2)
+            .serviceLevelObjectives(
+                Duration.ofNanos(1_000_000),      // 1ms
+                Duration.ofNanos(10_000_000),       // 10ms
+                Duration.ofNanos(50_000_000),      // 50ms
+                Duration.ofNanos(100_000_000),     // 100ms
+                Duration.ofNanos(500_000_000)      // 500ms
+            );
+        if (runId != null && !runId.isBlank()) {
+            queueWaitBuilder.tag("run_id", runId);
+        }
+        this.queueWaitTimer = queueWaitBuilder.register(registry);
+        
+        // Queue size gauge - will be updated by ExecutionEngine
+        this.queueSizeHolder = new AtomicLong(0);
+        var queueSizeBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.execution.queue.size", queueSizeHolder, AtomicLong::get)
+            .description("Number of pending task executions in queue");
+        if (runId != null && !runId.isBlank()) {
+            queueSizeBuilder.tag("run_id", runId);
+        }
+        this.queueSizeGauge = queueSizeBuilder.register(registry);
     }
     
     /**
@@ -145,6 +177,25 @@ public final class MetricsCollector {
     }
     
     /**
+     * Records queue wait time for a task.
+     * 
+     * @param waitTimeNanos the time the task waited in the queue (nanoseconds)
+     */
+    public void recordQueueWait(long waitTimeNanos) {
+        queueWaitTimer.record(waitTimeNanos, TimeUnit.NANOSECONDS);
+    }
+    
+    /**
+     * Updates the queue size gauge.
+     * This should be called by ExecutionEngine to keep the gauge current.
+     * 
+     * @param queueSize the current queue size
+     */
+    public void updateQueueSize(long queueSize) {
+        queueSizeHolder.set(queueSize);
+    }
+    
+    /**
      * Creates a snapshot of current metrics.
      * 
      * @return aggregated metrics snapshot
@@ -157,16 +208,22 @@ public final class MetricsCollector {
 
         var successSnapshot = successTimer.takeSnapshot();
         var failureSnapshot = failureTimer.takeSnapshot();
+        var queueWaitSnapshot = queueWaitTimer.takeSnapshot();
 
         Map<Double, Double> successIdx = indexSnapshot(successSnapshot);
         Map<Double, Double> failureIdx = indexSnapshot(failureSnapshot);
+        Map<Double, Double> queueWaitIdx = indexSnapshot(queueWaitSnapshot);
 
         java.util.Map<Double, Double> successMap = new java.util.LinkedHashMap<>();
         java.util.Map<Double, Double> failureMap = new java.util.LinkedHashMap<>();
+        java.util.Map<Double, Double> queueWaitMap = new java.util.LinkedHashMap<>();
         for (double p : configuredPercentiles) {
             successMap.put(p, successIdx.getOrDefault(p, Double.NaN));
             failureMap.put(p, failureIdx.getOrDefault(p, Double.NaN));
+            queueWaitMap.put(p, queueWaitIdx.getOrDefault(p, Double.NaN));
         }
+
+        long currentQueueSize = queueSizeHolder.get();
 
         return new AggregatedMetrics(
             totalCount,
@@ -174,7 +231,9 @@ public final class MetricsCollector {
             failureCount,
             successMap,
             failureMap,
-            elapsedMillis
+            elapsedMillis,
+            currentQueueSize,
+            queueWaitMap
         );
     }
 

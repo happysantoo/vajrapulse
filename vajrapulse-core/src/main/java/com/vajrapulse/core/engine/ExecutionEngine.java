@@ -12,7 +12,6 @@ import com.vajrapulse.core.metrics.MetricsCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -58,6 +57,9 @@ public final class ExecutionEngine implements AutoCloseable {
     private final VajraPulseConfig config;
     private final ShutdownManager shutdownManager;
     private final java.util.concurrent.atomic.AtomicBoolean stopRequested = new java.util.concurrent.atomic.AtomicBoolean(false);
+    
+    // Queue depth tracking
+    private final java.util.concurrent.atomic.AtomicLong pendingExecutions = new java.util.concurrent.atomic.AtomicLong(0);
     
     /**
      * Creates a new execution engine with automatic run ID generation.
@@ -262,7 +264,13 @@ public final class ExecutionEngine implements AutoCloseable {
                 rateController.waitForNext();
                 
                 long currentIteration = iteration++;
-                executor.submit(new ExecutionCallable(taskExecutor, metricsCollector, currentIteration));
+                long queueStartNanos = System.nanoTime();
+                pendingExecutions.incrementAndGet();
+                
+                // Update queue size gauge
+                metricsCollector.updateQueueSize(pendingExecutions.get());
+                
+                executor.submit(new ExecutionCallable(taskExecutor, metricsCollector, currentIteration, queueStartNanos, pendingExecutions));
             }
             
             if (stopRequested.get()) {
@@ -326,6 +334,15 @@ public final class ExecutionEngine implements AutoCloseable {
     }
     
     /**
+     * Returns the current number of pending executions in the queue.
+     * 
+     * @return the current queue depth
+     */
+    public long getQueueDepth() {
+        return pendingExecutions.get();
+    }
+    
+    /**
      * Callable for executing a task and recording metrics.
      * Implemented as a concrete class to avoid lambda allocation in hot path.
      */
@@ -333,17 +350,33 @@ public final class ExecutionEngine implements AutoCloseable {
         private final TaskExecutor taskExecutor;
         private final MetricsCollector metricsCollector;
         private final long iteration;
+        private final long queueStartNanos;
+        private final java.util.concurrent.atomic.AtomicLong pendingExecutions;
         
-        ExecutionCallable(TaskExecutor taskExecutor, MetricsCollector metricsCollector, long iteration) {
+        ExecutionCallable(TaskExecutor taskExecutor, MetricsCollector metricsCollector, long iteration, 
+                         long queueStartNanos, java.util.concurrent.atomic.AtomicLong pendingExecutions) {
             this.taskExecutor = taskExecutor;
             this.metricsCollector = metricsCollector;
             this.iteration = iteration;
+            this.queueStartNanos = queueStartNanos;
+            this.pendingExecutions = pendingExecutions;
         }
         
         @Override
         public Void call() {
-            ExecutionMetrics metrics = taskExecutor.executeWithMetrics(iteration);
-            metricsCollector.record(metrics);
+            try {
+                // Record queue wait time (time from submission to actual execution start)
+                long queueWaitNanos = System.nanoTime() - queueStartNanos;
+                metricsCollector.recordQueueWait(queueWaitNanos);
+                
+                ExecutionMetrics metrics = taskExecutor.executeWithMetrics(iteration);
+                metricsCollector.record(metrics);
+            } finally {
+                // Decrement pending count when execution starts
+                pendingExecutions.decrementAndGet();
+                // Update queue size gauge
+                metricsCollector.updateQueueSize(pendingExecutions.get());
+            }
             return null;
         }
     }

@@ -11,6 +11,8 @@ package com.vajrapulse.core.metrics;
  * @param successPercentiles map of percentile→latency nanos for successes
  * @param failurePercentiles map of percentile→latency nanos for failures
  * @param elapsedMillis time elapsed since metrics collection started
+ * @param queueSize current number of pending executions in queue
+ * @param queueWaitPercentiles map of percentile→wait time nanos for queue wait
  */
 public record AggregatedMetrics(
     long totalExecutions,
@@ -18,7 +20,9 @@ public record AggregatedMetrics(
     long failureCount,
     java.util.Map<Double, Double> successPercentiles,
     java.util.Map<Double, Double> failurePercentiles,
-    long elapsedMillis
+    long elapsedMillis,
+    long queueSize,
+    java.util.Map<Double, Double> queueWaitPercentiles
 ) {
     /**
      * Calculates the success rate as a percentage.
