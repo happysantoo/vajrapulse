@@ -36,6 +36,8 @@ subprojects {
     apply(plugin = "groovy")
     apply(plugin = "jacoco")
     apply(plugin = "com.github.spotbugs")
+    apply(plugin = "pmd")
+    apply(plugin = "checkstyle")
     apply(plugin = "maven-publish")
     apply(plugin = "signing")
 
