@@ -41,7 +41,7 @@ A comprehensive testing framework has been created for VajraPulse that covers al
 ### 2. Sample Test Projects
 
 #### simple-success
-**Location**: `test-samples/simple-success/`
+**Location**: `internal-tests/simple-success/`
 
 - Basic success-only task
 - Supports all load patterns via command-line argument
@@ -49,7 +49,7 @@ A comprehensive testing framework has been created for VajraPulse that covers al
 - Uses Console exporter with periodic reporting
 
 #### mixed-results
-**Location**: `test-samples/mixed-results/`
+**Location**: `internal-tests/mixed-results/`
 
 - Task with success and failure (20% failure rate)
 - Verifies metrics collection for both outcomes
@@ -57,7 +57,7 @@ A comprehensive testing framework has been created for VajraPulse that covers al
 - Validates both success and failure percentiles
 
 #### all-patterns
-**Location**: `test-samples/all-patterns/`
+**Location**: `internal-tests/all-patterns/`
 
 - Comprehensive test running all 6 load patterns sequentially
 - Verifies each pattern works correctly
@@ -66,7 +66,7 @@ A comprehensive testing framework has been created for VajraPulse that covers al
 
 ### 3. Test Framework
 
-**Location**: `test-samples/test-framework.sh`
+**Location**: `internal-tests/test-framework.sh`
 
 **Features**:
 - Automated execution of all sample projects
@@ -143,7 +143,7 @@ Integration guide for other agents:
 ### Sample Projects
 
 ```bash
-cd test-samples
+cd internal-tests
 
 # Run all projects
 ./test-framework.sh run-all
@@ -227,12 +227,12 @@ Recommendations:
 
 1. `vajrapulse-core/src/test/groovy/com/vajrapulse/core/integration/ExecutionEngineLoadPatternIntegrationSpec.groovy`
 2. `vajrapulse-worker/src/test/groovy/com/vajrapulse/worker/integration/ExporterIntegrationSpec.groovy`
-3. `test-samples/simple-success/` (entire directory)
-4. `test-samples/mixed-results/` (entire directory)
-5. `test-samples/all-patterns/` (entire directory)
-6. `test-samples/test-framework.sh`
-7. `test-samples/settings.gradle.kts`
-8. `test-samples/build.gradle.kts`
+3. `internal-tests/simple-success/` (entire directory)
+4. `internal-tests/mixed-results/` (entire directory)
+5. `internal-tests/all-patterns/` (entire directory)
+6. `internal-tests/test-framework.sh`
+7. `internal-tests/settings.gradle.kts`
+8. `internal-tests/build.gradle.kts`
 9. `documents/TESTING_AGENT_GUIDE.md`
 10. `documents/TESTING_AGENT_INTEGRATION.md`
 11. `documents/TESTING_AGENT_SUMMARY.md` (this file)

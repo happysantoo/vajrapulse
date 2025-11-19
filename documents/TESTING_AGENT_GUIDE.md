@@ -36,7 +36,7 @@ The Testing Agent is responsible for comprehensive end-to-end testing of VajraPu
 
 ### 2. Sample Test Projects
 
-**Location**: `test-samples/`
+**Location**: `internal-tests/`
 
 #### simple-success
 - Basic success-only task
@@ -55,7 +55,7 @@ The Testing Agent is responsible for comprehensive end-to-end testing of VajraPu
 
 ### 3. Test Framework
 
-**Location**: `test-samples/test-framework.sh`
+**Location**: `internal-tests/test-framework.sh`
 
 **Commands**:
 ```bash
@@ -140,7 +140,7 @@ The Testing Agent is responsible for comprehensive end-to-end testing of VajraPu
 
 ```bash
 # Run all sample projects
-cd test-samples
+cd internal-tests
 ./test-framework.sh run-all
 
 # Run specific project

@@ -16,7 +16,7 @@
 
 ### Run Sample Projects
 ```bash
-cd test-samples
+cd internal-tests
 
 # All projects
 ./test-framework.sh run-all
@@ -54,7 +54,7 @@ cd test-samples
 |-----------|----------|
 | Execution Engine + Load Patterns | `vajrapulse-core/.../ExecutionEngineLoadPatternIntegrationSpec.groovy` |
 | Exporters | `vajrapulse-worker/.../ExporterIntegrationSpec.groovy` |
-| Sample Projects | `test-samples/` |
+| Sample Projects | `internal-tests/` |
 
 ## Validation Checklist
 
@@ -76,7 +76,7 @@ cd test-samples
 ## Test Files
 
 - Integration tests: `*IntegrationSpec.groovy`
-- Sample projects: `test-samples/*/`
-- Test framework: `test-samples/test-framework.sh`
+- Sample projects: `internal-tests/*/`
+- Test framework: `internal-tests/test-framework.sh`
 - Documentation: `documents/TESTING_AGENT_*.md`
 

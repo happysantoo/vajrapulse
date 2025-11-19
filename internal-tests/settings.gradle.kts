@@ -1,4 +1,4 @@
-rootProject.name = "vajrapulse-test-samples"
+rootProject.name = "vajrapulse-internal-tests"
 
 include("simple-success")
 include("mixed-results")

@@ -94,7 +94,7 @@ Recommendations:
 ./gradlew test --tests "ExecutionEngineLoadPatternIntegrationSpec"
 
 # Run sample projects
-cd test-samples
+cd internal-tests
 ./test-framework.sh run-all
 ```
 
