@@ -43,36 +43,6 @@ public record AggregatedMetrics(
     }
     
     /**
-     * Returns an unmodifiable view of success percentiles.
-     * 
-     * @return unmodifiable map of success percentiles
-     */
-    @Override
-    public java.util.Map<Double, Double> successPercentiles() {
-        return successPercentiles; // Already unmodifiable from compact constructor
-    }
-    
-    /**
-     * Returns an unmodifiable view of failure percentiles.
-     * 
-     * @return unmodifiable map of failure percentiles
-     */
-    @Override
-    public java.util.Map<Double, Double> failurePercentiles() {
-        return failurePercentiles; // Already unmodifiable from compact constructor
-    }
-    
-    /**
-     * Returns an unmodifiable view of queue wait percentiles.
-     * 
-     * @return unmodifiable map of queue wait percentiles
-     */
-    @Override
-    public java.util.Map<Double, Double> queueWaitPercentiles() {
-        return queueWaitPercentiles; // Already unmodifiable from compact constructor
-    }
-    
-    /**
      * Calculates the success rate as a percentage.
      * 
      * @return success rate (0.0 to 100.0)
