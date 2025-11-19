@@ -1,5 +1,6 @@
 rootProject.name = "vajrapulse"
 
+include("vajrapulse-bom")
 include("vajrapulse-api")
 include("vajrapulse-core")
 include("vajrapulse-exporter-console")

@@ -381,7 +381,10 @@ class OpenTelemetryExporterSpec extends Specification {
             90L,
             10L,
             successPercentiles,
-            failurePercentiles
+            failurePercentiles,
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         when: "exporting metrics with percentiles"
@@ -390,6 +393,30 @@ class OpenTelemetryExporterSpec extends Specification {
         then: "no exceptions are thrown"
         noExceptionThrown()
         
+        cleanup:
+        exporter?.close()
+    }
+
+    def "should compute TPS metrics from snapshot"() {
+        given: "an exporter instance"
+        def exporter = OpenTelemetryExporter.builder().build()
+        and: "aggregated metrics with known counts and elapsed time (1s)"
+        def metrics = new AggregatedMetrics(
+            3050L,
+            2995L,
+            55L,
+            [:] as Map<Double, Double>,
+            [:] as Map<Double, Double>,
+            1000L, // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
+        )
+        when: "exporting metrics"
+        exporter.export("TPS Test", metrics)
+        then: "TPS calculations exposed by exporter match expected values"
+        exporter.getLastResponseTps() == 3050.0
+        exporter.getLastSuccessTps() == 2995.0
+        exporter.getLastFailureTps() == 55.0
         cleanup:
         exporter?.close()
     }
@@ -438,7 +465,10 @@ class OpenTelemetryExporterSpec extends Specification {
             successCount,
             failureCount,
             successPercentiles,
-            failurePercentiles
+            failurePercentiles,
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
     }
 }

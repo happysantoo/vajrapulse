@@ -30,6 +30,23 @@ import java.util.Map;
  */
 public final class HttpLoadTestOtelRunner {
 
+    /**
+     * Default constructor for HttpLoadTestOtelRunner.
+     * This is a utility class with static main method.
+     */
+    private HttpLoadTestOtelRunner() {
+        // Utility class - prevent instantiation
+    }
+
+    /**
+     * Main entry point for the HTTP load test with OpenTelemetry export.
+     * 
+     * <p>Runs a load test and exports metrics to an OTLP collector endpoint.
+     * Requires an OpenTelemetry collector running at http://localhost:4317.
+     * 
+     * @param args command-line arguments (currently unused)
+     * @throws Exception if test execution or export fails
+     */
     public static void main(String[] args) throws Exception {
         HttpLoadTest task = new HttpLoadTest();
 

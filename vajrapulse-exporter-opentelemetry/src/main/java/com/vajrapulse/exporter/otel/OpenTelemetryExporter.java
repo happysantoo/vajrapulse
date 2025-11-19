@@ -74,6 +74,10 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
 
     // Store latest snapshot for asynchronous success rate gauge
     private final AtomicReference<AggregatedMetrics> lastMetrics = new AtomicReference<>();
+    // Expose last computed TPS values for testing and potential instrumentation extensions
+    private volatile double lastResponseTps;
+    private volatile double lastSuccessTps;
+    private volatile double lastFailureTps;
     
     private OpenTelemetryExporter(Builder builder) {
         this.endpoint = builder.endpoint;
@@ -163,6 +167,72 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
                         Attributes.of(AttributeKey.stringKey("run_id"), runId));
                 }
             });
+
+        // Asynchronous gauge for request throughput (approximate requested rate).
+        // Follows OTel semantic conventions with unit format {request}/s
+        meter.gaugeBuilder("vajrapulse.request.throughput")
+            .setDescription("Requested target throughput (requests per second)")
+            .setUnit("{request}/s")
+            .buildWithCallback(measurement -> {
+                var snapshot = lastMetrics.get();
+                if (snapshot != null && snapshot.elapsedMillis() > 0) {
+                    double tps = snapshot.responseTps();
+                    measurement.record(tps, Attributes.of(AttributeKey.stringKey("run_id"), runId));
+                }
+            });
+
+        // Asynchronous gauge for response throughput partitioned by result status.
+        // Follows OTel convention with "status" attribute and unit format {response}/s
+        meter.gaugeBuilder("vajrapulse.response.throughput")
+            .setDescription("Achieved response throughput by status (success|failure)")
+            .setUnit("{response}/s")
+            .buildWithCallback(measurement -> {
+                var snapshot = lastMetrics.get();
+                if (snapshot != null && snapshot.elapsedMillis() > 0) {
+                    measurement.record(snapshot.responseTps(), Attributes.builder()
+                        .put(AttributeKey.stringKey("status"), "all")
+                        .put(AttributeKey.stringKey("run_id"), runId)
+                        .build());
+                    measurement.record(snapshot.successTps(), Attributes.builder()
+                        .put(AttributeKey.stringKey("status"), "success")
+                        .put(AttributeKey.stringKey("run_id"), runId)
+                        .build());
+                    measurement.record(snapshot.failureTps(), Attributes.builder()
+                        .put(AttributeKey.stringKey("status"), "failure")
+                        .put(AttributeKey.stringKey("run_id"), runId)
+                        .build());
+                }
+            });
+        
+        // Queue size gauge
+        meter.gaugeBuilder("vajrapulse.execution.queue.size")
+            .setDescription("Number of pending task executions in queue")
+            .buildWithCallback(measurement -> {
+                var snapshot = lastMetrics.get();
+                if (snapshot != null) {
+                    measurement.record(snapshot.queueSize(), 
+                        Attributes.of(AttributeKey.stringKey("run_id"), runId));
+                }
+            });
+        
+        // Queue wait time percentiles (asynchronous gauge)
+        meter.gaugeBuilder("vajrapulse.execution.queue.wait_time")
+            .setDescription("Queue wait time percentiles in milliseconds (snapshot)")
+            .setUnit("ms")
+            .buildWithCallback(measurement -> {
+                var snapshot = lastMetrics.get();
+                if (snapshot == null) return;
+                if (!snapshot.queueWaitPercentiles().isEmpty()) {
+                    for (var entry : snapshot.queueWaitPercentiles().entrySet()) {
+                        String p = String.valueOf(entry.getKey());
+                        double ms = entry.getValue() / 1_000_000.0;
+                        measurement.record(ms, Attributes.builder()
+                            .put(AttributeKey.stringKey("percentile"), p)
+                            .put(AttributeKey.stringKey("run_id"), runId)
+                            .build());
+                    }
+                }
+            });
         
         logger.info("OpenTelemetry exporter initialized - endpoint: {}, protocol: {}", 
             endpoint, protocol);
@@ -228,6 +298,12 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
 
             // Update last snapshot for asynchronous gauge
             lastMetrics.set(metrics);
+            // Update exposed TPS values for direct access & tests
+            if (metrics.elapsedMillis() > 0) {
+                lastResponseTps = metrics.responseTps();
+                lastSuccessTps = metrics.successTps();
+                lastFailureTps = metrics.failureTps();
+            }
 
             // Compute deltas per status for unified counter
             long success = metrics.successCount();
@@ -286,6 +362,30 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
      */
     public String getRunId() {
         return runId;
+    }
+
+    /**
+     * Returns the last computed total response TPS (requests per second).
+     * @return total response TPS or 0.0 if unavailable
+     */
+    public double getLastResponseTps() {
+        return lastResponseTps;
+    }
+
+    /**
+     * Returns the last computed successful response TPS.
+     * @return success TPS or 0.0 if unavailable
+     */
+    public double getLastSuccessTps() {
+        return lastSuccessTps;
+    }
+
+    /**
+     * Returns the last computed failed response TPS.
+     * @return failure TPS or 0.0 if unavailable
+     */
+    public double getLastFailureTps() {
+        return lastFailureTps;
     }
     
     /**

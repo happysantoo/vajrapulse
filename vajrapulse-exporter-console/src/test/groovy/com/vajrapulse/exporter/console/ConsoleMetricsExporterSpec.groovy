@@ -37,7 +37,10 @@ class ConsoleMetricsExporterSpec extends Specification {
             950,
             50,
             successPercentiles,
-            failurePercentiles
+            failurePercentiles,
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         and: "a console exporter capturing output"
@@ -75,7 +78,10 @@ class ConsoleMetricsExporterSpec extends Specification {
             100,
             0,
             defaultPercentiles,
-            [:] as Map<Double, Double> // no failures
+            [:] as Map<Double, Double>, // no failures
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         and: "a console exporter"
@@ -110,7 +116,10 @@ class ConsoleMetricsExporterSpec extends Specification {
             1000,
             0,
             customPercentiles,
-            [:] as Map<Double, Double>
+            [:] as Map<Double, Double>,
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         and: "a console exporter"
@@ -137,7 +146,10 @@ class ConsoleMetricsExporterSpec extends Specification {
             0,
             0,
             [:] as Map<Double, Double>,
-            [:] as Map<Double, Double>
+            [:] as Map<Double, Double>,
+            0L,  // No time elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         and: "a console exporter"
@@ -152,8 +164,12 @@ class ConsoleMetricsExporterSpec extends Specification {
         !output.contains("Success Latency")
         !output.contains("Failure Latency")
         
-        and: "summary still shown"
-        output.contains("Total Executions:    0")
+        and: "summary still shown with new format"
+        output.contains("Requests:")
+        output.contains("Total:             0")
+        output.contains("Request TPS:")
+        output.contains("Response TPS:")
+        output.contains("Elapsed Time:        0.0s")
     }
     
     def "should show title when provided"() {
@@ -168,7 +184,10 @@ class ConsoleMetricsExporterSpec extends Specification {
             50,
             0,
             percentiles,
-            [:] as Map<Double, Double>
+            [:] as Map<Double, Double>,
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         and: "a console exporter"
@@ -195,7 +214,10 @@ class ConsoleMetricsExporterSpec extends Specification {
             3,
             0,
             successPercentiles,
-            [:] as Map<Double, Double>
+            [:] as Map<Double, Double>,
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
 
         and: "a console exporter"
@@ -226,7 +248,10 @@ class ConsoleMetricsExporterSpec extends Specification {
             90,
             10,
             successPercentiles,
-            failurePercentiles
+            failurePercentiles,
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
 
         and:

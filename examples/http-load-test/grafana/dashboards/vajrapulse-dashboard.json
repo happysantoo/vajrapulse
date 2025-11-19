@@ -105,7 +105,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (task_name) (rate(vajrapulse_execution_count_total{job=\"otel-collector\"}[1m])) * 60",
+          "expr": "sum by (task_name) (rate(vajrapulse_execution_count_total{job=\"otel-collector\", run_id=~\"$run_id\"}[1m])) * 60",
           "legendFormat": "Total/min - {{task_name}}",
           "range": true,
           "refId": "A"
@@ -116,7 +116,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(vajrapulse_execution_count_total{job=\"otel-collector\", status=\"success\"}[1m]) * 60",
+          "expr": "rate(vajrapulse_execution_count_total{job=\"otel-collector\", status=\"success\", run_id=~\"$run_id\"}[1m]) * 60",
           "legendFormat": "Successful/min - {{task_name}}",
           "range": true,
           "refId": "B"
@@ -127,7 +127,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(vajrapulse_execution_count_total{job=\"otel-collector\", status=\"failure\"}[1m]) * 60",
+          "expr": "rate(vajrapulse_execution_count_total{job=\"otel-collector\", status=\"failure\", run_id=~\"$run_id\"}[1m]) * 60",
           "legendFormat": "Failed/min - {{task_name}}",
           "range": true,
           "refId": "C"
@@ -203,7 +203,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_success_rate{job=\"otel-collector\"}",
+          "expr": "vajrapulse_success_rate{job=\"otel-collector\", run_id=~\"$run_id\"}",
           "legendFormat": "{{task_name}}",
           "range": true,
           "refId": "A"
@@ -297,7 +297,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (task_name) (vajrapulse_execution_count_total{job=\"otel-collector\"})",
+          "expr": "sum by (task_name) (vajrapulse_execution_count_total{job=\"otel-collector\", run_id=~\"$run_id\"})",
           "legendFormat": "Total",
           "range": true,
           "refId": "A"
@@ -308,7 +308,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_execution_count_total{job=\"otel-collector\", status=\"success\"}",
+          "expr": "vajrapulse_execution_count_total{job=\"otel-collector\", status=\"success\", run_id=~\"$run_id\"}",
           "legendFormat": "Success",
           "range": true,
           "refId": "B"
@@ -319,7 +319,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_execution_count_total{job=\"otel-collector\", status=\"failure\"}",
+          "expr": "vajrapulse_execution_count_total{job=\"otel-collector\", status=\"failure\", run_id=~\"$run_id\"}",
           "legendFormat": "Failure",
           "range": true,
           "refId": "C"
@@ -327,6 +327,182 @@
       ],
       "title": "Execution Counts",
       "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Request throughput (target rate)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "avg(vajrapulse_request_throughput_per_second{job=\"otel-collector\", run_id=~\"$run_id\"})",
+          "legendFormat": "Target TPS",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Request Throughput",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Response throughput by status (success/failure)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 16,
+        "x": 8,
+        "y": 8
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": ["last"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "avg(vajrapulse_response_throughput_per_second{job=\"otel-collector\", status=\"all\", run_id=~\"$run_id\"})",
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "avg(vajrapulse_response_throughput_per_second{job=\"otel-collector\", status=\"success\", run_id=~\"$run_id\"})",
+          "legendFormat": "Success",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "avg(vajrapulse_response_throughput_per_second{job=\"otel-collector\", status=\"failure\", run_id=~\"$run_id\"})",
+          "legendFormat": "Failure",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Response Throughput",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -390,7 +566,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 14
       },
       "id": 4,
       "options": {
@@ -412,7 +588,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"success\", percentile=\"0.5\"}",
+          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"success\", percentile=\"0.5\", run_id=~\"$run_id\"}",
           "legendFormat": "P50 - {{task_name}}",
           "range": true,
           "refId": "A"
@@ -423,7 +599,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"success\", percentile=\"0.9\"}",
+          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"success\", percentile=\"0.9\", run_id=~\"$run_id\"}",
           "legendFormat": "P90 - {{task_name}}",
           "range": true,
           "refId": "B"
@@ -434,7 +610,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"success\", percentile=\"0.95\"}",
+          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"success\", percentile=\"0.95\", run_id=~\"$run_id\"}",
           "legendFormat": "P95 - {{task_name}}",
           "range": true,
           "refId": "C"
@@ -445,7 +621,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"success\", percentile=\"0.99\"}",
+          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"success\", percentile=\"0.99\", run_id=~\"$run_id\"}",
           "legendFormat": "P99 - {{task_name}}",
           "range": true,
           "refId": "D"
@@ -516,7 +692,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 14
       },
       "id": 5,
       "options": {
@@ -538,7 +714,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"failure\", percentile=\"0.5\"}",
+          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"failure\", percentile=\"0.5\", run_id=~\"$run_id\"}",
           "legendFormat": "P50 - {{task_name}}",
           "range": true,
           "refId": "A"
@@ -549,7 +725,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"failure\", percentile=\"0.9\"}",
+          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"failure\", percentile=\"0.9\", run_id=~\"$run_id\"}",
           "legendFormat": "P90 - {{task_name}}",
           "range": true,
           "refId": "B"
@@ -560,7 +736,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"failure\", percentile=\"0.95\"}",
+          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"failure\", percentile=\"0.95\", run_id=~\"$run_id\"}",
           "legendFormat": "P95 - {{task_name}}",
           "range": true,
           "refId": "C"
@@ -571,7 +747,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"failure\", percentile=\"0.99\"}",
+          "expr": "vajrapulse_execution_duration_milliseconds{job=\"otel-collector\", status=\"failure\", percentile=\"0.99\", run_id=~\"$run_id\"}",
           "legendFormat": "P99 - {{task_name}}",
           "range": true,
           "refId": "D"
@@ -615,7 +791,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 23
       },
       "id": 6,
       "options": {
@@ -637,7 +813,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "vajrapulse_execution_count_total{job=\"otel-collector\"}",
+          "expr": "vajrapulse_execution_count_total{job=\"otel-collector\", run_id=~\"$run_id\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
@@ -659,8 +835,16 @@
               "job": true
             },
             "includeByName": {},
-            "indexByName": {},
+            "indexByName": {
+              "run_id": 0,
+              "task_name": 1,
+              "status": 2,
+              "deployment_environment": 3,
+              "service_name": 4,
+              "service_version": 5
+            },
             "renameByName": {
+              "run_id": "Run ID",
               "deployment_environment": "Environment",
               "cloud_region": "Region",
               "service_name": "Service",
@@ -668,7 +852,8 @@
               "task_component": "Component",
               "task_name": "Task Name",
               "task_scenario": "Scenario",
-              "team": "Team"
+              "team": "Team",
+              "status": "Status"
             }
           }
         }
@@ -680,7 +865,40 @@
   "schemaVersion": 39,
   "tags": ["vajrapulse", "load-testing", "performance"],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "allValue": null,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(vajrapulse_execution_count_total{job=\"otel-collector\"}, run_id)",
+        "description": "Select a run ID to filter all metrics",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Run ID",
+        "multi": false,
+        "name": "run_id",
+        "options": [],
+        "query": {
+          "query": "label_values(vajrapulse_execution_count_total{job=\"otel-collector\"}, run_id)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 2,
+        "tagValuesQuery": "",
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      }
+    ]
   },
   "time": {
     "from": "now-15m",

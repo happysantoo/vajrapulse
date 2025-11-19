@@ -1,6 +1,15 @@
 # HTTP Load Test Example
 
+> **📚 User Example**: This is a production-ready example for end users learning VajraPulse.  
+> For internal framework testing, see [`internal-tests/`](../../internal-tests/).
+
 Demonstrates the `HttpLoadTest` task with multiple load patterns, console & OpenTelemetry export, run ID correlation, and Java 21 virtual threads.
+
+This example shows how to:
+- Create a real-world HTTP load test
+- Set up a complete observability stack (Docker, Grafana, OpenTelemetry)
+- Use all load patterns in practice
+- Integrate with monitoring and visualization tools
 
 ## Patterns Supported
 

@@ -1,0 +1,340 @@
+# Cursor IDE Rules for VajraPulse
+
+This file configures Cursor IDE to follow the same coding standards as GitHub Copilot.
+
+## Project Overview
+
+VajraPulse is a Java 21-based distributed load testing framework leveraging virtual threads for high-concurrency testing with minimal resource overhead.
+
+**🚨 PRE-1.0 STATUS**: This project has NOT reached 1.0 release yet. Breaking changes are acceptable and encouraged if they result in cleaner, better-designed code. **DO NOT** prioritize backwards compatibility over clean architecture.
+
+## Core Principles
+
+### 0. Pre-1.0 Design Philosophy
+- **Clean code > Backwards compatibility** - Always choose the cleaner design
+- **Breaking changes are acceptable** - We haven't released 1.0 yet
+- **Refactor boldly** - Don't be constrained by previous implementations
+- **Get it right, then stabilize** - Focus on correct architecture first
+- **No deprecated code** - Remove immediately, don't deprecate
+- **Simplify aggressively** - Remove unnecessary abstractions
+
+### 1. Language & Version
+- **Java 21** is MANDATORY - use all modern features
+- Use **virtual threads** for I/O-bound tasks
+- Use **platform threads** for CPU-bound tasks  
+- Leverage **records**, **sealed interfaces**, **pattern matching**
+- **Never** suggest Java 8/11/17 syntax when Java 21 features are available
+
+### 2. Documentation Requirements (MANDATORY)
+
+#### JavaDoc Standards
+**All public APIs MUST have complete JavaDoc documentation.**
+
+**Required Elements:**
+- Class-level JavaDoc for all public classes, interfaces, records
+- Method JavaDoc for all public methods
+- Constructor JavaDoc for all public constructors (including default)
+- `@param` tags for all parameters
+- `@return` tag for methods returning non-void
+- `@throws` tags for all declared exceptions
+- `@since` tag recommended for API stability tracking
+
+**Example:**
+```java
+/**
+ * Executes a task with automatic instrumentation and metrics collection.
+ * 
+ * <p>This method wraps the task execution, capturing timing and result
+ * information automatically. The executor handles all exceptions and
+ * converts them to TaskResult.Failure.
+ * 
+ * @param iteration the iteration number (0-based)
+ * @return execution metrics including timing and result
+ * @throws IllegalStateException if task not initialized
+ * @since 0.9.0
+ */
+public ExecutionMetrics executeWithMetrics(long iteration)
+```
+
+**Constructor Documentation:**
+```java
+/**
+ * Default constructor for HttpLoadTest.
+ * Initializes the task for use with VajraPulse execution engine.
+ */
+public HttpLoadTest() {
+    // Default constructor - initialization happens in setup()
+}
+```
+
+**Main Method Documentation:**
+```java
+/**
+ * Main entry point for the HTTP load test example.
+ * 
+ * <p>Runs a load test with configurable load patterns.
+ * 
+ * @param args command-line arguments (optional pattern type)
+ * @throws Exception if test execution fails
+ */
+public static void main(String[] args) throws Exception {
+```
+
+**Compiler Warnings:**
+- Build is configured with `-Xlint:doclint` to catch JavaDoc issues
+- All JavaDoc warnings MUST be fixed before committing
+- Examples may have relaxed rules, main modules enforce strict requirements
+
+### 3. Code Style
+
+#### Naming Conventions
+- Classes: `PascalCase` (e.g., `ExecutionEngine`, `TaskExecutor`)
+- Methods: `camelCase` (e.g., `execute()`, `recordMetrics()`)
+- Constants: `UPPER_SNAKE_CASE` (e.g., `DEFAULT_TIMEOUT`, `MAX_RETRIES`)
+- Packages: `lowercase` (e.g., `com.vajrapulse.core.engine`)
+
+#### Avoid
+- `Impl` suffix (e.g., `TaskExecutorImpl` → `TaskExecutor`)
+- `Abstract` prefix (e.g., `AbstractTaskExecutor` → `TaskExecutor`)
+- `I` prefix for interfaces (e.g., `ITask` → `Task`)
+- `do` prefix for methods (e.g., `doRecord()` → `record()`)
+- `get` prefix for non-getters (e.g., `getSnapshot()` → `snapshot()`)
+
+### 4. Virtual Threads Best Practices
+
+#### Use Virtual Threads For:
+- HTTP/REST API calls
+- Database queries (JDBC)
+- Message queue operations
+- File I/O operations
+- Network calls (gRPC, WebSocket)
+
+#### Use Platform Threads For:
+- CPU-intensive operations (encryption, compression)
+- Heavy computations
+- Image/video processing
+
+#### Avoid with Virtual Threads:
+- `ThreadLocal` - Use `ScopedValue` instead
+- Heavy `synchronized` blocks - Use lock-free structures
+- Blocking I/O in hot paths - Use async where possible
+
+### 5. Dependencies
+
+#### Minimal Dependencies
+- Every dependency must be justified
+- Prefer JDK built-in features
+- Use Micrometer for metrics (industry standard)
+- Keep `vajrapulse-api` with ZERO dependencies
+
+#### Module Structure
+- `vajrapulse-api` - Zero dependencies, pure interfaces
+- `vajrapulse-core` - Minimal dependencies (Micrometer, SLF4J)
+- `vajrapulse-exporter-*` - Optional, separate modules
+- `vajrapulse-worker` - CLI application, bundles everything
+
+### 6. Testing
+
+#### Test Framework
+- Use **Spock Framework** for BDD-style tests
+- Follow `given-when-then` structure
+- Aim for ≥90% code coverage
+- Use descriptive test names
+
+#### Test Structure
+```groovy
+def "should execute task and record metrics"() {
+    given:
+    def task = new TestTask()
+    def collector = new MetricsCollector()
+    
+    when:
+    def result = task.execute()
+    
+    then:
+    result.isSuccess()
+    collector.totalExecutions() == 1
+}
+```
+
+### 7. Error Handling
+
+#### Exception Strategy
+- Catch exceptions at the right level
+- Convert to `TaskResult.Failure` in task execution
+- Log errors with context
+- Don't swallow exceptions silently
+
+### 8. Performance
+
+#### Hot Path Optimizations
+- No lambdas in hot paths
+- Pre-size collections
+- Reuse objects where possible
+- Use primitive types when appropriate
+- Avoid unnecessary allocations
+
+### 9. File Organization
+
+#### Markdown Documentation Files
+**All markdown documentation files MUST be created in the `documents/` folder.**
+
+**Allowed Exceptions:**
+- `README.md` in root directory (project overview)
+- `CHANGELOG.md` in root directory (standard changelog)
+- `README.md` in module directories (e.g., `vajrapulse-api/README.md`)
+- `README.md` in example directories (e.g., `examples/http-load-test/README.md`)
+- `README.md` in internal test directories (e.g., `internal-tests/README.md`)
+- `README.md` in script directories (e.g., `scripts/README-*.md`)
+- `.github/*.md` files (GitHub-specific documentation)
+
+**Forbidden Locations:**
+- ❌ Root directory (except README.md and CHANGELOG.md)
+- ❌ Source code directories (`src/main/java/`, `src/test/`)
+- ❌ Build directories
+- ❌ Any location outside `documents/` unless it's a standard README
+
+**Rule**: When creating documentation, planning documents, or any markdown files:
+1. **Always create in `documents/` folder** unless it's a standard README
+2. Use descriptive filenames (e.g., `RELEASE_0.9.3_FEATURES.md`)
+3. Follow existing naming conventions in `documents/`
+4. If unsure, use `documents/` - it's the default location for all documentation
+
+**Examples:**
+```markdown
+✅ documents/RELEASE_0.9.3_FEATURES.md
+✅ documents/BLAZEMETER_INTEGRATION_PLAN.md
+✅ documents/STRATEGIC_ROADMAP.md
+✅ README.md (root - allowed)
+✅ CHANGELOG.md (root - allowed)
+✅ examples/http-load-test/README.md (example README - allowed)
+
+❌ RELEASE_0.9.3_FEATURES.md (root - forbidden)
+❌ src/main/java/com/vajrapulse/DOCS.md (source directory - forbidden)
+❌ BLAZEMETER_PLAN.md (root - forbidden, should be in documents/)
+```
+
+### 10. Build Configuration
+
+#### Gradle Best Practices
+- Use Kotlin DSL
+- Use `toolchain` for Java version
+- Enable configuration cache
+- Use `java-platform` plugin for BOM
+- Configure JavaDoc linting: `-Xlint:doclint`
+
+### 11. Module Boundaries
+
+#### Respect Module Boundaries
+- `vajrapulse-api` - No dependencies on other modules
+- `vajrapulse-core` - Depends only on `vajrapulse-api`
+- Exporters - Depend on `vajrapulse-core` and `vajrapulse-api`
+- `vajrapulse-worker` - Can depend on all modules
+
+### 12. Static Code Analysis
+
+#### SpotBugs Integration
+- **SpotBugs** is configured to run automatically on build
+- Static analysis runs as part of the `check` task
+- Reports are generated in `build/reports/spotbugs/main.html`
+
+#### Pre-Commit Checklist
+**ALWAYS run static analysis before committing:**
+
+```bash
+# Run static analysis
+./gradlew spotbugsMain
+
+# Or run full check (tests + coverage + static analysis)
+./gradlew check
+```
+
+**If SpotBugs finds issues:**
+1. Review the HTML report: `build/reports/spotbugs/main.html`
+2. Fix legitimate issues (bugs, code smells)
+3. If it's a false positive, add exclusion to `spotbugs-exclude.xml`
+4. Re-run analysis to verify fix
+
+#### Common Issues to Fix
+- **Null pointer dereferences** - Always check for null
+- **Resource leaks** - Use try-with-resources
+- **Dead stores** - Remove unused variables
+- **Inefficient operations** - Optimize hot paths
+- **Thread safety** - Ensure proper synchronization
+
+#### Cursor IDE Integration
+When working on code:
+1. **Before committing**: Run `./gradlew spotbugsMain` to check for issues
+2. **Review findings**: Open `build/reports/spotbugs/main.html` in browser
+3. **Fix issues**: Address all high/medium confidence findings
+4. **Re-verify**: Run analysis again before committing
+
+**Cursor should remind developers to run static analysis before commits.**
+
+### 13. Code Review Checklist
+
+Before submitting code:
+- [ ] Uses Java 21 features (records, sealed types, pattern matching)
+- [ ] Complete JavaDoc on all public APIs
+- [ ] No JavaDoc compiler warnings
+- [ ] **Static analysis passes** (`./gradlew spotbugsMain`)
+- [ ] **Markdown files created in `documents/` folder** (or standard README locations)
+- [ ] No unnecessary dependencies added
+- [ ] Virtual/platform threads used appropriately
+- [ ] No lambdas in hot paths
+- [ ] Micrometer used for all metrics
+- [ ] Spock tests with given-when-then
+- [ ] No synchronized blocks with virtual threads
+- [ ] Proper error handling
+- [ ] Performance considered
+- [ ] Module boundaries respected
+- [ ] All tests pass
+
+### 14. Common Patterns
+
+#### Task Implementation
+```java
+@VirtualThreads
+public class MyTask implements Task {
+    /**
+     * Default constructor for MyTask.
+     */
+    public MyTask() {
+    }
+    
+    @Override
+    public void setup() throws Exception {
+        // Initialize resources
+    }
+    
+    @Override
+    public TaskResult execute() throws Exception {
+        // Task logic
+        return TaskResult.success();
+    }
+    
+    @Override
+    public void cleanup() throws Exception {
+        // Cleanup resources
+    }
+}
+```
+
+#### Metrics Collection
+```java
+MetricsCollector collector = new MetricsCollector();
+// ... execute tasks ...
+AggregatedMetrics metrics = collector.snapshot();
+```
+
+#### Load Pattern
+```java
+LoadPattern pattern = new StaticLoad(100.0, Duration.ofSeconds(30));
+```
+
+## References
+
+- See `.github/copilot-instructions.md` for complete guidelines
+- See `documents/DESIGN.md` for architecture details
+- See `README.md` for project overview
+

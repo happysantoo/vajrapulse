@@ -3,6 +3,7 @@ plugins {
     groovy
     id("com.gradleup.shadow") version "9.0.0-beta4" apply false
     jacoco
+    id("com.github.spotbugs") version "6.0.14" apply false
     id("maven-publish")
     signing
 }
@@ -10,7 +11,7 @@ plugins {
 allprojects {
     // Artifact coordinates moved to 'com.vajrapulse' for 0.9 release alignment.
     group = "com.vajrapulse"
-    version = "0.9.2"
+    version = "0.9.3"
 
     repositories {
         mavenCentral()
@@ -24,11 +25,17 @@ subprojects {
         // Aggregator only; no source sets or plugins applied.
         return@subprojects
     }
+    
+    // BOM uses java-platform plugin, skip standard plugins
+    if (project.path == ":vajrapulse-bom") {
+        return@subprojects
+    }
 
     apply(plugin = "java")
     apply(plugin = "java-library")
     apply(plugin = "groovy")
     apply(plugin = "jacoco")
+    apply(plugin = "com.github.spotbugs")
     apply(plugin = "maven-publish")
     apply(plugin = "signing")
 
@@ -42,6 +49,29 @@ subprojects {
         options.encoding = "UTF-8"
         options.release.set(21)
         options.compilerArgs.addAll(listOf("-parameters", "-Xlint:deprecation"))
+        
+        // Configure JavaDoc linting
+        // Suppress doclint warnings for missing comments in examples (they're educational)
+        if (project.path.startsWith(":examples")) {
+            options.compilerArgs.add("-Xdoclint:none")
+        } else {
+            // For main modules, enforce JavaDoc requirements (warn on malformed, allow missing)
+            options.compilerArgs.add("-Xdoclint:all")
+            options.compilerArgs.add("-Xdoclint:-missing")
+        }
+    }
+    
+    // Configure JavaDoc task to check for documentation issues
+    tasks.withType<Javadoc> {
+        options {
+            (this as StandardJavadocDocletOptions).apply {
+                addStringOption("Xdoclint:all,-missing", "-quiet")
+                // Suppress doclint for examples
+                if (project.path.startsWith(":examples")) {
+                    addStringOption("Xdoclint:none", "-quiet")
+                }
+            }
+        }
     }
 
     // Configure coverage verification: enforce ≥90% for tested modules
@@ -99,13 +129,42 @@ subprojects {
         executionData.setFrom(files(layout.buildDirectory.dir("jacoco/test.exec")))
     }
 
-    // Ensure 'check' depends on coverage verification for CI gating
+    // Configure SpotBugs for static code analysis
+    tasks.withType<com.github.spotbugs.snom.SpotBugsTask> {
+        // Skip examples from static analysis
+        enabled = !project.path.startsWith(":examples")
+        
+        // Set exclusion filter
+        excludeFilter = file("${rootProject.projectDir}/spotbugs-exclude.xml")
+        
+        // Configure reports
+        reports {
+            create("html") {
+                required = true
+            }
+        }
+        
+        // Don't fail build on findings - generate report for review instead
+        // Developers should review and fix issues before committing
+        ignoreFailures = false  // Set to true if you want to allow builds with findings
+    }
+    
+    // Disable spotbugsTest task - we only analyze main source code
+    // Test code (Spock/Groovy) has different patterns that trigger false positives
+    tasks.named("spotbugsTest") {
+        enabled = false
+    }
+    
+    // Ensure 'check' depends on coverage verification and static analysis for CI gating
     tasks.named("check") {
         dependsOn(tasks.named("jacocoTestCoverageVerification"))
+        // Note: spotbugsMain will fail if issues found - this enforces code quality
+        dependsOn(tasks.named("spotbugsMain"))
     }
 
-    // Simplified publishing/signing for selected modules (API, core, exporters, worker)
+    // Simplified publishing/signing for selected modules (BOM, API, core, exporters, worker)
     val publishable = setOf(
+        "vajrapulse-bom",
         "vajrapulse-api",
         "vajrapulse-core",
         "vajrapulse-exporter-console",

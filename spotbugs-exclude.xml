@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SpotBugs exclusion filter for VajraPulse.
+    
+    This file excludes known false positives and acceptable patterns
+    that don't violate our code quality standards.
+-->
+<FindBugsFilter>
+    <!-- Exclude generated code and third-party code -->
+    <Match>
+        <Source name="~.*\.generated\..*"/>
+    </Match>
+    
+    <!-- Allow final fields that are initialized in constructors -->
+    <!-- This is a common pattern in builder classes -->
+    <Match>
+        <Bug pattern="UWF_UNWRITTEN_FIELD"/>
+        <Class name="~.*Builder"/>
+    </Match>
+    
+    <!-- Allow intentional null returns for optional values -->
+    <Match>
+        <Bug pattern="NP_NULL_ON_SOME_PATH"/>
+        <Method name="~.*Optional.*"/>
+    </Match>
+    
+    <!-- Allow intentional null checks before usage -->
+    <Match>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+        <Method name="~.*get.*"/>
+    </Match>
+    
+    <!-- Fire-and-forget executor.submit() is intentional in ExecutionEngine -->
+    <Match>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+        <Class name="com.vajrapulse.core.engine.ExecutionEngine"/>
+        <Method name="run"/>
+    </Match>
+    
+    <!-- AggregatedMetrics record accessors return unmodifiable maps via compact constructor -->
+    <!-- The compact constructor creates defensive copies, so exposure is safe -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+        <Class name="com.vajrapulse.core.metrics.AggregatedMetrics"/>
+        <Method name="successPercentiles"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+        <Class name="com.vajrapulse.core.metrics.AggregatedMetrics"/>
+        <Method name="failurePercentiles"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+        <Class name="com.vajrapulse.core.metrics.AggregatedMetrics"/>
+        <Method name="queueWaitPercentiles"/>
+    </Match>
+    
+    <!-- MetricsCollector.getRegistry() is documented as mutable - advanced use case -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+        <Class name="com.vajrapulse.core.metrics.MetricsCollector"/>
+        <Method name="getRegistry"/>
+    </Match>
+    
+    <!-- Record compact constructors and accessors - records are immutable by design -->
+    <!-- The compact constructor validates input, and records provide immutability guarantees -->
+    <!-- Accessors return the record fields directly, which is the standard record pattern -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+        <Class name="com.vajrapulse.api.StepLoad"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.api.StepLoad"/>
+    </Match>
+    
+    <!-- TaskResult.Failure stores/returns Throwable - this is intentional for error handling -->
+    <!-- Throwable is part of the failure record and should be accessible -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+        <Class name="com.vajrapulse.api.TaskResult$Failure"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.api.TaskResult$Failure"/>
+    </Match>
+    
+    <!-- TaskResult.Success stores/returns Object - this is intentional for result data -->
+    <!-- The data is part of the success record and should be accessible -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+        <Class name="com.vajrapulse.api.TaskResult$Success"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.api.TaskResult$Success"/>
+    </Match>
+    
+    <!-- ConsoleMetricsExporter stores PrintStream - this is intentional for output control -->
+    <!-- PrintStream is thread-safe and the exporter is designed to use it directly -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.exporter.console.ConsoleMetricsExporter"/>
+    </Match>
+    
+    <!-- OpenTelemetryExporter.Builder stores Map references - builder pattern creates defensive copies in build() -->
+    <!-- The builder pattern is designed to accept mutable maps and create immutable copies -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.exporter.otel.OpenTelemetryExporter$Builder"/>
+    </Match>
+</FindBugsFilter>
+

@@ -10,7 +10,9 @@ import java.io.PrintStream;
  * 
  * <p>This exporter formats metrics as a table showing:
  * <ul>
- *   <li>Total/Success/Failure counts and rates</li>
+ *   <li>Elapsed time and throughput (TPS)</li>
+ *   <li>Request counts (total/success/failure) with rates</li>
+ *   <li>Response TPS (actual throughput achieved)</li>
  *   <li>Latency percentiles (dynamically displays all configured percentiles)</li>
  *   <li>Formatted duration values (ms)</li>
  * </ul>
@@ -20,20 +22,27 @@ import java.io.PrintStream;
  * ========================================
  * Load Test Results
  * ========================================
- * Total Executions:    1000
- * Successful:          950 (95.0%)
- * Failed:              50 (5.0%)
+ * Elapsed Time:        30.5s
+ * 
+ * Requests:
+ *   Total:             3050
+ *   Successful:        2995 (98.2%)
+ *   Failed:            55 (1.8%)
+ * 
+ * Request TPS:         100.0
+ * 
+ * Response TPS:
+ *   Total:             100.0
+ *   Successful:        98.2
+ *   Failed:            1.8
  * 
  * Success Latency (ms):
  *   P50:  12.5
- *   P75:  23.8
- *   P90:  38.4
  *   P95:  45.2
  *   P99:  78.9
  * 
  * Failure Latency (ms):
  *   P50:  150.3
- *   P95:  250.7
  *   P99:  380.1
  * ========================================
  * </pre>
@@ -68,13 +77,52 @@ public final class ConsoleMetricsExporter implements MetricsExporter {
         out.println("========================================");
         out.println("Load Test Results");
         out.println("========================================");
+        printMetricsBody(metrics);
+        out.println("========================================");
+        out.println();
+    }
+    
+    /**
+     * Exports metrics with a custom title.
+     * 
+     * @param title the title to display
+     * @param metrics the metrics to export
+     */
+    @Override
+    public void export(String title, AggregatedMetrics metrics) {
+        out.println();
+        out.println("========================================");
+        out.println(title);
+        out.println("========================================");
+        printMetricsBody(metrics);
+        out.println("========================================");
+        out.println();
+    }
+    
+    private void printMetricsBody(AggregatedMetrics metrics) {
+        // Elapsed time
+        out.printf("Elapsed Time:        %.1fs%n", metrics.elapsedMillis() / 1000.0);
+        out.println();
         
-        // Summary
-        out.printf("Total Executions:    %d%n", metrics.totalExecutions());
-        out.printf("Successful:          %d (%.1f%%)%n", 
+        // Request counts
+        out.println("Requests:");
+        out.printf("  Total:             %d%n", metrics.totalExecutions());
+        out.printf("  Successful:        %d (%.1f%%)%n", 
             metrics.successCount(), metrics.successRate());
-        out.printf("Failed:              %d (%.1f%%)%n", 
+        out.printf("  Failed:            %d (%.1f%%)%n", 
             metrics.failureCount(), metrics.failureRate());
+        out.println();
+        
+        // Request TPS (target/intended rate)
+        double requestTps = metrics.responseTps();
+        out.printf("Request TPS:         %.1f%n", requestTps);
+        out.println();
+        
+        // Response TPS (actual achieved throughput)
+        out.println("Response TPS:");
+        out.printf("  Total:             %.1f%n", metrics.responseTps());
+        out.printf("  Successful:        %.1f%n", metrics.successTps());
+        out.printf("  Failed:            %.1f%n", metrics.failureTps());
         out.println();
         
         // Success latencies - display all configured percentiles
@@ -101,50 +149,18 @@ public final class ConsoleMetricsExporter implements MetricsExporter {
             out.println();
         }
         
-        out.println("========================================");
-        out.println();
-    }
-    
-    /**
-     * Exports metrics with a custom title.
-     * 
-     * @param title the title to display
-     * @param metrics the metrics to export
-     */
-    @Override
-    public void export(String title, AggregatedMetrics metrics) {
-        out.println();
-        out.println("========================================");
-        out.println(title);
-        out.println("========================================");
-        
-        // Same formatting as above
-        out.printf("Total Executions:    %d%n", metrics.totalExecutions());
-        out.printf("Successful:          %d (%.1f%%)%n", 
-            metrics.successCount(), metrics.successRate());
-        out.printf("Failed:              %d (%.1f%%)%n", 
-            metrics.failureCount(), metrics.failureRate());
-        out.println();
-        
-        if (metrics.successCount() > 0 && !metrics.successPercentiles().isEmpty()) {
-            out.println("Success Latency (ms):");
-            metrics.successPercentiles().forEach((percentile, nanos) -> {
-                String label = formatPercentileLabel(percentile);
-                out.printf("  %s:  %.2f%n", label, nanosToMillis(nanos));
-            });
-            out.println();
+        // Queue metrics
+        out.println("Queue:");
+        out.printf("  Size:              %d%n", metrics.queueSize());
+        if (!metrics.queueWaitPercentiles().isEmpty()) {
+            out.println("  Wait Time (ms):");
+            metrics.queueWaitPercentiles().entrySet().stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .forEach(e -> {
+                    String label = formatPercentileLabel(e.getKey());
+                    out.printf("    %s:  %.2f%n", label, nanosToMillis(e.getValue()));
+                });
         }
-        
-        if (metrics.failureCount() > 0 && !metrics.failurePercentiles().isEmpty()) {
-            out.println("Failure Latency (ms):");
-            metrics.failurePercentiles().forEach((percentile, nanos) -> {
-                String label = formatPercentileLabel(percentile);
-                out.printf("  %s:  %.2f%n", label, nanosToMillis(nanos));
-            });
-            out.println();
-        }
-        
-        out.println("========================================");
         out.println();
     }
     

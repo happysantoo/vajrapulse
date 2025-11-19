@@ -16,6 +16,7 @@ VajraPulse is a Java 21-based distributed load testing framework leveraging virt
 - **No deprecated code** - Remove immediately, don't deprecate
 - **Simplify aggressively** - Remove unnecessary abstractions
 - **Auto-archive historical docs** - Move phase completion, implementation summaries, and interim tracking docs to `documents/archive/` automatically after major milestones
+- **NEVER merge PRs without explicit user approval** - Always wait for user confirmation before merging any pull request, no matter how complete or tested the code is
 
 ### 1. Language & Version
 - **Java 21** is MANDATORY - use all modern features
@@ -388,9 +389,12 @@ private static final int max_retries = 3;          // Underscores only for const
 
 ### 12. Documentation
 
-#### JavaDoc Requirements
+#### JavaDoc Requirements (MANDATORY)
+
+**All public APIs MUST have complete JavaDoc documentation.**
+
 ```java
-// ✅ GOOD - Complete JavaDoc
+// ✅ GOOD - Complete JavaDoc with all required elements
 /**
  * Executes a task with automatic instrumentation and metrics collection.
  * 
@@ -401,13 +405,74 @@ private static final int max_retries = 3;          // Underscores only for const
  * @param iteration the iteration number (0-based)
  * @return execution metrics including timing and result
  * @throws IllegalStateException if task not initialized
+ * @since 0.9.0
  */
 public ExecutionMetrics executeWithMetrics(long iteration)
 
-// ❌ BAD - Minimal or missing
+// ❌ BAD - Minimal or missing JavaDoc
 // Executes task
 public ExecutionMetrics executeWithMetrics(long iteration)
 ```
+
+**JavaDoc Requirements Checklist:**
+- ✅ **Class-level JavaDoc** - Required for all public classes, interfaces, records
+- ✅ **Method JavaDoc** - Required for all public methods
+- ✅ **Constructor JavaDoc** - Required for all public constructors (including default)
+- ✅ **@param tags** - Required for all parameters
+- ✅ **@return tag** - Required for methods returning non-void
+- ✅ **@throws tags** - Required for all declared exceptions
+- ✅ **@since tag** - Recommended for API stability tracking
+- ✅ **@see tags** - Recommended for related APIs
+- ✅ **Examples** - Include code examples in `<pre>{@code ... }</pre>` blocks when helpful
+
+**Constructor Documentation:**
+```java
+// ✅ GOOD - Document default constructor
+/**
+ * Default constructor for HttpLoadTest.
+ * Initializes the task for use with VajraPulse execution engine.
+ */
+public HttpLoadTest() {
+    // Default constructor - initialization happens in setup()
+}
+
+// ✅ GOOD - Document private constructor for utility classes
+/**
+ * Default constructor for HttpLoadTestRunner.
+ * This is a utility class with static main method.
+ */
+private HttpLoadTestRunner() {
+    // Utility class - prevent instantiation
+}
+
+// ❌ BAD - Missing constructor documentation
+public HttpLoadTest() {
+}
+```
+
+**Main Method Documentation:**
+```java
+// ✅ GOOD - Document main method
+/**
+ * Main entry point for the HTTP load test example.
+ * 
+ * <p>Runs a load test with configurable load patterns. Supports:
+ * <ul>
+ *   <li>static - Constant TPS</li>
+ *   <li>step - Discrete TPS steps</li>
+ * </ul>
+ * 
+ * @param args command-line arguments (optional pattern type: static|step|sine|spike)
+ * @throws Exception if test execution fails
+ */
+public static void main(String[] args) throws Exception {
+```
+
+**Compiler Warnings:**
+- Build is configured with `-Xlint:doclint` to catch JavaDoc issues
+- All JavaDoc warnings MUST be fixed before committing
+- Examples may have relaxed rules (configured in build.gradle.kts)
+- Main modules enforce strict JavaDoc requirements
 
 #### Package-level Documentation
 ```java

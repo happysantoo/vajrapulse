@@ -25,6 +25,14 @@ import java.util.concurrent.Executors;
 @VirtualThreads
 public class HttpLoadTest implements Task {
     
+    /**
+     * Default constructor for HttpLoadTest.
+     * Initializes the task for use with VajraPulse execution engine.
+     */
+    public HttpLoadTest() {
+        // Default constructor - initialization happens in setup()
+    }
+    
     private HttpClient client;
     private HttpRequest request;
     
