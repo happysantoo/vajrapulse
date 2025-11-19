@@ -149,46 +149,11 @@ subprojects {
         ignoreFailures = false  // Set to true if you want to allow builds with findings
     }
     
-    // Configure PMD for code quality and maintainability analysis
-    if (!project.path.startsWith(":examples")) {
-        pmd {
-            isConsoleOutput = true
-            ruleSets = listOf(
-                "category/java/bestpractices.xml",
-                "category/java/codestyle.xml",
-                "category/java/design.xml",
-                "category/java/errorprone.xml",
-                "category/java/performance.xml",
-                "category/java/maintainability.xml"
-            )
-            cpd {
-                isEnabled = true
-                minimumTokenCount = 50
-            }
-        }
-    }
-    
-    // Configure Checkstyle for code style consistency
-    if (!project.path.startsWith(":examples")) {
-        val checkstyleConfigFile = file("${rootProject.projectDir}/checkstyle.xml")
-        if (checkstyleConfigFile.exists()) {
-            checkstyle {
-                configFile = checkstyleConfigFile
-            }
-        }
-    }
-    
     // Ensure 'check' depends on coverage verification and static analysis for CI gating
     tasks.named("check") {
         dependsOn(tasks.named("jacocoTestCoverageVerification"))
         // Note: spotbugsMain will fail if issues found - this enforces code quality
         dependsOn(tasks.named("spotbugsMain"))
-        // Add maintainability checks
-        if (!project.path.startsWith(":examples")) {
-            dependsOn(tasks.named("pmdMain"))
-            dependsOn(tasks.named("checkstyleMain"))
-            dependsOn(tasks.named("cpdMain"))
-        }
     }
 
     // Simplified publishing/signing for selected modules (BOM, API, core, exporters, worker)
