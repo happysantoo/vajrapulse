@@ -38,7 +38,9 @@ class ConsoleMetricsExporterSpec extends Specification {
             50,
             successPercentiles,
             failurePercentiles,
-            1000L  // 1 second elapsed
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         and: "a console exporter capturing output"
@@ -77,7 +79,9 @@ class ConsoleMetricsExporterSpec extends Specification {
             0,
             defaultPercentiles,
             [:] as Map<Double, Double>, // no failures
-            1000L  // 1 second elapsed
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         and: "a console exporter"
@@ -113,7 +117,9 @@ class ConsoleMetricsExporterSpec extends Specification {
             0,
             customPercentiles,
             [:] as Map<Double, Double>,
-            1000L  // 1 second elapsed
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         and: "a console exporter"
@@ -141,7 +147,9 @@ class ConsoleMetricsExporterSpec extends Specification {
             0,
             [:] as Map<Double, Double>,
             [:] as Map<Double, Double>,
-            0L  // No time elapsed
+            0L,  // No time elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         and: "a console exporter"
@@ -177,7 +185,9 @@ class ConsoleMetricsExporterSpec extends Specification {
             0,
             percentiles,
             [:] as Map<Double, Double>,
-            1000L  // 1 second elapsed
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         and: "a console exporter"
@@ -205,7 +215,9 @@ class ConsoleMetricsExporterSpec extends Specification {
             0,
             successPercentiles,
             [:] as Map<Double, Double>,
-            1000L  // 1 second elapsed
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
 
         and: "a console exporter"
@@ -237,7 +249,9 @@ class ConsoleMetricsExporterSpec extends Specification {
             10,
             successPercentiles,
             failurePercentiles,
-            1000L  // 1 second elapsed
+            1000L,  // 1 second elapsed
+            0L,     // queue size
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
 
         and:

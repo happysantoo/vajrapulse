@@ -191,12 +191,53 @@ def "should execute task and record metrics"() {
 - Exporters - Depend on `vajrapulse-core` and `vajrapulse-api`
 - `vajrapulse-worker` - Can depend on all modules
 
-### 11. Code Review Checklist
+### 11. Static Code Analysis
+
+#### SpotBugs Integration
+- **SpotBugs** is configured to run automatically on build
+- Static analysis runs as part of the `check` task
+- Reports are generated in `build/reports/spotbugs/main.html`
+
+#### Pre-Commit Checklist
+**ALWAYS run static analysis before committing:**
+
+```bash
+# Run static analysis
+./gradlew spotbugsMain
+
+# Or run full check (tests + coverage + static analysis)
+./gradlew check
+```
+
+**If SpotBugs finds issues:**
+1. Review the HTML report: `build/reports/spotbugs/main.html`
+2. Fix legitimate issues (bugs, code smells)
+3. If it's a false positive, add exclusion to `spotbugs-exclude.xml`
+4. Re-run analysis to verify fix
+
+#### Common Issues to Fix
+- **Null pointer dereferences** - Always check for null
+- **Resource leaks** - Use try-with-resources
+- **Dead stores** - Remove unused variables
+- **Inefficient operations** - Optimize hot paths
+- **Thread safety** - Ensure proper synchronization
+
+#### Cursor IDE Integration
+When working on code:
+1. **Before committing**: Run `./gradlew spotbugsMain` to check for issues
+2. **Review findings**: Open `build/reports/spotbugs/main.html` in browser
+3. **Fix issues**: Address all high/medium confidence findings
+4. **Re-verify**: Run analysis again before committing
+
+**Cursor should remind developers to run static analysis before commits.**
+
+### 12. Code Review Checklist
 
 Before submitting code:
 - [ ] Uses Java 21 features (records, sealed types, pattern matching)
 - [ ] Complete JavaDoc on all public APIs
 - [ ] No JavaDoc compiler warnings
+- [ ] **Static analysis passes** (`./gradlew spotbugsMain`)
 - [ ] No unnecessary dependencies added
 - [ ] Virtual/platform threads used appropriately
 - [ ] No lambdas in hot paths
@@ -208,7 +249,7 @@ Before submitting code:
 - [ ] Module boundaries respected
 - [ ] All tests pass
 
-### 12. Common Patterns
+### 13. Common Patterns
 
 #### Task Implementation
 ```java

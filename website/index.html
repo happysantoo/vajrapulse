@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="VajraPulse - High-performance load testing framework built on Java 21 virtual threads. Minimal dependencies, maximum concurrency.">
+    <title>VajraPulse - Load Testing with Virtual Threads</title>
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/images/favicons/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="assets/images/favicons/favicon-48x48.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/images/favicons/apple-touch-icon.png">
+    <link rel="manifest" href="assets/site.webmanifest">
+    
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-content">
+                <div class="logo-section">
+                    <img src="assets/images/vajrapulse_logo.png" alt="VajraPulse Logo" class="logo">
+                    <span class="logo-text">VajraPulse</span>
+                </div>
+                <ul class="nav-links">
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#advantages">Advantages</a></li>
+                    <li><a href="#examples">Examples</a></li>
+                    <li><a href="#getting-started">Get Started</a></li>
+                    <li><a href="https://github.com/happysantoo/vajrapulse" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                </ul>
+                <button class="mobile-menu-toggle" aria-label="Toggle menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <h1 class="hero-title">
+                        Load Testing with<br>
+                        <span class="gradient-text">Virtual Threads</span>
+                    </h1>
+                    <p class="hero-subtitle">
+                        Open source, high-concurrency load testing framework built on Java 21. 
+                        Achieve 10,000+ TPS with minimal memory footprint using Project Loom's virtual threads.
+                        <strong>Released under Apache License 2.0</strong>.
+                    </p>
+                    <div class="hero-badges">
+                        <span class="badge badge-open-source">
+                            <span class="badge-icon">🔓</span>
+                            Open Source
+                        </span>
+                        <span class="badge badge-license">
+                            <span class="badge-icon">⚖️</span>
+                            Apache 2.0
+                        </span>
+                        <span class="badge">Java 21</span>
+                        <span class="badge">Virtual Threads</span>
+                        <span class="badge">Minimal Dependencies</span>
+                        <span class="badge">OpenTelemetry</span>
+                    </div>
+                    <div class="hero-cta">
+                        <a href="#getting-started" class="btn btn-primary">Get Started</a>
+                        <a href="https://github.com/happysantoo/vajrapulse" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">View on GitHub</a>
+                    </div>
+                </div>
+                <div class="hero-visual">
+                    <div class="code-preview">
+                        <div class="code-header">
+                            <span class="code-dot"></span>
+                            <span class="code-dot"></span>
+                            <span class="code-dot"></span>
+                            <span class="code-title">HttpLoadTest.java</span>
+                        </div>
+                        <pre><code>@VirtualThreads
+public class HttpLoadTest implements Task {
+    private HttpClient client;
+    
+    @Override
+    public void setup() {
+        client = HttpClient.newBuilder()
+            .executor(Executors.newVirtualThreadPerTaskExecutor())
+            .build();
+    }
+    
+    @Override
+    public TaskResult execute() {
+        var response = client.send(request, ...);
+        return TaskResult.success(response.body());
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <h2 class="section-title">Powerful Features</h2>
+            <p class="section-subtitle">Everything you need for modern load testing</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Virtual Threads</h3>
+                    <p>Leverage Java 21's Project Loom for millions of concurrent operations with minimal memory overhead. Perfect for I/O-bound load tests.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Flexible Load Patterns</h3>
+                    <p>Six built-in patterns: Static, Ramp-up, Ramp-sustain, Step, Spike, and Sine wave. Model any real-world traffic scenario.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📈</div>
+                    <h3>Rich Metrics</h3>
+                    <p>Micrometer-based metrics with percentile calculations. Export to OpenTelemetry, console, or custom backends.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🔌</div>
+                    <h3>Simple API</h3>
+                    <p>Just implement the Task interface with setup(), execute(), and cleanup(). The framework handles the rest.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Thread Strategy</h3>
+                    <p>Choose virtual threads for I/O-bound tasks or platform threads for CPU-intensive workloads. Annotate and go.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🚀</div>
+                    <h3>High Performance</h3>
+                    <p>10,000+ TPS per worker, millions of concurrent requests, all with minimal resource consumption.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Advantages Section -->
+    <section id="advantages" class="advantages">
+        <div class="container">
+            <h2 class="section-title">Why VajraPulse?</h2>
+            <p class="section-subtitle">Built for the modern Java ecosystem</p>
+            
+            <div class="advantages-content">
+                <div class="advantage-item">
+                    <div class="advantage-number">01</div>
+                    <div class="advantage-text">
+                        <h3>Java 21 First</h3>
+                        <p>Built exclusively for Java 21, leveraging records, sealed types, pattern matching, and virtual threads. No legacy baggage.</p>
+                    </div>
+                </div>
+                
+                <div class="advantage-item">
+                    <div class="advantage-number">02</div>
+                    <div class="advantage-text">
+                        <h3>Minimal Dependencies</h3>
+                        <p>Core API has zero dependencies. Full framework weighs in at just ~1.6MB. Every dependency is justified and minimal.</p>
+                    </div>
+                </div>
+                
+                <div class="advantage-item">
+                    <div class="advantage-number">03</div>
+                    <div class="advantage-text">
+                        <h3>Production Ready</h3>
+                        <p>Comprehensive test coverage (≥90%), OpenTelemetry integration, and battle-tested patterns. Ready for production workloads.</p>
+                    </div>
+                </div>
+                
+                <div class="advantage-item">
+                    <div class="advantage-number">04</div>
+                    <div class="advantage-text">
+                        <h3>Developer Friendly</h3>
+                        <p>Simple, intuitive API. Clear documentation. Working examples. Get started in minutes, not hours.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Code Examples Section -->
+    <section id="examples" class="examples">
+        <div class="container">
+            <h2 class="section-title">Code Examples</h2>
+            <p class="section-subtitle">See how easy it is to get started</p>
+            
+            <div class="examples-tabs">
+                <button class="tab-btn active" data-tab="basic">Basic Task</button>
+                <button class="tab-btn" data-tab="patterns">Load Patterns</button>
+                <button class="tab-btn" data-tab="programmatic">Programmatic</button>
+                <button class="tab-btn" data-tab="cli">CLI Usage</button>
+            </div>
+            
+            <div class="tab-content active" id="basic">
+                <div class="example-card">
+                    <h3>Creating a Simple HTTP Load Test</h3>
+                    <pre><code>import com.vajrapulse.api.*;
+
+@VirtualThreads  // Use virtual threads for I/O
+public class HttpLoadTest implements Task {
+    private HttpClient client;
+    private HttpRequest request;
+    
+    @Override
+    public void setup() throws Exception {
+        client = HttpClient.newBuilder()
+            .executor(Executors.newVirtualThreadPerTaskExecutor())
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+        
+        request = HttpRequest.newBuilder()
+            .uri(URI.create("https://api.example.com/endpoint"))
+            .timeout(Duration.ofSeconds(10))
+            .GET()
+            .build();
+    }
+    
+    @Override
+    public TaskResult execute() throws Exception {
+        HttpResponse<String> response = client.send(
+            request, 
+            HttpResponse.BodyHandlers.ofString()
+        );
+        
+        if (response.statusCode() == 200) {
+            return TaskResult.success(response.body());
+        } else {
+            return TaskResult.failure(
+                new RuntimeException("HTTP " + response.statusCode())
+            );
+        }
+    }
+    
+    @Override
+    public void cleanup() throws Exception {
+        // Cleanup resources if needed
+    }
+}</code></pre>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="patterns">
+                <div class="example-card">
+                    <h3>Load Pattern Examples</h3>
+                    <pre><code>import com.vajrapulse.api.*;
+import java.time.Duration;
+
+// Static: Constant TPS
+LoadPattern staticPattern = new StaticLoad(
+    100.0, 
+    Duration.ofMinutes(5)
+);
+
+// Ramp-up: Linear increase from 0 to max
+LoadPattern rampPattern = new RampUpLoad(
+    500.0, 
+    Duration.ofSeconds(30)
+);
+
+// Ramp-sustain: Ramp then maintain
+LoadPattern rampSustain = new RampUpToMaxLoad(
+    500.0, 
+    Duration.ofSeconds(30),  // ramp duration
+    Duration.ofMinutes(5)      // total duration
+);
+
+// Step: Discrete phases
+LoadPattern stepPattern = new StepLoad(List.of(
+    new StepLoad.Step(50.0, Duration.ofSeconds(30)),
+    new StepLoad.Step(200.0, Duration.ofMinutes(1)),
+    new StepLoad.Step(500.0, Duration.ofMinutes(2))
+));
+
+// Sine: Smooth oscillation
+LoadPattern sinePattern = new SineWaveLoad(
+    300.0,                    // mean rate
+    150.0,                     // amplitude
+    Duration.ofMinutes(3),     // total duration
+    Duration.ofSeconds(20)     // period
+);
+
+// Spike: Periodic bursts
+LoadPattern spikePattern = new SpikeLoad(
+    200.0,                     // base rate
+    800.0,                     // spike rate
+    Duration.ofMinutes(2),     // total duration
+    Duration.ofSeconds(15),    // spike interval
+    Duration.ofSeconds(3)      // spike duration
+);</code></pre>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="programmatic">
+                <div class="example-card">
+                    <h3>Programmatic Execution</h3>
+                    <pre><code>import com.vajrapulse.api.*;
+import com.vajrapulse.core.metrics.AggregatedMetrics;
+import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
+import com.vajrapulse.worker.pipeline.MetricsPipeline;
+import java.time.Duration;
+
+public class LoadTestRunner {
+    public static void main(String[] args) throws Exception {
+        // Create your task
+        HttpLoadTest task = new HttpLoadTest();
+        
+        // Define load pattern
+        LoadPattern pattern = new StaticLoad(
+            100.0, 
+            Duration.ofSeconds(30)
+        );
+        
+        // Build metrics pipeline with exporters
+        try (MetricsPipeline pipeline = MetricsPipeline.builder()
+            .addExporter(new ConsoleMetricsExporter())
+            .withPeriodic(Duration.ofSeconds(5))  // Live updates
+            .withPercentiles(0.5, 0.95, 0.99)
+            .build()) {
+            
+            // Run the test
+            pipeline.run(task, pattern);
+        }
+        
+        // Automatic cleanup
+    }
+}</code></pre>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="cli">
+                <div class="example-card">
+                    <h3>Command Line Interface</h3>
+                    <pre><code># Static pattern
+java -jar vajrapulse-worker-all.jar \
+  com.example.HttpLoadTest \
+  --mode static \
+  --tps 100 \
+  --duration 5m
+
+# Ramp-up pattern
+java -jar vajrapulse-worker-all.jar \
+  com.example.HttpLoadTest \
+  --mode ramp \
+  --tps 200 \
+  --ramp-duration 30s
+
+# Ramp-sustain pattern
+java -jar vajrapulse-worker-all.jar \
+  com.example.HttpLoadTest \
+  --mode ramp-sustain \
+  --tps 200 \
+  --ramp-duration 30s \
+  --duration 5m
+
+# Step pattern
+java -jar vajrapulse-worker-all.jar \
+  com.example.HttpLoadTest \
+  --mode step \
+  --steps "50@30s,200@1m,500@2m,100@30s"
+
+# Sine wave pattern
+java -jar vajrapulse-worker-all.jar \
+  com.example.HttpLoadTest \
+  --mode sine \
+  --mean-rate 300 \
+  --amplitude 150 \
+  --period 120s \
+  --duration 15m
+
+# Spike pattern
+java -jar vajrapulse-worker-all.jar \
+  com.example.HttpLoadTest \
+  --mode spike \
+  --base-rate 100 \
+  --spike-rate 800 \
+  --spike-interval 60s \
+  --spike-duration 5s \
+  --duration 10m</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Getting Started Section -->
+    <section id="getting-started" class="getting-started">
+        <div class="container">
+            <h2 class="section-title">Get Started</h2>
+            <p class="section-subtitle">Add VajraPulse to your project in minutes</p>
+            
+            <div class="getting-started-content">
+                <div class="install-tabs">
+                    <button class="install-tab active" data-install="gradle-kotlin">Gradle (Kotlin)</button>
+                    <button class="install-tab" data-install="gradle-groovy">Gradle (Groovy)</button>
+                    <button class="install-tab" data-install="maven">Maven</button>
+                </div>
+                
+                <div class="install-content active" id="gradle-kotlin">
+                    <h3>Using BOM (Recommended)</h3>
+                    <pre><code>dependencies {
+    // Import BOM
+    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.3"))
+    
+    // Use modules without versions
+    implementation("com.vajrapulse:vajrapulse-core")
+    implementation("com.vajrapulse:vajrapulse-worker")
+    
+    // Optional exporters
+    implementation("com.vajrapulse:vajrapulse-exporter-console")
+    implementation("com.vajrapulse:vajrapulse-exporter-opentelemetry")
+}</code></pre>
+                </div>
+                
+                <div class="install-content" id="gradle-groovy">
+                    <h3>Using BOM (Recommended)</h3>
+                    <pre><code>dependencies {
+    // Import BOM
+    implementation platform('com.vajrapulse:vajrapulse-bom:0.9.3')
+    
+    // Use modules without versions
+    implementation 'com.vajrapulse:vajrapulse-core'
+    implementation 'com.vajrapulse:vajrapulse-worker'
+    
+    // Optional exporters
+    implementation 'com.vajrapulse:vajrapulse-exporter-console'
+    implementation 'com.vajrapulse:vajrapulse-exporter-opentelemetry'
+}</code></pre>
+                </div>
+                
+                <div class="install-content" id="maven">
+                    <h3>Using BOM (Recommended)</h3>
+                    <pre><code>&lt;dependencyManagement&gt;
+    &lt;dependencies&gt;
+        &lt;!-- Import BOM --&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;com.vajrapulse&lt;/groupId&gt;
+            &lt;artifactId&gt;vajrapulse-bom&lt;/artifactId&gt;
+            &lt;version&gt;0.9.3&lt;/version&gt;
+            &lt;type&gt;pom&lt;/type&gt;
+            &lt;scope&gt;import&lt;/scope&gt;
+        &lt;/dependency&gt;
+    &lt;/dependencies&gt;
+&lt;/dependencyManagement&gt;
+
+&lt;dependencies&gt;
+    &lt;!-- Use modules without versions --&gt;
+    &lt;dependency&gt;
+        &lt;groupId&gt;com.vajrapulse&lt;/groupId&gt;
+        &lt;artifactId&gt;vajrapulse-core&lt;/artifactId&gt;
+    &lt;/dependency&gt;
+    &lt;dependency&gt;
+        &lt;groupId&gt;com.vajrapulse&lt;/groupId&gt;
+        &lt;artifactId&gt;vajrapulse-worker&lt;/artifactId&gt;
+    &lt;/dependency&gt;
+&lt;/dependencies&gt;</code></pre>
+                </div>
+            </div>
+            
+            <div class="requirements">
+                <h3>Requirements</h3>
+                <ul>
+                    <li>Java 21 or higher</li>
+                    <li>Gradle 9.0+ or Maven 3.6+</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Performance Section -->
+    <section class="performance">
+        <div class="container">
+            <h2 class="section-title">Performance Benchmarks</h2>
+            <div class="performance-grid">
+                <div class="perf-card">
+                    <div class="perf-number">10,000+</div>
+                    <div class="perf-label">TPS per Worker</div>
+                </div>
+                <div class="perf-card">
+                    <div class="perf-number">1M+</div>
+                    <div class="perf-label">Concurrent Requests</div>
+                </div>
+                <div class="perf-card">
+                    <div class="perf-number">~200 MB</div>
+                    <div class="perf-label">Memory Usage</div>
+                </div>
+                <div class="perf-card">
+                    <div class="perf-number">1.6 MB</div>
+                    <div class="perf-label">Fat JAR Size</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Open Source Section -->
+    <section class="open-source">
+        <div class="container">
+            <div class="open-source-content">
+                <div class="open-source-icon">🔓</div>
+                <h2 class="section-title">Open Source & Free</h2>
+                <p class="section-subtitle">
+                    VajraPulse is completely open source and free to use. 
+                    Released under the <strong>Apache License 2.0</strong>, 
+                    you can use it in commercial and personal projects without restrictions.
+                </p>
+                
+                <div class="license-info">
+                    <div class="license-card">
+                        <div class="license-icon">⚖️</div>
+                        <h3>Apache License 2.0</h3>
+                        <p>
+                            Permissive open source license that allows you to:
+                        </p>
+                        <ul class="license-benefits">
+                            <li>✅ Use commercially</li>
+                            <li>✅ Modify and distribute</li>
+                            <li>✅ Use in proprietary software</li>
+                            <li>✅ Patent use granted</li>
+                        </ul>
+                        <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
+                            Read Full License
+                        </a>
+                    </div>
+                    
+                    <div class="license-card">
+                        <div class="license-icon">💡</div>
+                        <h3>Contribute & Collaborate</h3>
+                        <p>
+                            VajraPulse is built by the community, for the community. 
+                            Contributions are welcome!
+                        </p>
+                        <ul class="license-benefits">
+                            <li>✅ Open source on GitHub</li>
+                            <li>✅ Community-driven development</li>
+                            <li>✅ Issue tracking and PRs welcome</li>
+                            <li>✅ Transparent development process</li>
+                        </ul>
+                        <a href="https://github.com/happysantoo/vajrapulse" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+                            View on GitHub
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <div class="footer-logo">
+                        <img src="assets/images/vajrapulse_logo.png" alt="VajraPulse Logo" class="footer-logo-img">
+                        <span class="footer-logo-text">VajraPulse</span>
+                    </div>
+                    <p class="footer-tagline">वज्र - "thunderbolt"</p>
+                    <p class="footer-description">High-performance load testing with Java 21 virtual threads.</p>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Resources</h4>
+                    <ul>
+                        <li><a href="https://github.com/happysantoo/vajrapulse" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                        <li><a href="https://search.maven.org/search?q=g:com.vajrapulse" target="_blank" rel="noopener noreferrer">Maven Central</a></li>
+                        <li><a href="https://jitpack.io/#happysantoo/vajrapulse" target="_blank" rel="noopener noreferrer">JitPack</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Documentation</h4>
+                    <ul>
+                        <li><a href="https://github.com/happysantoo/vajrapulse/blob/main/README.md" target="_blank" rel="noopener noreferrer">README</a></li>
+                        <li><a href="https://github.com/happysantoo/vajrapulse/tree/main/examples" target="_blank" rel="noopener noreferrer">Examples</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Open Source</h4>
+                    <p>
+                        <strong>Apache License 2.0</strong><br>
+                        Free for commercial and personal use
+                    </p>
+                    <ul>
+                        <li><a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer">License Text</a></li>
+                        <li><a href="https://github.com/happysantoo/vajrapulse/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">View on GitHub</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2024 VajraPulse. Built with Java 21 and virtual threads.</p>
+                <p>Released under <strong>Apache License 2.0</strong> - Free for commercial and personal use.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="assets/js/script.js"></script>
+</body>
+</html>
+
