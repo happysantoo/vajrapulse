@@ -3,7 +3,7 @@ set -euo pipefail
 
 VERSION="${1:-0.9.0}"
 GROUP_PATH="com/vajrapulse"
-MODULES=(vajrapulse-bom vajrapulse-api vajrapulse-core vajrapulse-exporter-console vajrapulse-exporter-opentelemetry vajrapulse-worker)
+MODULES=(vajrapulse-bom vajrapulse-api vajrapulse-core vajrapulse-exporter-console vajrapulse-exporter-opentelemetry vajrapulse-exporter-report vajrapulse-worker)
 REPO_ROOT="${HOME}/.m2/repository"
 
 echo "[central-bundle] Preparing bundle for version ${VERSION}"

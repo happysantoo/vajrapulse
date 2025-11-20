@@ -169,6 +169,7 @@ subprojects {
         "vajrapulse-core",
         "vajrapulse-exporter-console",
         "vajrapulse-exporter-opentelemetry",
+        "vajrapulse-exporter-report",
         "vajrapulse-worker"
     )
     if (project.name in publishable) {
