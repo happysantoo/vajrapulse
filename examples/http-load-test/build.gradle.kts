@@ -24,6 +24,7 @@ dependencies {
     implementation(project(":vajrapulse-core"))
     implementation(project(":vajrapulse-exporter-console"))
     implementation(project(":vajrapulse-exporter-opentelemetry"))
+    implementation(project(":vajrapulse-exporter-report"))
     implementation(project(":vajrapulse-worker"))
     
     // Logback for logging (replaces slf4j-simple)

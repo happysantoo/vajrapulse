@@ -78,5 +78,5 @@ cd internal-tests
 - Integration tests: `*IntegrationSpec.groovy`
 - Sample projects: `internal-tests/*/`
 - Test framework: `internal-tests/test-framework.sh`
-- Documentation: `documents/TESTING_AGENT_*.md`
+- Documentation: `documents/guides/TESTING_AGENT_*.md`
 

@@ -152,7 +152,7 @@ Deliverables:
 - Weekly summary appended to `IMPLEMENTATION_UPDATES.md` referencing issue IDs.
 
 ## 10. Decision Log (New for 0.9)
-Record non-obvious choices in `documents/DECISIONS.md` (e.g., BlazeMeter JTL vs REST first, sampling default 5%).
+Record non-obvious choices in `documents/architecture/DECISIONS.md` (e.g., BlazeMeter JTL vs REST first, sampling default 5%).
 
 ## 11. Roll Forward to 1.0 (Preview)
 After 0.9: focus shifts to distributed coordination, plugin SPI, advanced backpressure, exemplars, persistence.

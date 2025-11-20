@@ -57,7 +57,7 @@ Run with OTLP exporter:
 ```
 Collector expected at `http://localhost:4317` (gRPC). Adjust endpoint in `HttpLoadTestOtelRunner`.
 
-Import `documents/grafana-dashboard-runid-simple.json` in Grafana to visualize latency percentiles & success rate by `run_id`.
+Import `documents/resources/grafana-dashboard-runid-simple.json` in Grafana to visualize latency percentiles & success rate by `run_id`.
 
 ## Configuration Overrides
 Environment vars (e.g. `VAJRAPULSE_EXECUTION_DRAIN_TIMEOUT=5s`) or worker CLI `--config path/to/conf.yml` modify execution semantics.
@@ -72,7 +72,7 @@ Environment vars (e.g. `VAJRAPULSE_EXECUTION_DRAIN_TIMEOUT=5s`) or worker CLI `-
 | sine | `--mean-rate`, `--amplitude`, `--period`, `--duration` | Smooth oscillation around mean |
 | spike | `--base-rate`, `--spike-rate`, `--spike-interval`, `--spike-duration`, `--duration` | Periodic short spikes |
 
-See `documents/LOAD_PATTERNS.md` for deeper design notes.
+See `documents/architecture/LOAD_PATTERNS.md` for deeper design notes.
 
 ## Example Programmatic Runner Selection
 In `HttpLoadTestRunner` pass the pattern name as first arg; steps, sine, spike examples are hard-coded for quick experimentation.

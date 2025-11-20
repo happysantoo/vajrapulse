@@ -92,7 +92,7 @@ dependencies {
 
 ### 5. Comprehensive Documentation ✅
 
-**New File**: `documents/RELEASE_PROCESS.md`
+**New File**: `documents/releases/RELEASE_PROCESS.md`
 
 **Contents**:
 - Quick start guide
@@ -208,8 +208,8 @@ done
 
 ### Created
 - ✅ `scripts/release.sh` - Automated release script
-- ✅ `documents/RELEASE_PROCESS.md` - Comprehensive release guide
-- ✅ `documents/RELEASE_IMPROVEMENTS.md` - This file
+- ✅ `documents/releases/RELEASE_PROCESS.md` - Comprehensive release guide
+- ✅ `documents/releases/RELEASE_IMPROVEMENTS.md` - This file
 
 ### Updated
 - ✅ `examples/http-load-test/build.gradle.kts` - Uses BOM
@@ -233,9 +233,9 @@ done
 
 ## Related Documents
 
-- `documents/RELEASE_PROCESS.md` - Detailed release guide
-- `documents/BOM_IMPLEMENTATION.md` - BOM implementation details
-- `documents/MAVEN_CENTRAL_PUBLISHING.md` - Publishing guide
+- `documents/releases/RELEASE_PROCESS.md` - Detailed release guide
+- `documents/integrations/BOM_IMPLEMENTATION.md` - BOM implementation details
+- `documents/integrations/MAVEN_CENTRAL_PUBLISHING.md` - Publishing guide
 - `scripts/release.sh` - Release script
 - `scripts/create-central-bundle.sh` - Bundle creation script
 

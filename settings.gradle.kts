@@ -5,6 +5,7 @@ include("vajrapulse-api")
 include("vajrapulse-core")
 include("vajrapulse-exporter-console")
 include("vajrapulse-exporter-opentelemetry")
+include("vajrapulse-exporter-report")
 include("vajrapulse-worker")
 
 // Examples

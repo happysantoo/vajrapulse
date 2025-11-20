@@ -36,6 +36,8 @@ public final class RateController {
      *   <li>Expected execution count based on TPS</li>
      *   <li>Delay needed to stay on track</li>
      * </ol>
+     * 
+     * <p>The sleep time is capped to prevent sleeping past the test duration.
      */
     public void waitForNext() {
         long currentCount = executionCount.incrementAndGet();
@@ -57,8 +59,14 @@ public final class RateController {
             long targetNanos = testStartNanos + (currentCount * nanosPerExecution);
             long sleepNanos = targetNanos - System.nanoTime();
             
-            if (sleepNanos > 0) {
-                LockSupport.parkNanos(sleepNanos);
+            // Cap sleep time to prevent sleeping past test duration
+            // Maximum sleep is 1 second to allow loop condition to re-check
+            long maxSleepNanos = 1_000_000_000L; // 1 second
+            long remainingDurationNanos = (loadPattern.getDuration().toMillis() * 1_000_000L) - elapsedNanos;
+            long cappedSleepNanos = Math.min(sleepNanos, Math.min(maxSleepNanos, remainingDurationNanos));
+            
+            if (cappedSleepNanos > 0 && remainingDurationNanos > 0) {
+                LockSupport.parkNanos(cappedSleepNanos);
             }
         }
     }

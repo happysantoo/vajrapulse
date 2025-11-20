@@ -233,9 +233,9 @@ Recommendations:
 6. `internal-tests/test-framework.sh`
 7. `internal-tests/settings.gradle.kts`
 8. `internal-tests/build.gradle.kts`
-9. `documents/TESTING_AGENT_GUIDE.md`
-10. `documents/TESTING_AGENT_INTEGRATION.md`
-11. `documents/TESTING_AGENT_SUMMARY.md` (this file)
+9. `documents/guides/TESTING_AGENT_GUIDE.md`
+10. `documents/guides/TESTING_AGENT_INTEGRATION.md` (if exists)
+11. `documents/guides/TESTING_AGENT_SUMMARY.md` (this file)
 
 ## Conclusion
 
