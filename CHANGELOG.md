@@ -23,11 +23,13 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
   - `CsvReportExporter` - CSV format for spreadsheet analysis (Excel, LibreOffice, Google Sheets)
   - All exporters support file-based report generation with automatic directory creation
   - Reports include summary tables, percentile graphs, and run metadata
+  - Report module included in BOM for version consistency
 - **Document Organization**: Comprehensive document reorganization strategy
   - Documents organized into logical folders: `releases/`, `roadmap/`, `architecture/`, `integrations/`, `guides/`, `analysis/`, `resources/`, `archive/`
   - Clear naming conventions and classification rules
   - Improved discoverability and maintainability
-- **Comparison Guide**: Comprehensive comparison document with JMeter, Gatling, and BlazeMeter
+  - `DOCUMENT_ORGANIZATION_STRATEGY.md` guide created
+- **Comparison Guide**: Comprehensive comparison document (`COMPARISON.md`) with JMeter, Gatling, and BlazeMeter
   - Architecture and concurrency model comparison
   - Performance benchmarks and resource usage analysis
   - Enterprise scalability considerations
@@ -40,17 +42,28 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
   - Integration guides moved to `documents/integrations/`
   - Roadmap documents moved to `documents/roadmap/`
   - Historical documents archived to `documents/archive/`
+  - Updated all documentation references to reflect new paths
+- **HTTP Load Test Example**: Enhanced example to demonstrate report exporters
+  - Added HTML, JSON, and CSV report generation
+  - Updated documentation paths to reflect new folder structure
+  - Report exporters integrated into example pipeline
 - **Cursor IDE Rules**: Enhanced `.cursorrules` with document organization requirements
   - Mandatory document classification rules
   - Clear folder structure guidelines
   - Naming convention standards
+
+### Fixed
+- **RateController**: Fixed potential issue where rate controller could sleep past test duration
+  - Sleep time now capped to prevent sleeping beyond test duration
+  - Maximum sleep capped at 1 second to allow loop condition re-check
+  - Prevents potential timing issues in long-running tests
 
 ### Internal / Technical
 - Report exporters use Jackson for JSON serialization
 - HTML reports use Chart.js for interactive visualizations
 - CSV reports use simple comma-separated format for maximum compatibility
 - All report exporters implement `MetricsExporter` interface for consistent integration
-- Report module included in BOM for version consistency
+- Example dependencies updated to include report module
 
 ### Notes
 - Report exporters enable professional test result sharing and analysis
@@ -58,6 +71,7 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - JSON reports enable CI/CD integration and automated analysis
 - CSV reports enable spreadsheet-based analysis and reporting
 - Document organization improves project maintainability and discoverability
+- **Note**: Several planned features (health endpoints, client-side metrics, additional examples, configuration enhancements) were deferred to future releases to focus on report exporters and infrastructure improvements
 
 ## [0.9.3] - 2025-01-XX
 ### Added
