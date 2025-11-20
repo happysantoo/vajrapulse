@@ -306,8 +306,8 @@ Pre-1.0: Breaking changes allowed (0.x versions)
 
 ## Related Documents
 
-- `documents/MAVEN_CENTRAL_PUBLISHING.md` - Detailed publishing guide
-- `documents/JRELEASER_INTEGRATION.md` - JReleaser configuration
+- `documents/integrations/MAVEN_CENTRAL_PUBLISHING.md` - Detailed publishing guide
+- `documents/integrations/JRELEASER_INTEGRATION.md` - JReleaser configuration
 - `scripts/create-central-bundle.sh` - Bundle creation script
 - `jreleaser.yml` - JReleaser configuration
 

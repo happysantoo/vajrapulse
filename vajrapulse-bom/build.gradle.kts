@@ -14,6 +14,7 @@ dependencies {
         api(project(":vajrapulse-core"))
         api(project(":vajrapulse-exporter-console"))
         api(project(":vajrapulse-exporter-opentelemetry"))
+        api(project(":vajrapulse-exporter-report"))
         api(project(":vajrapulse-worker"))
     }
 }

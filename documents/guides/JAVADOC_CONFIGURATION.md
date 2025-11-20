@@ -275,7 +275,7 @@ BUILD SUCCESSFUL
 
 - `.github/copilot-instructions.md` - Complete Copilot guidelines
 - `.cursorrules` - Cursor IDE configuration
-- `documents/DESIGN.md` - Architecture documentation
+- `documents/architecture/DESIGN.md` - Architecture documentation
 - `README.md` - Project overview
 
 ---

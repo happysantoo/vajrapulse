@@ -7,10 +7,57 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 ## [Unreleased]
 ### Planned
 - Distributed execution layer (multi-worker coordination)
-- Additional exporters: Prometheus, JSON, CSV
+- Health & metrics endpoints for Kubernetes deployments
+- Enhanced client-side metrics (connection pool, timeouts, backlog)
+- Additional examples (database, gRPC, Kafka, multi-endpoint REST)
+- Configuration system enhancements (schema validation, inheritance)
 - Adaptive / feedback-driven load patterns
 - GraalVM native image validation
 - Scenario scripting DSL
+
+## [0.9.4] - 2025-01-XX
+### Added
+- **Report Exporters Module**: New `vajrapulse-exporter-report` module with multiple report formats
+  - `HtmlReportExporter` - Beautiful HTML reports with interactive charts using Chart.js
+  - `JsonReportExporter` - JSON format for programmatic analysis and CI/CD integration
+  - `CsvReportExporter` - CSV format for spreadsheet analysis (Excel, LibreOffice, Google Sheets)
+  - All exporters support file-based report generation with automatic directory creation
+  - Reports include summary tables, percentile graphs, and run metadata
+- **Document Organization**: Comprehensive document reorganization strategy
+  - Documents organized into logical folders: `releases/`, `roadmap/`, `architecture/`, `integrations/`, `guides/`, `analysis/`, `resources/`, `archive/`
+  - Clear naming conventions and classification rules
+  - Improved discoverability and maintainability
+- **Comparison Guide**: Comprehensive comparison document with JMeter, Gatling, and BlazeMeter
+  - Architecture and concurrency model comparison
+  - Performance benchmarks and resource usage analysis
+  - Enterprise scalability considerations
+  - Real-world use case scenarios
+
+### Changed
+- **Documentation Structure**: Reorganized all markdown files into proper `documents/` subfolders
+  - Release documents moved to `documents/releases/`
+  - Architecture documents moved to `documents/architecture/`
+  - Integration guides moved to `documents/integrations/`
+  - Roadmap documents moved to `documents/roadmap/`
+  - Historical documents archived to `documents/archive/`
+- **Cursor IDE Rules**: Enhanced `.cursorrules` with document organization requirements
+  - Mandatory document classification rules
+  - Clear folder structure guidelines
+  - Naming convention standards
+
+### Internal / Technical
+- Report exporters use Jackson for JSON serialization
+- HTML reports use Chart.js for interactive visualizations
+- CSV reports use simple comma-separated format for maximum compatibility
+- All report exporters implement `MetricsExporter` interface for consistent integration
+- Report module included in BOM for version consistency
+
+### Notes
+- Report exporters enable professional test result sharing and analysis
+- HTML reports provide visual insights with interactive charts
+- JSON reports enable CI/CD integration and automated analysis
+- CSV reports enable spreadsheet-based analysis and reporting
+- Document organization improves project maintainability and discoverability
 
 ## [0.9.3] - 2025-01-XX
 ### Added
@@ -113,6 +160,7 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - Coordinate migration requires updating build scripts to `com.vajrapulse` before consuming 0.9.0 artifacts.
 - Signing skipped automatically if `SIGNING_KEY` / `SIGNING_PASSWORD` not provided.
 
-[Unreleased]: https://github.com/happysantoo/vajrapulse/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/happysantoo/vajrapulse/compare/v0.9.4...HEAD
+[0.9.4]: https://github.com/happysantoo/vajrapulse/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/happysantoo/vajrapulse/compare/v0.9.2...v0.9.3
 [0.9.0]: https://github.com/happysantoo/vajrapulse/tree/phase1-opentelemetry-exporter

@@ -54,7 +54,7 @@ curl --request POST \
   "https://central.sonatype.com/api/v1/publisher/upload?name=vajrapulse-0.9.3&publishingType=AUTOMATIC"
 ```
 
-See `documents/RELEASE_0.9.3_MAVEN_CENTRAL_UPLOAD.md` for detailed instructions.
+See `documents/releases/RELEASE_0.9.3_MAVEN_CENTRAL_UPLOAD.md` for detailed instructions.
 
 ### Step 2: Verify Maven Central Sync
 
@@ -100,7 +100,7 @@ Expected: HTTP 200 responses
 - **GitHub Release**: https://github.com/happysantoo/vajrapulse/releases/tag/v0.9.3
 - **Git Tag**: https://github.com/happysantoo/vajrapulse/releases/tag/v0.9.3
 - **Bundle Location**: `/tmp/vajrapulse-0.9.3-central.zip`
-- **Maven Central Upload Guide**: `documents/RELEASE_0.9.3_MAVEN_CENTRAL_UPLOAD.md`
+- **Maven Central Upload Guide**: `documents/releases/RELEASE_0.9.3_MAVEN_CENTRAL_UPLOAD.md`
 
 ---
 

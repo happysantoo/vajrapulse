@@ -88,9 +88,9 @@ The 0.9.3 release branch is **mostly ready** for release. All major features are
 - **Files Verified**:
   - ✅ `CHANGELOG.md` - Comprehensive 0.9.3 release notes
   - ✅ `README.md` - Updated with BOM usage examples
-  - ✅ `documents/RELEASE_0.9.3_CHECKLIST.md` - Complete release checklist
-  - ✅ `documents/RELEASE_0.9.3_FEATURES.md` - Feature planning
-  - ✅ `documents/RELEASE_0.9.3_PR.md` - Pull request documentation
+  - ✅ `documents/releases/RELEASE_0.9.3_CHECKLIST.md` - Complete release checklist
+  - ✅ `documents/releases/RELEASE_0.9.3_FEATURES.md` - Feature planning
+  - ✅ `documents/releases/RELEASE_0.9.3_PR.md` - Pull request documentation
 
 ### 5. Test Suite ⚠️
 - **Status**: MOSTLY PASSING

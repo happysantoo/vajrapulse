@@ -177,7 +177,7 @@ def "should execute task and record metrics"() {
 ### 9. File Organization
 
 #### Markdown Documentation Files
-**All markdown documentation files MUST be created in the `documents/` folder.**
+**All markdown documentation files MUST be created in the `documents/` folder with proper classification.**
 
 **Allowed Exceptions:**
 - `README.md` in root directory (project overview)
@@ -194,24 +194,99 @@ def "should execute task and record metrics"() {
 - ❌ Build directories
 - ❌ Any location outside `documents/` unless it's a standard README
 
+#### Document Classification and Folder Structure
+
+**The `documents/` folder is organized into the following subfolders. ALWAYS create documents in the appropriate subfolder:**
+
+1. **`documents/releases/`** - Release-specific documents
+   - Release checklists (e.g., `RELEASE_0.9.4_CHECKLIST.md`)
+   - Release plans (e.g., `RELEASE_0.9.4_PLAN.md`)
+   - Release summaries (e.g., `RELEASE_0.9.4_SUMMARY.md`)
+   - Release deployment guides
+   - Release-specific changes and validation reports
+   - Release scope documents
+   - **Naming**: `RELEASE_<version>_<type>.md`
+
+2. **`documents/roadmap/`** - Strategic planning and roadmaps
+   - Roadmap documents (e.g., `ROADMAP_TO_1.0.md`)
+   - Strategic planning documents
+   - Gap analysis documents
+   - Minimal viable release plans
+   - Breaking changes planning (pre-1.0)
+
+3. **`documents/architecture/`** - Design and architecture documents
+   - Design documents (e.g., `DESIGN.md`)
+   - Architecture decisions (e.g., `DECISIONS.md`)
+   - Architecture plans (e.g., `EXPORTER_ARCHITECTURE_PLAN.md`)
+   - Technical alternatives analysis
+   - Load pattern specifications
+
+4. **`documents/integrations/`** - Integration guides and publishing
+   - Integration plans (e.g., `BLAZEMETER_INTEGRATION_PLAN.md`)
+   - Publishing guides (e.g., `MAVEN_CENTRAL_PUBLISHING.md`)
+   - Release tool integration (e.g., `JRELEASER_INTEGRATION.md`)
+   - BOM implementation guides
+   - License publishing guides
+
+5. **`documents/guides/`** - User guides and quick references
+   - Quick reference guides (e.g., `EXPORTER_QUICK_REFERENCE.md`)
+   - User guides (e.g., `TESTING_AGENT_GUIDE.md`)
+   - Configuration guides (e.g., `METRICS_TAGGING_GUIDE.md`)
+   - Action items and task lists
+   - Process documentation (e.g., `RELEASE_PROCESS.md`)
+
+6. **`documents/analysis/`** - Analysis and improvement documents
+   - Maintainability analysis
+   - Implementation updates
+   - Critical improvements documents
+   - User wishlist
+
+7. **`documents/resources/`** - Non-markdown files
+   - JSON configuration files (e.g., Grafana dashboards)
+   - Requirements files
+   - Other non-markdown resources
+
+8. **`documents/archive/`** - Completed and historical documents
+   - Completed implementation summaries
+   - Historical release documents (older than current release cycle)
+   - Superseded plans and documents
+   - Completed phase summaries
+
+**Classification Rules:**
+- **Release documents**: Create in `documents/releases/` with version-specific naming
+- **Planning documents**: Create in `documents/roadmap/` or `documents/architecture/` based on scope
+- **Integration guides**: Create in `documents/integrations/` folder
+- **User documentation**: Create in `documents/guides/` folder
+- **Analysis documents**: Create in `documents/analysis/` folder
+- **Resource files**: Create in `documents/resources/` folder
+- **Archive old documents**: Move completed/historical documents to `documents/archive/` when:
+  - Release is complete and next release cycle begins
+  - Implementation is complete and verified
+  - Document is superseded by newer version
+  - Document is older than 2 release cycles
+
 **Rule**: When creating documentation, planning documents, or any markdown files:
-1. **Always create in `documents/` folder** unless it's a standard README
-2. Use descriptive filenames (e.g., `RELEASE_0.9.3_FEATURES.md`)
-3. Follow existing naming conventions in `documents/`
-4. If unsure, use `documents/` - it's the default location for all documentation
+1. **Always create in the appropriate `documents/<subfolder>/` based on document type**
+2. Use descriptive filenames with `UPPER_SNAKE_CASE` (e.g., `RELEASE_0.9.4_CHECKLIST.md`)
+3. Follow existing naming conventions in each subfolder
+4. If unsure about classification, refer to `documents/DOCUMENT_ORGANIZATION_STRATEGY.md`
+5. Archive completed documents to `documents/archive/` when appropriate
 
 **Examples:**
 ```markdown
-✅ documents/RELEASE_0.9.3_FEATURES.md
-✅ documents/BLAZEMETER_INTEGRATION_PLAN.md
-✅ documents/STRATEGIC_ROADMAP.md
+✅ documents/releases/RELEASE_0.9.4_CHECKLIST.md
+✅ documents/integrations/BLAZEMETER_INTEGRATION_PLAN.md
+✅ documents/roadmap/ROADMAP_TO_1.0.md
+✅ documents/architecture/DESIGN.md
+✅ documents/guides/TESTING_AGENT_GUIDE.md
+✅ documents/analysis/MAINTAINABILITY_ANALYSIS_PLAN.md
+✅ documents/resources/grafana-dashboard.json
 ✅ README.md (root - allowed)
 ✅ CHANGELOG.md (root - allowed)
-✅ examples/http-load-test/README.md (example README - allowed)
 
-❌ RELEASE_0.9.3_FEATURES.md (root - forbidden)
+❌ documents/RELEASE_0.9.4_CHECKLIST.md (should be in releases/)
+❌ RELEASE_0.9.4_CHECKLIST.md (root - forbidden)
 ❌ src/main/java/com/vajrapulse/DOCS.md (source directory - forbidden)
-❌ BLAZEMETER_PLAN.md (root - forbidden, should be in documents/)
 ```
 
 ### 10. Build Configuration
@@ -239,15 +314,32 @@ def "should execute task and record metrics"() {
 - Reports are generated in `build/reports/spotbugs/main.html`
 
 #### Pre-Commit Checklist
-**ALWAYS run static analysis before committing:**
+**ALWAYS run these checks before committing:**
 
 ```bash
-# Run static analysis
+# 1. Run tests (with --rerun-tasks to avoid cache issues)
+./gradlew test --rerun-tasks
+
+# 2. Verify code coverage ≥90%
+./gradlew jacocoTestCoverageVerification --rerun-tasks
+
+# 3. Run static analysis
 ./gradlew spotbugsMain
 
-# Or run full check (tests + coverage + static analysis)
-./gradlew check
+# Or run full check (all of the above)
+./gradlew check --rerun-tasks
 ```
+
+**IMPORTANT: Always use `--rerun-tasks` flag**
+- Ensures all tasks are executed, not taken from cache
+- Prevents false positives from cached test results
+- Required for reliable test verification before commits
+
+**Coverage Verification (MANDATORY):**
+- Coverage verification is **REQUIRED** before every commit
+- Build will **FAIL** if coverage drops below 90%
+- All new code MUST have corresponding tests
+- Coverage reports: `build/reports/jacoco/test/html/index.html`
 
 **If SpotBugs finds issues:**
 1. Review the HTML report: `build/reports/spotbugs/main.html`
@@ -264,12 +356,21 @@ def "should execute task and record metrics"() {
 
 #### Cursor IDE Integration
 When working on code:
-1. **Before committing**: Run `./gradlew spotbugsMain` to check for issues
-2. **Review findings**: Open `build/reports/spotbugs/main.html` in browser
-3. **Fix issues**: Address all high/medium confidence findings
-4. **Re-verify**: Run analysis again before committing
+1. **Before committing**: Run `./gradlew check --rerun-tasks` to verify:
+   - All tests pass (with --rerun-tasks to avoid cache issues)
+   - Code coverage ≥90% (`jacocoTestCoverageVerification`)
+   - Static analysis passes (`spotbugsMain`)
+2. **Review findings**: 
+   - Coverage report: `build/reports/jacoco/test/html/index.html`
+   - SpotBugs report: `build/reports/spotbugs/main.html`
+3. **Fix issues**: 
+   - Add tests if coverage drops below 90%
+   - Address all high/medium confidence SpotBugs findings
+4. **Re-verify**: Run `./gradlew check --rerun-tasks` again before committing
 
-**Cursor should remind developers to run static analysis before commits.**
+**Cursor MUST remind developers to:**
+- Always use `--rerun-tasks` flag when running tests before commits
+- Verify code coverage ≥90% before every commit
 
 ### 13. Code Review Checklist
 
@@ -278,6 +379,8 @@ Before submitting code:
 - [ ] Complete JavaDoc on all public APIs
 - [ ] No JavaDoc compiler warnings
 - [ ] **Static analysis passes** (`./gradlew spotbugsMain`)
+- [ ] **Code coverage ≥90%** (`./gradlew jacocoTestCoverageVerification --rerun-tasks`)
+- [ ] **All tests pass** (`./gradlew test --rerun-tasks`)
 - [ ] **Markdown files created in `documents/` folder** (or standard README locations)
 - [ ] No unnecessary dependencies added
 - [ ] Virtual/platform threads used appropriately
@@ -289,6 +392,40 @@ Before submitting code:
 - [ ] Performance considered
 - [ ] Module boundaries respected
 - [ ] All tests pass
+
+#### Code Coverage Requirements (MANDATORY)
+**All modules MUST maintain ≥90% code coverage before release.**
+
+**Pre-Commit Checklist:**
+```bash
+# Verify code coverage meets ≥90% threshold
+./gradlew jacocoTestCoverageVerification
+
+# Or run full check (tests + coverage + static analysis)
+./gradlew check
+```
+
+**Coverage Verification:**
+- Coverage is automatically verified via `jacocoTestCoverageVerification` task
+- Build will FAIL if coverage drops below 90%
+- Coverage reports available in `build/reports/jacoco/test/html/index.html`
+- All new code MUST have corresponding tests
+- If coverage drops, add tests before committing
+
+**Modules with Coverage Requirements:**
+- `vajrapulse-api` - ≥90% coverage required
+- `vajrapulse-core` - ≥90% coverage required
+- `vajrapulse-exporter-*` - ≥90% coverage required
+- `vajrapulse-worker` - Coverage recommended but not enforced
+
+**If Coverage Fails:**
+1. Review coverage report: `build/reports/jacoco/test/html/index.html`
+2. Identify uncovered lines/branches
+3. Add tests to cover missing code paths
+4. Re-run `./gradlew jacocoTestCoverageVerification`
+5. Verify coverage ≥90% before committing
+
+**Cursor should remind developers to verify code coverage before commits.**
 
 ### 14. Common Patterns
 
@@ -335,6 +472,7 @@ LoadPattern pattern = new StaticLoad(100.0, Duration.ofSeconds(30));
 ## References
 
 - See `.github/copilot-instructions.md` for complete guidelines
-- See `documents/DESIGN.md` for architecture details
+- See `documents/architecture/DESIGN.md` for architecture details
+- See `documents/DOCUMENT_ORGANIZATION_STRATEGY.md` for document classification rules
 - See `README.md` for project overview
 

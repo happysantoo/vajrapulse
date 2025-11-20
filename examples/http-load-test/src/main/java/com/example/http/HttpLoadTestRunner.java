@@ -7,8 +7,12 @@ import com.vajrapulse.api.SineWaveLoad;
 import com.vajrapulse.api.SpikeLoad;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
+import com.vajrapulse.exporter.report.HtmlReportExporter;
+import com.vajrapulse.exporter.report.JsonReportExporter;
+import com.vajrapulse.exporter.report.CsvReportExporter;
 import com.vajrapulse.worker.pipeline.MetricsPipeline;
 
+import java.nio.file.Path;
 import java.time.Duration;
 
 /**
@@ -92,16 +96,36 @@ public final class HttpLoadTestRunner {
         System.out.println("Starting load test...");
         System.out.println();
         
+        // Create reports directory
+        Path reportsDir = Path.of("reports");
+        java.nio.file.Files.createDirectories(reportsDir);
+        
+        // Generate timestamped report filenames
+        String timestamp = java.time.Instant.now().toString().replace(":", "-");
+        Path htmlReport = reportsDir.resolve("load-test-" + timestamp + ".html");
+        Path jsonReport = reportsDir.resolve("load-test-" + timestamp + ".json");
+        Path csvReport = reportsDir.resolve("load-test-" + timestamp + ".csv");
+        
         // Pipeline automatically manages lifecycle
+        // Add multiple exporters: console for live updates, reports for analysis
         try (MetricsPipeline pipeline = MetricsPipeline.builder()
             .addExporter(new ConsoleMetricsExporter())
+            .addExporter(new HtmlReportExporter(htmlReport))
+            .addExporter(new JsonReportExporter(jsonReport))
+            .addExporter(new CsvReportExporter(csvReport))
             .withPeriodic(Duration.ofSeconds(5))
             .withPercentiles(0.1,0.2,0.5,0.75,0.9,0.95,0.99)
             .build()) {
             
             pipeline.run(task, loadPattern);
-        } // Automatic cleanup
+        } // Automatic cleanup - reports are written on final export
         
-        System.out.println("Load test completed!\n");
+        System.out.println("Load test completed!");
+        System.out.println();
+        System.out.println("Reports generated:");
+        System.out.println("  HTML: " + htmlReport.toAbsolutePath());
+        System.out.println("  JSON: " + jsonReport.toAbsolutePath());
+        System.out.println("  CSV:  " + csvReport.toAbsolutePath());
+        System.out.println();
     }
 }

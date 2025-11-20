@@ -115,8 +115,8 @@ git push origin v0.9.2
 ```
 
 ## Documentation Updates
-- `documents/LICENSE_PUBLISHING.md` - Updated with signing configuration
-- `documents/RELEASE_0.9.2_CHANGES.md` - This file
+- `documents/integrations/LICENSE_PUBLISHING.md` - Updated with signing configuration
+- `documents/archive/RELEASE_0.9.2_CHANGES.md` - This file
 
 ## Breaking Changes
 None - purely compliance and quality improvements.

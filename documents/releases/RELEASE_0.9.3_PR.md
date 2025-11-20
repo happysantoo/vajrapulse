@@ -122,10 +122,10 @@ This PR merges all changes for VajraPulse 0.9.3 release, including queue depth t
 ### Added
 - `vajrapulse-bom/` - New BOM module
 - `spotbugs-exclude.xml` - SpotBugs exclusion filter
-- `documents/RELEASE_0.9.3_CHECKLIST.md` - Release checklist
-- `documents/RELEASE_0.9.3_PR.md` - This file
-- `documents/RELEASE_0.9.3_FEATURES.md` - Feature planning
-- `documents/RELEASE_0.9.3_QUICK_WINS.md` - Implementation plan
+- `documents/releases/RELEASE_0.9.3_CHECKLIST.md` - Release checklist
+- `documents/releases/RELEASE_0.9.3_PR.md` - This file
+- `documents/releases/RELEASE_0.9.3_FEATURES.md` - Feature planning
+- `documents/releases/RELEASE_0.9.3_QUICK_WINS.md` - Implementation plan
 
 ### Modified
 - `build.gradle.kts` - SpotBugs configuration, removed PMD/Checkstyle

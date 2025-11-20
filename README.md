@@ -29,6 +29,8 @@
 - 📦 **Minimal Dependencies**: ~1.6MB fat JAR, zero-dependency API module
 - 🚀 **Production Ready**: OpenTelemetry integration, comprehensive metrics, graceful shutdown
 
+> 📊 **Want to see how VajraPulse compares to JMeter, Gatling, and BlazeMeter?** Check out our [comprehensive comparison guide](COMPARISON.md) covering architecture, performance, enterprise scalability, and real-world use cases.
+
 ---
 
 ## Quick Start

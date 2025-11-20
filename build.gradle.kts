@@ -11,7 +11,7 @@ plugins {
 allprojects {
     // Artifact coordinates moved to 'com.vajrapulse' for 0.9 release alignment.
     group = "com.vajrapulse"
-    version = "0.9.3"
+    version = "0.9.4"
 
     repositories {
         mavenCentral()
@@ -88,7 +88,7 @@ subprojects {
         )
         sourceDirectories.setFrom(files("src/main/java", "src/main/groovy"))
         // Enforce 90% line coverage for core, api, exporter modules
-        if (project.path in listOf(":vajrapulse-core", ":vajrapulse-api", ":vajrapulse-exporter-console")) {
+        if (project.path in listOf(":vajrapulse-core", ":vajrapulse-api", ":vajrapulse-exporter-console", ":vajrapulse-exporter-opentelemetry", ":vajrapulse-exporter-report")) {
             violationRules {
                 rule {
                     element = "BUNDLE"

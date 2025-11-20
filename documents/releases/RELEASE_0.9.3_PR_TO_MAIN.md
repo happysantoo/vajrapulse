@@ -51,7 +51,7 @@ All pre-release validation steps have been completed:
 - [x] **Signatures**: All GPG signatures valid
 - [x] **Bundle**: Created and verified (`/tmp/vajrapulse-0.9.3-central.zip`)
 
-See `documents/RELEASE_0.9.3_VALIDATION_REPORT.md` for full validation details.
+See `documents/releases/RELEASE_0.9.3_VALIDATION_REPORT.md` for full validation details.
 
 ## 📦 Release Artifacts
 
@@ -84,7 +84,7 @@ All artifacts include:
 ### Key Files Added
 - `vajrapulse-bom/` - New BOM module
 - `spotbugs-exclude.xml` - SpotBugs exclusion filter
-- `documents/RELEASE_0.9.3_*.md` - Release documentation
+- `documents/releases/RELEASE_0.9.3_*.md` - Release documentation
 - `scripts/bug-fixer-*.md` - Bug fixer agent documentation
 
 ### Key Files Modified
@@ -161,7 +161,7 @@ After this PR is merged:
 2. **Upload to Maven Central**:
    - Bundle ready at `/tmp/vajrapulse-0.9.3-central.zip`
    - Upload via Sonatype Portal or API
-   - See `documents/RELEASE_0.9.3_PRE_RELEASE_COMPLETE.md` for details
+   - See `documents/releases/RELEASE_0.9.3_PRE_RELEASE_COMPLETE.md` for details
 
 3. **Verify Maven Central Sync**:
    - Wait 10-120 minutes
