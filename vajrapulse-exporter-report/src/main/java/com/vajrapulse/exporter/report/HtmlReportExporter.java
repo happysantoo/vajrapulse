@@ -394,9 +394,6 @@ public final class HtmlReportExporter implements MetricsExporter {
         if (value instanceof Number n) {
             return n.doubleValue();
         }
-        if (value instanceof Double d) {
-            return d;
-        }
         throw new IllegalArgumentException("Cannot convert " + value.getClass() + " to double");
     }
 }
