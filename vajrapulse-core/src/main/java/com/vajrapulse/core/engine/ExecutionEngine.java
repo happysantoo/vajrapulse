@@ -122,6 +122,11 @@ public final class ExecutionEngine implements AutoCloseable {
         this.executor = createExecutor(taskClass);
         this.shutdownManager = createShutdownManager(runId, metricsCollector);
         shutdownManager.registerShutdownHook();
+        
+        // Register adaptive pattern metrics if applicable
+        if (loadPattern instanceof com.vajrapulse.api.AdaptiveLoadPattern adaptivePattern) {
+            AdaptivePatternMetrics.register(adaptivePattern, metricsCollector.getRegistry(), runId);
+        }
     }
 
     private static String deriveRunId(MetricsCollector metricsCollector) {

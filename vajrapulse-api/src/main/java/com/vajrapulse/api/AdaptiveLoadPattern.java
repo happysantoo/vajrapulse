@@ -55,15 +55,25 @@ public final class AdaptiveLoadPattern implements LoadPattern {
     private volatile long phaseStartTime;
     private volatile int stableIntervalsCount = 0;
     private volatile int rampDownAttempts = 0;
+    private volatile long phaseTransitionCount = 0;
     
     private static final int MAX_RAMP_DOWN_ATTEMPTS = 10;
     private static final int STABLE_INTERVALS_REQUIRED = 3;
     
-    enum Phase {
+    /**
+     * Represents the current phase of the adaptive load pattern.
+     * 
+     * @since 0.9.5
+     */
+    public enum Phase {
+        /** Ramping up TPS until errors occur */
         RAMP_UP,
+        /** Ramping down TPS to find stable point */
         RAMP_DOWN,
+        /** Sustaining at stable TPS */
         SUSTAIN,
-        COMPLETE  // Only if stable point never found
+        /** Test complete (only if stable point never found) */
+        COMPLETE
     }
     
     /**
@@ -233,6 +243,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         if (currentPhase != newPhase) {
             currentPhase = newPhase;
             phaseStartTime = elapsedMillis;
+            phaseTransitionCount++;
             if (newPhase == Phase.SUSTAIN) {
                 stableIntervalsCount = 0;  // Reset for sustain phase
             }
@@ -271,6 +282,15 @@ public final class AdaptiveLoadPattern implements LoadPattern {
      */
     public double getStableTps() {
         return stableTps >= 0 ? stableTps : -1.0;
+    }
+    
+    /**
+     * Gets the number of phase transitions that have occurred.
+     * 
+     * @return phase transition count
+     */
+    public long getPhaseTransitionCount() {
+        return phaseTransitionCount;
     }
 }
 
