@@ -16,99 +16,89 @@ I've created a design document analyzing different approaches for implementing t
 
 Please review and choose your preferred options:
 
-### 1. Error Threshold Definition ⚠️ **REQUIRES DECISION**
+### 1. Error Threshold Definition ✅ **DECISION MADE**
 
 **Question**: What defines when we've hit a bottleneck?
 
 | Option | Description | Pros | Cons |
 |--------|-------------|------|------|
-| **A** ✅ | Failure rate > threshold (e.g., >1%) | Simple, clear | Doesn't consider latency |
+| **A** ✅ **CHOSEN** | Failure rate > threshold (e.g., >1%) | Simple, clear | Doesn't consider latency |
 | **B** | Failure rate OR latency > threshold | More comprehensive | More complex logic |
 | **C** | Configurable (failure rate, latency, or both) | Most flexible | Most complex |
 
-**Recommendation**: **Option A** - Start simple with failure rate only. We can add latency later if needed.
-
-**Your Choice**: [ ] A  [ ] B  [ ] C
+**Decision**: **Option A** - Failure rate only. Simple and clear. Can add latency later if needed.
 
 ---
 
-### 2. Adjustment Frequency ⚠️ **REQUIRES DECISION**
+### 2. Adjustment Frequency ✅ **DECISION MADE**
 
 **Question**: How often should we check metrics and adjust TPS?
 
 | Option | Description | Pros | Cons |
 |--------|-------------|------|------|
-| **A** ✅ | Fixed interval (e.g., every 1 minute) | Simple, predictable | May be slow to react |
+| **A** ✅ **CHOSEN** | Fixed interval (e.g., every 1 minute) | Simple, predictable | May be slow to react |
 | **B** | Sliding window (e.g., last 30 seconds) | More responsive | More complex |
 | **C** | Configurable window size | Flexible | More to configure |
 
-**Recommendation**: **Option A** - Fixed interval. Makes behavior predictable and easier to visualize.
-
-**Your Choice**: [ ] A  [ ] B  [ ] C
+**Decision**: **Option A** - Fixed interval. Predictable and easier to visualize.
 
 ---
 
-### 3. Ramp Down Behavior ⚠️ **REQUIRES DECISION**
+### 3. Ramp Down Behavior ✅ **DECISION MADE**
 
 **Question**: When errors occur, how should we decrease TPS?
 
 | Option | Description | Pros | Cons |
 |--------|-------------|------|------|
-| **A** ✅ | Immediate step down by decrement amount | Simple, clear | May overshoot |
+| **A** ✅ **CHOSEN** | Immediate step down by decrement amount | Simple, clear | May overshoot |
 | **B** | Gradual ramp down over interval | Smoother | More complex |
 | **C** | Step down, wait for stabilization | More conservative | Slower to find stable point |
 
-**Recommendation**: **Option A** - Immediate step down. Simple and effective.
-
-**Your Choice**: [ ] A  [ ] B  [ ] C
+**Decision**: **Option A** - Immediate step down. Simple and effective.
 
 ---
 
-### 4. Stable Point Detection ⚠️ **REQUIRES DECISION**
+### 4. Stable Point Detection ✅ **DECISION MADE**
 
 **Question**: How do we know we've found the stable TPS?
 
 | Option | Description | Pros | Cons |
 |--------|-------------|------|------|
 | **A** | Error rate < threshold for one interval | Fast detection | May be unstable |
-| **B** ✅ | Error rate < threshold for N intervals (2-3) | More reliable | Takes longer |
+| **B** ✅ **CHOSEN** | Error rate < threshold for N intervals (2-3) | More reliable | Takes longer |
 | **C** | Error rate < threshold AND latency stable | Most reliable | Most complex |
 
-**Recommendation**: **Option B** - Require 2-3 consecutive intervals with low error rate. More reliable than single interval.
-
-**Your Choice**: [ ] A  [ ] B  [ ] C
+**Decision**: **Option B** - Require 2-3 consecutive intervals with low error rate. More reliable.
 
 ---
 
-### 5. After Sustain Phase ⚠️ **REQUIRES DECISION**
+### 5. After Sustain Phase ✅ **DECISION MADE**
 
 **Question**: What happens after sustaining at stable point?
 
 | Option | Description | Pros | Cons |
 |--------|-------------|------|------|
-| **A** ✅ | Test ends (return 0 TPS) | Simple, clear end | Test stops |
-| **B** | Continue at stable TPS indefinitely | Can run longer | Need manual stop |
+| **A** | Test ends (return 0 TPS) | Simple, clear end | Test stops |
+| **B** ✅ **CHOSEN** | Continue at stable TPS indefinitely | Can run longer | Need manual stop |
 | **C** | Optionally ramp down to 0 | Clean shutdown | More complex |
 
-**Recommendation**: **Option A** - Test ends after sustain duration. Clear and simple.
+**Decision**: **Option B** - Continue at stable TPS indefinitely. Test continues until manually stopped or duration limit reached.
 
-**Your Choice**: [ ] A  [ ] B  [ ] C
+**Implementation**: After sustain duration, pattern remains in SUSTAIN phase and continues returning stable TPS. Test can be stopped manually or by external duration limit.
 
 ---
 
-### 6. Unlimited Max TPS Representation ⚠️ **REQUIRES DECISION**
+### 6. Unlimited Max TPS Representation ✅ **DECISION MADE**
 
 **Question**: How to represent "no maximum limit"?
 
 | Option | Description | Pros | Cons |
 |--------|-------------|------|------|
-| **A** ✅ | `Double.POSITIVE_INFINITY` | Standard, clear | Need to check for infinity |
+| **A** ✅ **CHOSEN** | `Double.POSITIVE_INFINITY` | Standard, clear | Need to check for infinity |
 | **B** | `-1` or `0` as sentinel | Easy to check | Not standard |
 | **C** | `Optional<Double>` (null = unlimited) | Type-safe | More verbose |
 
-**Recommendation**: **Option A** - Use `Double.POSITIVE_INFINITY`. Standard Java approach.
-
-**Your Choice**: [ ] A  [ ] B  [ ] C
+**Decision**: **Option A** - Use `Double.POSITIVE_INFINITY`. Standard Java approach.
 
 ---
 
@@ -116,31 +106,25 @@ Please review and choose your preferred options:
 
 **Question 7a**: What if stable point is never found? (errors persist even at low TPS)
 
-**Proposal**: After N ramp-down attempts (e.g., 10), complete test with warning message.
-
-**Your Preference**: [ ] Accept proposal  [ ] Different behavior: _______________
+**Decision**: ✅ **Accept proposal** - After N ramp-down attempts (e.g., 10), complete test with warning message.
 
 ---
 
 **Question 7b**: What if we hit max TPS without any errors?
 
-**Proposal**: Treat max TPS as stable point, immediately go to SUSTAIN phase.
-
-**Your Preference**: [ ] Accept proposal  [ ] Different behavior: _______________
+**Decision**: ✅ **Accept proposal** - Treat max TPS as stable point, immediately go to SUSTAIN phase.
 
 ---
 
 **Question 7c**: Should we track latency in addition to error rate?
 
-**Proposal**: Start with error rate only. Add latency tracking in future iteration if needed.
-
-**Your Preference**: [ ] Error rate only  [ ] Include latency from start
+**Decision**: ✅ **Error rate only** - Start simple, add latency tracking in future iteration if needed.
 
 ---
 
-## Recommended Configuration
+## Final Configuration
 
-Based on recommendations above, here's the proposed configuration:
+Based on your decisions, here's the final configuration:
 
 ```java
 new AdaptiveLoadPattern(
@@ -159,7 +143,7 @@ new AdaptiveLoadPattern(
 - Ramp up: +50 TPS every minute until errors or max TPS
 - Ramp down: -100 TPS every minute when errors occur
 - Stable detection: 2-3 consecutive intervals with <1% error rate
-- After sustain: Test ends
+- After sustain: **Continue at stable TPS indefinitely** (until manual stop or duration limit)
 
 ---
 
@@ -235,17 +219,13 @@ new AdaptiveLoadPattern(
 
 **See**: `ADAPTIVE_LOAD_PATTERN_DESIGN.md` section "Distributed Testing Considerations" for details.
 
-### Decision Needed
+### Decision Made ✅
 
 **Question**: Should we design for distributed mode from the start, or implement single-instance first?
 
-**Options**:
-- **A** ✅: Implement single-instance first (0.9.5), add distributed support later
-- **B**: Design distributed support from the start (more complex, longer timeline)
+**Decision**: ✅ **Option A** - Implement single-instance first (0.9.5), add distributed support later.
 
-**Recommendation**: **Option A** - Start simple, extend later. The design is already compatible with distributed mode.
-
-**Your Choice**: [ ] A  [ ] B
+**Rationale**: Start simple, extend later. The design is already compatible with distributed mode.
 
 ---
 
