@@ -214,10 +214,10 @@ START (initialTps)
 [SUSTAIN]
   ├─ Hold at stableTps
   ├─ Monitor for sustainDuration
-  └─ After sustainDuration: → COMPLETE
+  └─ After sustainDuration: Continue at stableTps indefinitely
   ↓
-[COMPLETE]
-  └─ Return 0 TPS (test ends)
+[ONGOING]
+  └─ Return stableTps (test continues until manual stop or duration limit)
 ```
 
 ### Metrics Requirements
@@ -358,15 +358,15 @@ java -jar vajrapulse-worker.jar MyTask \
 
 ---
 
-### Decision 5: What Happens After Sustain?
+### Decision 5: What Happens After Sustain? ✅ **DECISION MADE**
 **Question**: After sustaining at stable point, what happens?
 
 **Options**:
 - **A**: Test ends (return 0 TPS)
-- **B**: Continue at stable TPS indefinitely
+- **B** ✅ **CHOSEN**: Continue at stable TPS indefinitely
 - **C**: Optionally ramp down to 0
 
-**Recommendation**: **Option A** (simplest) - Test ends after sustain duration
+**Decision**: **Option B** - Continue at stable TPS indefinitely. Test continues until manually stopped or duration limit reached.
 
 ---
 
