@@ -179,17 +179,16 @@ class AdaptiveLoadPatternSpec extends Specification {
         pattern.calculateTps(10_000) // Ramp up (no errors)
         errorRate.set(2.0) // 2% errors - always errors from now on (percentage)
         
-        // Transition to RAMP_DOWN at 20_000 (first attempt)
-        // Then 9 more attempts: 30_000, 40_000, ..., 110_000
-        // Total: 10 attempts (1 at transition + 9 more)
-        for (int i = 2; i <= 11; i++) {
+        // Transition to RAMP_DOWN at 20_000 (transition, not counted as attempt yet)
+        // Then 10 attempts while in RAMP_DOWN: 30_000, 40_000, ..., 120_000
+        // After 10 attempts, need one more call to check and transition to COMPLETE
+        for (int i = 2; i <= 12; i++) {
             pattern.calculateTps(i * 10_000) // Each interval
         }
         
         then: "transitions to COMPLETE phase after 10 attempts"
-        // After 10 attempts, rampDownAttempts should be 10, which triggers COMPLETE
         pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.COMPLETE
-        pattern.calculateTps(120_000) == 0.0 // Returns 0 TPS
+        pattern.calculateTps(130_000) == 0.0 // Returns 0 TPS
     }
     
     def "should reject invalid initial TPS"() {
