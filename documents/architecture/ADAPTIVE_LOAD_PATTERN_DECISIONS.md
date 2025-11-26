@@ -206,6 +206,49 @@ new AdaptiveLoadPattern(
 
 ---
 
+---
+
+## Distributed Testing Support
+
+### Current Design Compatibility
+
+**Good News**: The recommended design (Option 1) can be extended for distributed testing without breaking changes.
+
+**Single-Instance Mode (0.9.5)**:
+- `AdaptiveLoadPattern` uses `MetricsCollector` directly
+- Works standalone
+- No coordination needed
+
+**Distributed Mode (Future)**:
+- Add optional `AggregatedMetricsProvider` parameter
+- Add optional `CoordinationService` parameter
+- If provided, uses aggregated metrics from all instances
+- Backward compatible: single-instance mode still works
+
+### Distributed Coordination Approach
+
+**Recommended**: **Metrics Aggregator Pattern**
+- Each instance queries aggregated metrics (via Prometheus/OTEL)
+- Coordination via lightweight service (K8s ConfigMap, Redis, or HTTP)
+- No single point of failure
+- Works with existing orchestration (K8s, BlazeMeter, CI/CD)
+
+**See**: `ADAPTIVE_LOAD_PATTERN_DESIGN.md` section "Distributed Testing Considerations" for details.
+
+### Decision Needed
+
+**Question**: Should we design for distributed mode from the start, or implement single-instance first?
+
+**Options**:
+- **A** ✅: Implement single-instance first (0.9.5), add distributed support later
+- **B**: Design distributed support from the start (more complex, longer timeline)
+
+**Recommendation**: **Option A** - Start simple, extend later. The design is already compatible with distributed mode.
+
+**Your Choice**: [ ] A  [ ] B
+
+---
+
 ## Questions?
 
 If you have questions or want to discuss any of these decisions, please let me know. Once you've made your choices, I'll proceed with implementation.

@@ -35,6 +35,12 @@ public interface LoadPattern {
 - `RateController` calls `calculateTps()` but doesn't have metrics
 - Breaking the interface would affect all existing patterns
 
+**Additional Challenge**: **Distributed Testing Coordination**
+- Multiple VajraPulse instances need to coordinate phase transitions
+- Metrics must be aggregated across all instances
+- TPS adjustments must be synchronized
+- Each instance needs to know its share of total TPS
+
 ---
 
 ## Design Options
@@ -385,6 +391,350 @@ java -jar vajrapulse-worker.jar MyTask \
 - **C**: Query metrics through ExecutionEngine
 
 **Recommendation**: **Option A** (simplest) - Direct MetricsCollector access, easy to test with mock
+
+---
+
+## Distributed Testing Considerations
+
+### Current State
+- VajraPulse currently supports **single-instance** testing only
+- Distributed testing is planned for post-0.9.5 (see `DISTRIBUTED_EXECUTION_ALTERNATIVES.md`)
+- Multiple orchestration approaches are being considered:
+  - Kubernetes Jobs (recommended)
+  - BlazeMeter integration
+  - CI/CD orchestration
+  - Message queue based
+
+### Distributed Adaptive Pattern Requirements
+
+When multiple VajraPulse instances run in distributed mode, the adaptive pattern must:
+
+1. **Coordinate Phase Transitions**
+   - All instances must transition phases together
+   - Cannot have some in RAMP_UP while others in RAMP_DOWN
+   - Requires coordination mechanism
+
+2. **Aggregate Metrics**
+   - Error rate must be calculated from ALL instances
+   - Single instance's error rate is not representative
+   - Need aggregated metrics view
+
+3. **Synchronize TPS Adjustments**
+   - All instances adjust TPS at the same time
+   - Each instance gets its share: `instanceTps = totalTps / workerCount`
+   - Or weighted distribution if configured
+
+4. **Share State**
+   - Current phase must be consistent across instances
+   - Stable TPS must be agreed upon
+   - Phase transitions must be coordinated
+
+### Design Options for Distributed Support
+
+#### Option A: Metrics Aggregator Pattern ⭐ **RECOMMENDED**
+
+**Approach**: Create `AggregatedMetricsProvider` that:
+- Queries metrics from all instances (via Prometheus/OTEL)
+- Provides unified view of error rates
+- Adaptive pattern uses aggregated metrics
+
+**Architecture**:
+```
+┌─────────────────────────────────────────────────┐
+│         Distributed Test (5 Workers)             │
+│                                                  │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│  │ Worker 1 │  │ Worker 2 │  │ Worker 5 │     │
+│  │          │  │          │  │          │     │
+│  │ Adaptive │  │ Adaptive │  │ Adaptive │     │
+│  │ Pattern  │  │ Pattern  │  │ Pattern  │     │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘     │
+│       │             │             │             │
+│       └─────────────┼─────────────┘             │
+│                     │                           │
+│            ┌────────▼────────┐                   │
+│            │  Metrics Store  │                   │
+│            │ (Prometheus/    │                   │
+│            │  OTEL)          │                   │
+│            └────────┬────────┘                   │
+│                     │                           │
+│            ┌────────▼────────┐                   │
+│            │ Aggregated      │                   │
+│            │ MetricsProvider │                   │
+│            │ - Queries all   │                   │
+│            │   instances     │                   │
+│            │ - Calculates    │                   │
+│            │   total error   │                   │
+│            │   rate          │                   │
+│            └────────┬────────┘                   │
+│                     │                           │
+│            ┌────────▼────────┐                   │
+│            │  Coordination   │                   │
+│            │  Service        │                   │
+│            │  - Phase sync   │                   │
+│            │  - TPS broadcast│                   │
+│            └─────────────────┘                   │
+└──────────────────────────────────────────────────┘
+```
+
+**Implementation**:
+```java
+// Aggregated metrics provider
+public interface AggregatedMetricsProvider {
+    /**
+     * Gets aggregated error rate across all instances.
+     * 
+     * @param runId the test run ID
+     * @return aggregated error rate (0.0 to 1.0)
+     */
+    double getAggregatedErrorRate(String runId);
+    
+    /**
+     * Gets total TPS across all instances.
+     * 
+     * @param runId the test run ID
+     * @return total TPS
+     */
+    double getAggregatedTps(String runId);
+}
+
+// Adaptive pattern uses aggregated provider
+public record AdaptiveLoadPattern(
+    // ... existing params ...
+    AggregatedMetricsProvider metricsProvider,  // Instead of MetricsCollector
+    CoordinationService coordinationService      // For phase sync
+) implements LoadPattern {
+    
+    @Override
+    public double calculateTps(long elapsedMillis) {
+        // Get aggregated error rate (across all instances)
+        double errorRate = metricsProvider.getAggregatedErrorRate(runId);
+        
+        // Coordinate phase transitions
+        Phase newPhase = coordinationService.getCurrentPhase(runId);
+        if (newPhase != currentPhase) {
+            currentPhase = newPhase;  // Sync with other instances
+        }
+        
+        // Calculate TPS (each instance gets its share)
+        double totalTps = calculateTotalTps(errorRate);
+        return totalTps / workerCount;  // This instance's share
+    }
+}
+```
+
+**Pros**:
+- ✅ Works with existing orchestration (K8s, BlazeMeter, etc.)
+- ✅ No changes to LoadPattern interface
+- ✅ Leverages existing metrics infrastructure (Prometheus/OTEL)
+- ✅ Each instance can work independently
+- ✅ Fault tolerant (if one instance fails, others continue)
+
+**Cons**:
+- ⚠️ Requires metrics aggregation infrastructure
+- ⚠️ Requires coordination service (or use existing like K8s)
+- ⚠️ Slight delay in metrics propagation
+
+---
+
+#### Option B: Coordinator-Based Pattern
+
+**Approach**: Single coordinator instance manages adaptive pattern, workers follow:
+- Coordinator runs adaptive pattern logic
+- Workers receive TPS commands from coordinator
+- Coordinator aggregates metrics from all workers
+
+**Architecture**:
+```
+┌─────────────────────────────────────────┐
+│         Coordinator Instance             │
+│                                          │
+│  ┌──────────────────────────────────┐  │
+│  │  AdaptiveLoadPattern              │  │
+│  │  - State machine                  │  │
+│  │  - Phase management               │  │
+│  │  - TPS calculation                │  │
+│  └──────────────┬───────────────────┘  │
+│                 │                       │
+│  ┌──────────────▼───────────────────┐  │
+│  │  Coordination Service            │  │
+│  │  - Broadcast TPS to workers      │  │
+│  │  - Aggregate metrics             │  │
+│  └──────────────┬───────────────────┘  │
+└─────────────────┼───────────────────────┘
+                  │
+      ┌───────────┼───────────┐
+      │           │           │
+┌─────▼─────┐ ┌──▼──────┐ ┌─▼────────┐
+│  Worker 1 │ │Worker 2 │ │Worker N  │
+│           │ │         │ │          │
+│  Receives │ │Receives │ │Receives  │
+│  TPS cmd  │ │TPS cmd  │ │TPS cmd   │
+│           │ │         │ │          │
+│  Reports  │ │Reports  │ │Reports   │
+│  metrics  │ │metrics  │ │metrics   │
+└───────────┘ └─────────┘ └──────────┘
+```
+
+**Pros**:
+- ✅ Centralized control
+- ✅ Single source of truth
+- ✅ Simpler worker logic
+
+**Cons**:
+- ❌ Single point of failure
+- ❌ Requires custom coordinator
+- ❌ Doesn't fit existing orchestration models
+- ❌ More complex architecture
+
+---
+
+#### Option C: Peer-to-Peer Coordination
+
+**Approach**: Workers coordinate via gossip protocol:
+- Leader election for coordination
+- Gossip protocol for state sync
+- Distributed consensus for phase transitions
+
+**Pros**:
+- ✅ No single point of failure
+- ✅ Decentralized
+
+**Cons**:
+- ❌ Very complex
+- ❌ Network overhead
+- ❌ Consensus complexity
+- ❌ Overkill for this use case
+
+---
+
+### Recommended Approach: Option A (Metrics Aggregator)
+
+**Why**:
+1. **Works with existing plans**: Fits K8s, BlazeMeter, CI/CD orchestration
+2. **No custom coordinator**: Uses existing metrics infrastructure
+3. **Fault tolerant**: Instance failures don't break coordination
+4. **Simple**: Each instance runs independently, queries aggregated metrics
+
+**Implementation Strategy**:
+
+**Phase 1: Single-Instance (0.9.5)**
+- Implement `AdaptiveLoadPattern` with `MetricsCollector` (as designed)
+- Works standalone
+- No distributed coordination yet
+
+**Phase 2: Distributed Support (Post-0.9.5)**
+- Create `AggregatedMetricsProvider` interface
+- Implement Prometheus-based provider (queries Prometheus for aggregated metrics)
+- Implement OTEL-based provider (queries OTEL collector)
+- Add coordination service (lightweight, can use K8s ConfigMap or simple HTTP service)
+- Update `AdaptiveLoadPattern` to support both modes:
+  ```java
+  // Single-instance mode
+  new AdaptiveLoadPattern(..., metricsCollector, null);
+  
+  // Distributed mode
+  new AdaptiveLoadPattern(..., null, aggregatedMetricsProvider, coordinationService);
+  ```
+
+**Coordination Service Options**:
+
+1. **Kubernetes ConfigMap** (for K8s deployments)
+   - Coordinator writes phase/TPS to ConfigMap
+   - Workers watch ConfigMap for changes
+   - Simple, no additional service needed
+
+2. **Shared Database/Redis** (for non-K8s)
+   - Coordinator writes state to Redis
+   - Workers poll Redis for updates
+   - Works with any orchestration
+
+3. **HTTP Coordination Service** (lightweight)
+   - Simple REST service for phase/TPS coordination
+   - Can be deployed alongside workers
+   - Works everywhere
+
+4. **BlazeMeter API** (for BlazeMeter integration)
+   - Use BlazeMeter's coordination features
+   - Workers report to BlazeMeter
+   - BlazeMeter coordinates adaptive pattern
+
+---
+
+### Distributed Mode Configuration
+
+```java
+// Distributed mode with Prometheus aggregation
+AggregatedMetricsProvider provider = new PrometheusMetricsProvider(
+    "http://prometheus:9090",  // Prometheus endpoint
+    "vajrapulse.execution.total{status=\"failure\"}",  // Error query
+    "vajrapulse.execution.total"  // Total query
+);
+
+CoordinationService coordinator = new KubernetesConfigMapCoordinator(
+    "vajrapulse-adaptive-state",  // ConfigMap name
+    namespace
+);
+
+AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
+    100.0, 50.0, 100.0, Duration.ofMinutes(1),
+    5000.0, Duration.ofMinutes(10), 0.01,
+    null,  // No MetricsCollector in distributed mode
+    provider,
+    coordinator,
+    runId,
+    workerId,
+    workerCount
+);
+```
+
+---
+
+### Design Impact on Current Implementation
+
+**Good News**: The current design (Option 1) can be extended for distributed mode:
+
+1. **Single-Instance Mode** (0.9.5):
+   - `AdaptiveLoadPattern` takes `MetricsCollector`
+   - Queries local metrics
+   - Works standalone
+
+2. **Distributed Mode** (Future):
+   - Add `AggregatedMetricsProvider` parameter (optional)
+   - Add `CoordinationService` parameter (optional)
+   - If provided, use aggregated metrics instead of local
+   - Backward compatible: single-instance still works
+
+**Implementation**:
+```java
+public record AdaptiveLoadPattern(
+    // ... config params ...
+    MetricsCollector localMetrics,              // For single-instance
+    AggregatedMetricsProvider aggregatedMetrics, // For distributed (optional)
+    CoordinationService coordinator              // For distributed (optional)
+) implements LoadPattern {
+    
+    private double getErrorRate() {
+        if (aggregatedMetrics != null) {
+            // Distributed mode: use aggregated metrics
+            return aggregatedMetrics.getAggregatedErrorRate(runId);
+        } else {
+            // Single-instance mode: use local metrics
+            return localMetrics.snapshot().failureRate();
+        }
+    }
+    
+    private Phase getCurrentPhase() {
+        if (coordinator != null) {
+            // Distributed mode: get phase from coordinator
+            return coordinator.getCurrentPhase(runId);
+        } else {
+            // Single-instance mode: use local state
+            return currentPhase;
+        }
+    }
+}
+```
 
 ---
 
