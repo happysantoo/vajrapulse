@@ -1,10 +1,13 @@
 package com.example.http;
 
+import com.vajrapulse.api.AdaptiveLoadPattern;
 import com.vajrapulse.api.LoadPattern;
+import com.vajrapulse.api.MetricsProvider;
 import com.vajrapulse.api.StaticLoad;
 import com.vajrapulse.api.StepLoad;
 import com.vajrapulse.api.SineWaveLoad;
 import com.vajrapulse.api.SpikeLoad;
+import com.vajrapulse.core.engine.MetricsProviderAdapter;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
 import com.vajrapulse.exporter.report.HtmlReportExporter;
@@ -55,19 +58,39 @@ public final class HttpLoadTestRunner {
         HttpLoadTest task = new HttpLoadTest();
         
         // Choose load pattern via simple arg convention (default: static)
-        // args[0] may be: static | step | sine | spike
+        // args[0] may be: static | step | sine | spike | adaptive
         String patternType = (args.length > 0) ? args[0].toLowerCase() : "static";
-        LoadPattern loadPattern = switch (patternType) {
-            case "static" -> new StaticLoad(100.0, Duration.ofSeconds(30));
-            case "step" -> new StepLoad(java.util.List.of(
-                new StepLoad.Step(50.0, Duration.ofSeconds(10)),
-                new StepLoad.Step(150.0, Duration.ofSeconds(10)),
-                new StepLoad.Step(300.0, Duration.ofSeconds(10))
-            ));
-            case "sine" -> new SineWaveLoad(150.0, 75.0, Duration.ofSeconds(30), Duration.ofSeconds(10));
-            case "spike" -> new SpikeLoad(100.0, 600.0, Duration.ofSeconds(30), Duration.ofSeconds(10), Duration.ofSeconds(2));
-            default -> throw new IllegalArgumentException("Unknown pattern type: " + patternType);
-        };
+        
+        // For adaptive pattern, we need metrics collector first (shared with pipeline)
+        com.vajrapulse.core.metrics.MetricsCollector metricsCollector = null;
+        LoadPattern loadPattern;
+        
+        if ("adaptive".equals(patternType)) {
+            metricsCollector = com.vajrapulse.core.metrics.MetricsCollector.createWith(new double[]{0.50, 0.95, 0.99});
+            MetricsProvider metricsProvider = new MetricsProviderAdapter(metricsCollector);
+            loadPattern = new AdaptiveLoadPattern(
+                100.0,  // Start at 100 TPS
+                50.0,   // Increase 50 TPS per interval
+                100.0,  // Decrease 100 TPS per interval when errors occur
+                Duration.ofSeconds(5),  // Check/adjust every 5 seconds
+                500.0,  // Max 500 TPS
+                Duration.ofSeconds(10), // Sustain at stable point for 10 seconds
+                0.01,   // 1% error rate threshold
+                metricsProvider
+            );
+        } else {
+            loadPattern = switch (patternType) {
+                case "static" -> new StaticLoad(100.0, Duration.ofSeconds(30));
+                case "step" -> new StepLoad(java.util.List.of(
+                    new StepLoad.Step(50.0, Duration.ofSeconds(10)),
+                    new StepLoad.Step(150.0, Duration.ofSeconds(10)),
+                    new StepLoad.Step(300.0, Duration.ofSeconds(10))
+                ));
+                case "sine" -> new SineWaveLoad(150.0, 75.0, Duration.ofSeconds(30), Duration.ofSeconds(10));
+                case "spike" -> new SpikeLoad(100.0, 600.0, Duration.ofSeconds(30), Duration.ofSeconds(10), Duration.ofSeconds(2));
+                default -> throw new IllegalArgumentException("Unknown pattern type: " + patternType);
+            };
+        }
         
         // Display test configuration
         System.out.println("╔════════════════════════════════════════════════════════╗");
@@ -91,6 +114,10 @@ public final class HttpLoadTestRunner {
             System.out.println("  SpikeRate:" + sp.spikeRate());
             System.out.println("  Interval: " + sp.spikeInterval());
             System.out.println("  SpikeDur: " + sp.spikeDuration());
+        } else if (loadPattern instanceof AdaptiveLoadPattern ap) {
+            System.out.println("  Initial TPS: " + ap.getCurrentTps());
+            System.out.println("  Max TPS:     500.0");
+            System.out.println("  Error Threshold: 1%");
         }
         System.out.println("  Endpoint: https://httpbin.org/delay/0");
         System.out.println("Starting load test...");
@@ -108,11 +135,25 @@ public final class HttpLoadTestRunner {
         
         // Pipeline automatically manages lifecycle
         // Add multiple exporters: console for live updates, reports for analysis
-        try (MetricsPipeline pipeline = MetricsPipeline.builder()
-            .addExporter(new ConsoleMetricsExporter())
-            .addExporter(new HtmlReportExporter(htmlReport))
-            .addExporter(new JsonReportExporter(jsonReport))
-            .addExporter(new CsvReportExporter(csvReport))
+        var pipelineBuilder = MetricsPipeline.builder()
+            .addExporter(new ConsoleMetricsExporter());
+        
+        // For adaptive pattern, pass registry to report exporters for phase visualization
+        if (loadPattern instanceof AdaptiveLoadPattern && metricsCollector != null) {
+            var registry = metricsCollector.getRegistry();
+            pipelineBuilder
+                .addExporter(new HtmlReportExporter(htmlReport, registry))
+                .addExporter(new JsonReportExporter(jsonReport, registry))
+                .addExporter(new CsvReportExporter(csvReport, registry))
+                .withCollector(metricsCollector);  // Use the same collector for adaptive pattern
+        } else {
+            pipelineBuilder
+                .addExporter(new HtmlReportExporter(htmlReport))
+                .addExporter(new JsonReportExporter(jsonReport))
+                .addExporter(new CsvReportExporter(csvReport));
+        }
+        
+        try (MetricsPipeline pipeline = pipelineBuilder
             .withPeriodic(Duration.ofSeconds(5))
             .withPercentiles(0.1,0.2,0.5,0.75,0.9,0.95,0.99)
             .build()) {

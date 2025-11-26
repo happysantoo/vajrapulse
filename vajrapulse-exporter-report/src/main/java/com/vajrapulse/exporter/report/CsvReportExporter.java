@@ -2,6 +2,7 @@ package com.vajrapulse.exporter.report;
 
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.core.metrics.MetricsExporter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +31,7 @@ public final class CsvReportExporter implements MetricsExporter {
     private static final Logger logger = LoggerFactory.getLogger(CsvReportExporter.class);
     
     private final Path outputPath;
+    private final MeterRegistry registry; // Optional, for adaptive pattern metrics
     
     /**
      * Creates a new CSV report exporter.
@@ -37,7 +39,18 @@ public final class CsvReportExporter implements MetricsExporter {
      * @param outputPath path to output CSV file
      */
     public CsvReportExporter(Path outputPath) {
+        this(outputPath, null);
+    }
+    
+    /**
+     * Creates a new CSV report exporter with registry access for adaptive pattern metrics.
+     * 
+     * @param outputPath path to output CSV file
+     * @param registry meter registry to query for adaptive pattern metrics (optional)
+     */
+    public CsvReportExporter(Path outputPath, MeterRegistry registry) {
         this.outputPath = outputPath;
+        this.registry = registry;
     }
     
     @Override
@@ -125,7 +138,41 @@ public final class CsvReportExporter implements MetricsExporter {
                 });
         }
         
+        // Adaptive pattern metrics (if available)
+        if (registry != null) {
+            rows.add("");
+            rows.add("Adaptive Pattern,");
+            var phaseGauge = registry.find("vajrapulse.adaptive.phase").gauge();
+            var currentTpsGauge = registry.find("vajrapulse.adaptive.current_tps").gauge();
+            var stableTpsGauge = registry.find("vajrapulse.adaptive.stable_tps").gauge();
+            var transitionsGauge = registry.find("vajrapulse.adaptive.phase_transitions").gauge();
+            
+            if (phaseGauge != null && currentTpsGauge != null) {
+                int phaseOrdinal = (int) phaseGauge.value();
+                rows.add("Phase," + getPhaseName(phaseOrdinal));
+                rows.add("Current TPS," + String.format("%.2f", currentTpsGauge.value()));
+                
+                if (stableTpsGauge != null && !Double.isNaN(stableTpsGauge.value())) {
+                    rows.add("Stable TPS," + String.format("%.2f", stableTpsGauge.value()));
+                }
+                
+                if (transitionsGauge != null) {
+                    rows.add("Phase Transitions," + (long) transitionsGauge.value());
+                }
+            }
+        }
+        
         return rows;
+    }
+    
+    private String getPhaseName(int phaseOrdinal) {
+        return switch (phaseOrdinal) {
+            case 0 -> "RAMP_UP";
+            case 1 -> "RAMP_DOWN";
+            case 2 -> "SUSTAIN";
+            case 3 -> "COMPLETE";
+            default -> "UNKNOWN";
+        };
     }
     
     private String escapeCsv(String value) {
