@@ -92,5 +92,60 @@ class HtmlReportExporterSpec extends Specification {
         !html.contains("successChart")
         !html.contains("failureChart")
     }
+
+    def "should include adaptive pattern metrics when registry provided"() {
+        given:
+        def outputPath = tempDir.resolve("adaptive.html")
+        def registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry()
+        def exporter = new HtmlReportExporter(outputPath, registry)
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        
+        // Register adaptive pattern metrics
+        io.micrometer.core.instrument.Gauge.builder("vajrapulse.adaptive.phase", { -> 2.0 }).register(registry)
+        io.micrometer.core.instrument.Gauge.builder("vajrapulse.adaptive.current_tps", { -> 75.0 }).register(registry)
+        io.micrometer.core.instrument.Gauge.builder("vajrapulse.adaptive.stable_tps", { -> 70.0 }).register(registry)
+        io.micrometer.core.instrument.Gauge.builder("vajrapulse.adaptive.phase_transitions", { -> 5.0 }).register(registry)
+        
+        when:
+        exporter.export("Adaptive Test", metrics)
+        
+        then:
+        Files.exists(outputPath)
+        def html = Files.readString(outputPath)
+        html.contains("Adaptive Load Pattern")
+        html.contains("SUSTAIN")
+        html.contains("75.00")
+        html.contains("70.00")
+        html.contains("5")
+    }
+
+    def "should handle registry with missing adaptive metrics"() {
+        given:
+        def outputPath = tempDir.resolve("no-adaptive.html")
+        def registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry()
+        def exporter = new HtmlReportExporter(outputPath, registry)
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        
+        when:
+        exporter.export("No Adaptive", metrics)
+        
+        then:
+        Files.exists(outputPath)
+        noExceptionThrown()
+    }
+
+    def "should format duration correctly"() {
+        given:
+        def outputPath = tempDir.resolve("duration.html")
+        def exporter = new HtmlReportExporter(outputPath)
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 500L, 0L, [:]) // 500ms
+        
+        when:
+        exporter.export("Duration Test", metrics)
+        
+        then:
+        def html = Files.readString(outputPath)
+        html.contains("500ms")
+    }
 }
 

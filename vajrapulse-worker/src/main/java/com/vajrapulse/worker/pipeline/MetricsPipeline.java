@@ -1,7 +1,7 @@
 package com.vajrapulse.worker.pipeline;
 
 import com.vajrapulse.api.LoadPattern;
-import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskLifecycle;
 import com.vajrapulse.core.engine.ExecutionEngine;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.core.metrics.MetricsCollector;
@@ -49,7 +49,7 @@ public final class MetricsPipeline implements AutoCloseable {
     public static Builder builder() { return new Builder(); }
 
     /** Executes the task under the provided load pattern returning final aggregated metrics. */
-    public AggregatedMetrics run(Task task, LoadPattern loadPattern) throws Exception {
+    public AggregatedMetrics run(TaskLifecycle task, LoadPattern loadPattern) throws Exception {
         PeriodicMetricsReporter reporter = null;
         if (periodicInterval != null && !exporters.isEmpty()) {
             reporter = new PeriodicMetricsReporter(collector, exporters.get(0), periodicInterval, fireImmediateLive);
@@ -58,7 +58,11 @@ public final class MetricsPipeline implements AutoCloseable {
 
         AggregatedMetrics finalSnapshot;
         try {
-            try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, collector)) {
+            try (ExecutionEngine engine = ExecutionEngine.builder()
+                    .withTask(task)
+                    .withLoadPattern(loadPattern)
+                    .withMetricsCollector(collector)
+                    .build()) {
                 engine.run();
                 finalSnapshot = collector.snapshot();
             }
@@ -85,7 +89,7 @@ public final class MetricsPipeline implements AutoCloseable {
      * <p>This method is automatically called when using try-with-resources.
      * It ensures exporters are properly closed after final metrics have been exported.
      * 
-     * <p>Note: Final metrics export happens in {@link #run(Task, LoadPattern)} before
+     * <p>Note: Final metrics export happens in {@link #run(TaskLifecycle, LoadPattern)} before
      * this method is called, guaranteeing all metrics are flushed before cleanup.
      */
     @Override

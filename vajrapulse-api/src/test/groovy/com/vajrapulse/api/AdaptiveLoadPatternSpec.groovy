@@ -3,6 +3,7 @@ package com.vajrapulse.api
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicReference
 
 class AdaptiveLoadPatternSpec extends Specification {
@@ -230,8 +231,8 @@ class AdaptiveLoadPatternSpec extends Specification {
         new AdaptiveLoadPattern(100.0, 50.0, 100.0, Duration.ofMinutes(1),
             5000.0, Duration.ofMinutes(10), 0.01, null)
         
-        then: "throws exception"
-        thrown(IllegalArgumentException)
+        then: "throws NullPointerException"
+        thrown(NullPointerException)
     }
     
     def "should track phase transitions"() {
@@ -273,6 +274,186 @@ class AdaptiveLoadPatternSpec extends Specification {
         
         expect: "returns 0 for negative time"
         pattern.calculateTps(-1000) == 0.0
+    }
+
+    def "should be thread-safe under concurrent access"() {
+        given: "an adaptive pattern"
+        def metrics = new TestMetricsProvider(0.0, 1000)
+        def pattern = new AdaptiveLoadPattern(
+            100.0, 50.0, 100.0, Duration.ofMinutes(1),
+            5000.0, Duration.ofMinutes(10), 0.01, metrics
+        )
+
+        when: "multiple threads call calculateTps() concurrently"
+        def results = []
+        def threads = []
+        100.times { iteration ->
+            threads << Thread.startVirtualThread {
+                def elapsed = iteration * 1000L
+                results << pattern.calculateTps(elapsed)
+            }
+        }
+        threads.each { it.join() }
+
+        then: "all operations complete without errors"
+        results.size() == 100
+        results.every { it >= 0.0 }
+        noExceptionThrown()
+    }
+
+    def "should handle concurrent phase transitions correctly"() {
+        given: "an adaptive pattern with changing error rates"
+        def errorRate = new java.util.concurrent.atomic.AtomicReference<Double>(0.0)
+        def metrics = new TestMetricsProvider({ errorRate.get() }, 1000)
+        def pattern = new AdaptiveLoadPattern(
+            100.0, 50.0, 50.0, Duration.ofSeconds(10),
+            5000.0, Duration.ofSeconds(30), 0.01, metrics
+        )
+
+        when: "multiple threads access during phase transitions"
+        def results = []
+        def threads = []
+        
+        // Start threads that will trigger transitions
+        threads << Thread.startVirtualThread {
+            pattern.calculateTps(0) // Initialize
+            pattern.calculateTps(10_000) // Ramp up
+        }
+        
+        threads << Thread.startVirtualThread {
+            Thread.sleep(50)
+            errorRate.set(2.0) // Trigger errors
+            pattern.calculateTps(20_000) // Should transition to RAMP_DOWN
+        }
+        
+        threads << Thread.startVirtualThread {
+            Thread.sleep(100)
+            errorRate.set(0.5) // Low errors
+            pattern.calculateTps(30_000) // Should stay in RAMP_DOWN
+        }
+        
+        threads.each { it.join() }
+
+        then: "state transitions are consistent"
+        def phase = pattern.getCurrentPhase()
+        phase in [AdaptiveLoadPattern.Phase.RAMP_UP, AdaptiveLoadPattern.Phase.RAMP_DOWN]
+        noExceptionThrown()
+    }
+
+    def "should maintain consistency under high concurrency stress"() {
+        given: "an adaptive pattern"
+        def metrics = new TestMetricsProvider(0.0, 1000)
+        def pattern = new AdaptiveLoadPattern(
+            100.0, 50.0, 100.0, Duration.ofMinutes(1),
+            5000.0, Duration.ofMinutes(10), 0.01, metrics
+        )
+
+        when: "stressing with many concurrent calls"
+        def results = Collections.synchronizedList([])
+        def exceptions = Collections.synchronizedList([])
+        def threads = []
+        
+        500.times { iteration ->
+            threads << Thread.startVirtualThread {
+                try {
+                    def elapsed = (iteration % 100) * 1000L
+                    def tps = pattern.calculateTps(elapsed)
+                    results.add(tps)
+                } catch (Exception e) {
+                    exceptions.add(e)
+                }
+            }
+        }
+        threads.each { it.join() }
+
+        then: "all operations complete without exceptions"
+        results.size() + exceptions.size() == 500
+        exceptions.isEmpty() // No exceptions should occur
+        // All results should be valid TPS values (0.0 to max)
+        results.every { it >= 0.0 && it <= 5000.0 }
+    }
+
+    def "should cache metrics queries to reduce overhead"() {
+        given: "a metrics provider that tracks query count"
+        def queryCount = new java.util.concurrent.atomic.AtomicInteger(0)
+        def metrics = new TestMetricsProvider({ queryCount.incrementAndGet(); return 0.0 }, 1000)
+        def pattern = new AdaptiveLoadPattern(
+            100.0, 50.0, 100.0, Duration.ofMillis(200), // Short ramp interval to trigger checkAndAdjust
+            5000.0, Duration.ofMinutes(10), 0.01, metrics
+        )
+
+        when: "calling calculateTps to trigger adjustments"
+        pattern.calculateTps(0) // Initialize
+        pattern.calculateTps(200) // Trigger first adjustment (after ramp interval)
+        def queriesAfterFirst = queryCount.get()
+        
+        // Call multiple times within 100ms batch window
+        pattern.calculateTps(250) // Within batch interval
+        pattern.calculateTps(280) // Within batch interval
+        pattern.calculateTps(290) // Within batch interval
+        
+        def queriesAfterBatched = queryCount.get()
+
+        then: "metrics queries are batched (fewer queries than calls)"
+        // Should have at least one query, but fewer than number of calls
+        queriesAfterBatched >= 1
+        queriesAfterBatched < 5 // Should be less than total number of calls
+
+        when: "calling after batch interval expires"
+        pattern.calculateTps(400) // After ramp interval (200ms)
+        def queriesAfterInterval = queryCount.get()
+
+        then: "metrics are queried again after interval"
+        queriesAfterInterval > queriesAfterBatched // New query after interval
+    }
+
+    def "should refresh metrics cache after batch interval"() {
+        given: "a metrics provider with changing error rates"
+        def errorRate = new java.util.concurrent.atomic.AtomicReference<Double>(0.0)
+        def metrics = new TestMetricsProvider({ errorRate.get() }, 1000)
+        def pattern = new AdaptiveLoadPattern(
+            100.0, 50.0, 50.0, Duration.ofMillis(200), // Short ramp interval
+            5000.0, Duration.ofMinutes(10), 0.01, metrics
+        )
+
+        when: "triggering first adjustment with no errors"
+        pattern.calculateTps(0) // Initialize
+        pattern.calculateTps(200) // Trigger first adjustment
+        errorRate.set(2.0) // Change error rate after first adjustment
+        pattern.calculateTps(250) // Within batch interval - should use cached value
+
+        then: "cached error rate is used (no transition yet)"
+        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_UP
+
+        when: "calling after batch interval expires"
+        pattern.calculateTps(400) // After ramp interval (200ms) - should refresh cache
+
+        then: "new error rate is detected and pattern transitions"
+        // The pattern should detect the error and transition to RAMP_DOWN
+        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_DOWN
+    }
+
+    def "should handle metrics cache initialization correctly"() {
+        given: "a metrics provider"
+        def metrics = new TestMetricsProvider(0.0, 1000)
+        def pattern = new AdaptiveLoadPattern(
+            100.0, 50.0, 100.0, Duration.ofSeconds(1),
+            5000.0, Duration.ofMinutes(10), 0.01, metrics
+        )
+
+        when: "calling calculateTps for the first time"
+        def tps = pattern.calculateTps(0)
+
+        then: "metrics are queried and cached"
+        tps == 100.0
+        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_UP
+
+        when: "calling again immediately"
+        def tps2 = pattern.calculateTps(10) // Within batch interval
+
+        then: "cached metrics are used"
+        tps2 == 100.0
+        noExceptionThrown()
     }
     
     // Test helper class

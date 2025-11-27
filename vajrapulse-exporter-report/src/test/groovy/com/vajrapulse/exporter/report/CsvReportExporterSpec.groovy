@@ -87,5 +87,74 @@ class CsvReportExporterSpec extends Specification {
         def csv = Files.readString(outputPath)
         csv.contains("Total Executions,0")
     }
+
+    def "should include adaptive pattern metrics when registry provided"() {
+        given:
+        def outputPath = tempDir.resolve("adaptive.csv")
+        def registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry()
+        def exporter = new CsvReportExporter(outputPath, registry)
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        
+        // Register adaptive pattern metrics
+        io.micrometer.core.instrument.Gauge.builder("vajrapulse.adaptive.phase", { -> 0.0 }).register(registry)
+        io.micrometer.core.instrument.Gauge.builder("vajrapulse.adaptive.current_tps", { -> 50.0 }).register(registry)
+        io.micrometer.core.instrument.Gauge.builder("vajrapulse.adaptive.stable_tps", { -> 45.0 }).register(registry)
+        io.micrometer.core.instrument.Gauge.builder("vajrapulse.adaptive.phase_transitions", { -> 3.0 }).register(registry)
+        
+        when:
+        exporter.export("Adaptive Test", metrics)
+        
+        then:
+        Files.exists(outputPath)
+        def csv = Files.readString(outputPath)
+        csv.contains("Adaptive Pattern")
+        csv.contains("Phase,RAMP_UP")
+        csv.contains("Current TPS,50.00")
+        csv.contains("Stable TPS,45.00")
+        csv.contains("Phase Transitions,3")
+    }
+
+    def "should handle registry with missing adaptive metrics"() {
+        given:
+        def outputPath = tempDir.resolve("no-adaptive.csv")
+        def registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry()
+        def exporter = new CsvReportExporter(outputPath, registry)
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        
+        when:
+        exporter.export("No Adaptive", metrics)
+        
+        then:
+        Files.exists(outputPath)
+        noExceptionThrown()
+    }
+
+    def "should escape CSV values with quotes"() {
+        given:
+        def outputPath = tempDir.resolve("escape.csv")
+        def exporter = new CsvReportExporter(outputPath)
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        
+        when:
+        exporter.export('Test "quoted" Report', metrics)
+        
+        then:
+        def csv = Files.readString(outputPath)
+        csv.contains('"Test ""quoted"" Report"')
+    }
+
+    def "should escape CSV values with newlines"() {
+        given:
+        def outputPath = tempDir.resolve("newline.csv")
+        def exporter = new CsvReportExporter(outputPath)
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        
+        when:
+        exporter.export("Test\nReport", metrics)
+        
+        then:
+        def csv = Files.readString(outputPath)
+        csv.contains('"Test\nReport"')
+    }
 }
 

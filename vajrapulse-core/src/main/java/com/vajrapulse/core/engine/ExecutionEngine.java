@@ -2,9 +2,7 @@ package com.vajrapulse.core.engine;
 
 import com.vajrapulse.api.LoadPattern;
 import com.vajrapulse.api.PlatformThreads;
-import com.vajrapulse.api.Task;
 import com.vajrapulse.api.TaskLifecycle;
-import com.vajrapulse.api.TaskResult;
 import com.vajrapulse.api.VirtualThreads;
 import com.vajrapulse.core.config.ConfigLoader;
 import com.vajrapulse.core.config.VajraPulseConfig;
@@ -12,11 +10,15 @@ import com.vajrapulse.core.metrics.MetricsCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
+
+import java.lang.ref.Cleaner;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Main execution engine for load testing.
@@ -30,25 +32,38 @@ import java.util.concurrent.TimeUnit;
  *   <li>Graceful shutdown handling</li>
  * </ul>
  * 
- * <p>Supports both legacy {@link Task} and new {@link TaskLifecycle} interfaces.
- * Tasks are automatically adapted to the lifecycle model.
- * 
  * <p>Example usage:
  * <pre>{@code
  * TaskLifecycle task = new MyHttpTask();
  * LoadPattern load = new StaticLoad(100.0, Duration.ofMinutes(5));
- * MetricsCollector metrics = new MetricsCollector();
  * 
- * ExecutionEngine engine = new ExecutionEngine(task, load, metrics);
- * engine.run();
- * 
- * AggregatedMetrics results = metrics.snapshot();
+ * try (MetricsCollector metrics = new MetricsCollector()) {
+ *     ExecutionEngine engine = ExecutionEngine.builder()
+ *         .withTask(task)
+ *         .withLoadPattern(load)
+ *         .withMetricsCollector(metrics)
+ *         .build();
+ *     engine.run();
+ *     
+ *     AggregatedMetrics results = metrics.snapshot();
+ * } // MetricsCollector automatically closed
  * }</pre>
+ * 
+ * <p><strong>Resource Management:</strong> The {@code MetricsCollector} passed to this
+ * engine should be managed by the caller. If using try-with-resources for the engine,
+ * also use try-with-resources for the metrics collector to ensure proper cleanup of
+ * ThreadLocal instances and prevent memory leaks.
  * 
  * @since 0.9.0
  */
 public final class ExecutionEngine implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(ExecutionEngine.class);
+    private static final Cleaner CLEANER = Cleaner.create();
+    
+    /**
+     * Timeout for executor termination in close() method (seconds).
+     */
+    private static final long EXECUTOR_TERMINATION_TIMEOUT_SECONDS = 10L;
     
     private final TaskLifecycle taskLifecycle;
     private final LoadPattern loadPattern;
@@ -58,23 +73,98 @@ public final class ExecutionEngine implements AutoCloseable {
     private final VajraPulseConfig config;
     private final ShutdownManager shutdownManager;
     private final java.util.concurrent.atomic.AtomicBoolean stopRequested = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final Cleaner.Cleanable cleanable; // Safety net for executor cleanup
     
     // Queue depth tracking
     private final java.util.concurrent.atomic.AtomicLong pendingExecutions = new java.util.concurrent.atomic.AtomicLong(0);
     
+    // Engine health tracking
+    private final AtomicLong startTimeMillis = new AtomicLong(0);
+    private volatile EngineState engineState = EngineState.STOPPED;
+    private Counter lifecycleStartCounter;
+    private Counter lifecycleStopCounter;
+    private Counter lifecycleCompleteCounter;
+    private Timer uptimeTimer;
+    
     /**
-     * Creates a new execution engine with automatic run ID generation.
-     * 
-     * @param task the task to execute (will be adapted to TaskLifecycle)
-     * @param loadPattern the load pattern
-     * @param metricsCollector the metrics collector
+     * Engine state for health metrics.
      */
-    public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector) {
-        this(adaptToLifecycle(task), loadPattern, metricsCollector, deriveRunId(metricsCollector), null);
+    private enum EngineState {
+        /** Engine is stopped (not running) */
+        STOPPED(0),
+        /** Engine is running (executing tasks) */
+        RUNNING(1),
+        /** Engine is stopping (shutdown in progress) */
+        STOPPING(2);
+        
+        private final int value;
+        
+        EngineState(int value) {
+            this.value = value;
+        }
+        
+        int getValue() {
+            return value;
+        }
     }
+    
+    /**
+     * Creates a new execution engine using the builder pattern.
+     * 
+     * <p>This is the primary constructor. Use {@link Builder} to create instances.
+     * 
+     * @param builder the builder with all required parameters
+     */
+    private ExecutionEngine(Builder builder) {
+        // Validate required parameters
+        if (builder.taskLifecycle == null) {
+            throw new IllegalArgumentException("Task lifecycle must not be null");
+        }
+        if (builder.loadPattern == null) {
+            throw new IllegalArgumentException("Load pattern must not be null");
+        }
+        if (builder.metricsCollector == null) {
+            throw new IllegalArgumentException("Metrics collector must not be null");
+        }
+        
+        this.taskLifecycle = builder.taskLifecycle;
+        this.loadPattern = builder.loadPattern;
+        this.metricsCollector = builder.metricsCollector;
+        this.runId = builder.runId != null ? builder.runId : deriveRunId(builder.metricsCollector);
+        this.config = builder.config != null ? builder.config : ConfigLoader.load();
 
-    public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId) {
-        this(adaptToLifecycle(task), loadPattern, metricsCollector, runId, null);
+        // Determine thread strategy from annotations
+        Class<?> taskClass = taskLifecycle.getClass();
+        this.executor = createExecutor(taskClass);
+        
+        // Register thread pool metrics
+        com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerExecutorMetrics(
+            executor, taskClass, metricsCollector.getRegistry(), runId);
+        
+        this.shutdownManager = createShutdownManager(runId, metricsCollector);
+        shutdownManager.registerShutdownHook();
+        
+        // Register Cleaner as safety net for executor cleanup
+        this.cleanable = CLEANER.register(this, new ExecutorCleanup(executor, runId));
+        
+        // Register adaptive pattern metrics if applicable
+        if (loadPattern instanceof com.vajrapulse.api.AdaptiveLoadPattern adaptivePattern) {
+            AdaptivePatternMetrics.register(adaptivePattern, metricsCollector.getRegistry(), runId);
+        }
+        
+        // Register engine health metrics
+        var healthMetrics = com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerHealthMetrics(
+            metricsCollector.getRegistry(),
+            runId,
+            () -> engineState.getValue(),
+            startTimeMillis::get
+        );
+        this.lifecycleStartCounter = healthMetrics.lifecycleStartCounter();
+        this.lifecycleStopCounter = healthMetrics.lifecycleStopCounter();
+        this.lifecycleCompleteCounter = healthMetrics.lifecycleCompleteCounter();
+        this.uptimeTimer = healthMetrics.uptimeTimer();
+        
+        // Rate controller metrics will be registered in run() method when RateController is created
     }
     
     /**
@@ -83,22 +173,14 @@ public final class ExecutionEngine implements AutoCloseable {
      * @param taskLifecycle the task lifecycle to execute
      * @param loadPattern the load pattern
      * @param metricsCollector the metrics collector
+     * @deprecated Use {@link #builder()} instead. This constructor will be removed in 0.9.6.
      */
+    @Deprecated(since = "0.9.5", forRemoval = true)
     public ExecutionEngine(TaskLifecycle taskLifecycle, LoadPattern loadPattern, MetricsCollector metricsCollector) {
-        this(taskLifecycle, loadPattern, metricsCollector, deriveRunId(metricsCollector), null);
-    }
-
-    /**
-     * Creates a new execution engine for a legacy Task with explicit run ID and configuration.
-     * 
-     * @param task the legacy task to adapt
-     * @param loadPattern the load pattern
-     * @param metricsCollector the metrics collector
-     * @param runId the run identifier for correlation
-     * @param config configuration, or null to load from default locations
-     */
-    public ExecutionEngine(Task task, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId, VajraPulseConfig config) {
-        this(adaptToLifecycle(task), loadPattern, metricsCollector, runId, config);
+        this(builder()
+                .withTask(taskLifecycle)
+                .withLoadPattern(loadPattern)
+                .withMetricsCollector(metricsCollector));
     }
     
     /**
@@ -109,25 +191,140 @@ public final class ExecutionEngine implements AutoCloseable {
      * @param metricsCollector the metrics collector
      * @param runId the run identifier for correlation
      * @param config configuration, or null to load from default locations
+     * @deprecated Use {@link #builder()} instead. This constructor will be removed in 0.9.6.
      */
+    @Deprecated(since = "0.9.5", forRemoval = true)
     public ExecutionEngine(TaskLifecycle taskLifecycle, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId, VajraPulseConfig config) {
-        this.taskLifecycle = taskLifecycle;
-        this.loadPattern = loadPattern;
-        this.metricsCollector = metricsCollector;
-        this.runId = runId;
-        this.config = config != null ? config : ConfigLoader.load();
-
-        // Determine thread strategy from annotations
-        Class<?> taskClass = taskLifecycle.getClass();
-        this.executor = createExecutor(taskClass);
-        this.shutdownManager = createShutdownManager(runId, metricsCollector);
-        shutdownManager.registerShutdownHook();
+        this(builder()
+                .withTask(taskLifecycle)
+                .withLoadPattern(loadPattern)
+                .withMetricsCollector(metricsCollector)
+                .withRunId(runId)
+                .withConfig(config));
+    }
+    
+    /**
+     * Returns a new builder for constructing an {@link ExecutionEngine}.
+     * 
+     * <p>Example usage:
+     * <pre>{@code
+     * ExecutionEngine engine = ExecutionEngine.builder()
+     *     .withTask(task)
+     *     .withLoadPattern(loadPattern)
+     *     .withMetricsCollector(metricsCollector)
+     *     .withRunId("my-run-id")
+     *     .withConfig(config)
+     *     .build();
+     * }</pre>
+     * 
+     * @return a new builder instance
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
+    
+    /**
+     * Builder for constructing {@link ExecutionEngine} instances.
+     * 
+     * <p>Required parameters:
+     * <ul>
+     *   <li>{@code taskLifecycle} - the task to execute</li>
+     *   <li>{@code loadPattern} - the load pattern</li>
+     *   <li>{@code metricsCollector} - the metrics collector</li>
+     * </ul>
+     * 
+     * <p>Optional parameters:
+     * <ul>
+     *   <li>{@code runId} - run identifier (auto-generated if not provided)</li>
+     *   <li>{@code config} - configuration (loaded from default locations if not provided)</li>
+     * </ul>
+     * 
+     * @since 0.9.5
+     */
+    public static final class Builder {
+        private TaskLifecycle taskLifecycle;
+        private LoadPattern loadPattern;
+        private MetricsCollector metricsCollector;
+        private String runId;
+        private VajraPulseConfig config;
         
-        // Register adaptive pattern metrics if applicable
-        if (loadPattern instanceof com.vajrapulse.api.AdaptiveLoadPattern adaptivePattern) {
-            AdaptivePatternMetrics.register(adaptivePattern, metricsCollector.getRegistry(), runId);
+        private Builder() {
+            // Private constructor - use ExecutionEngine.builder()
+        }
+        
+        /**
+         * Sets the task lifecycle to execute.
+         * 
+         * @param taskLifecycle the task lifecycle (must not be null)
+         * @return this builder
+         * @throws NullPointerException if taskLifecycle is null
+         */
+        public Builder withTask(TaskLifecycle taskLifecycle) {
+            this.taskLifecycle = java.util.Objects.requireNonNull(taskLifecycle, "Task lifecycle must not be null");
+            return this;
+        }
+        
+        /**
+         * Sets the load pattern.
+         * 
+         * @param loadPattern the load pattern (must not be null)
+         * @return this builder
+         * @throws NullPointerException if loadPattern is null
+         */
+        public Builder withLoadPattern(LoadPattern loadPattern) {
+            this.loadPattern = java.util.Objects.requireNonNull(loadPattern, "Load pattern must not be null");
+            return this;
+        }
+        
+        /**
+         * Sets the metrics collector.
+         * 
+         * @param metricsCollector the metrics collector (must not be null)
+         * @return this builder
+         * @throws NullPointerException if metricsCollector is null
+         */
+        public Builder withMetricsCollector(MetricsCollector metricsCollector) {
+            this.metricsCollector = java.util.Objects.requireNonNull(metricsCollector, "Metrics collector must not be null");
+            return this;
+        }
+        
+        /**
+         * Sets the run identifier for correlation.
+         * 
+         * <p>If not provided, a UUID will be generated automatically.
+         * 
+         * @param runId the run identifier
+         * @return this builder
+         */
+        public Builder withRunId(String runId) {
+            this.runId = runId;
+            return this;
+        }
+        
+        /**
+         * Sets the configuration.
+         * 
+         * <p>If not provided, configuration will be loaded from default locations.
+         * 
+         * @param config the configuration
+         * @return this builder
+         */
+        public Builder withConfig(VajraPulseConfig config) {
+            this.config = config;
+            return this;
+        }
+        
+        /**
+         * Builds the {@link ExecutionEngine} instance.
+         * 
+         * @return a new execution engine instance
+         * @throws IllegalArgumentException if required parameters are missing
+         */
+        public ExecutionEngine build() {
+            return new ExecutionEngine(this);
         }
     }
+    
 
     private static String deriveRunId(MetricsCollector metricsCollector) {
         return (metricsCollector.getRunId() != null && !metricsCollector.getRunId().isBlank())
@@ -179,49 +376,17 @@ public final class ExecutionEngine implements AutoCloseable {
             .withRunId(runId)
             .withDrainTimeout(config.execution().drainTimeout())
             .withForceTimeout(config.execution().forceTimeout())
+            .withRegistry(metricsCollector.getRegistry()) // Enable metrics for callback failures
             .onShutdown(() -> {
                 // Flush metrics before shutdown
-                try {
-                    logger.debug("Flushing metrics for runId={}", runId);
-                    // MetricsCollector doesn't have explicit flush, but snapshot captures state
-                    metricsCollector.snapshot();
-                } catch (Exception e) {
-                    logger.error("Failed to flush metrics for runId={}: {}", runId, e.getMessage(), e);
-                }
+                // Note: Exceptions are handled by ShutdownManager with metrics and structured logging
+                logger.debug("Flushing metrics for runId={}", runId);
+                // MetricsCollector doesn't have explicit flush, but snapshot captures state
+                metricsCollector.snapshot();
             })
             .build();
     }
 
-    
-    /**
-     * Adapts a Task to TaskLifecycle interface.
-     * If task is already TaskLifecycle, returns it directly.
-     * Otherwise, creates an adapter that maps setup/execute/cleanup to init/execute/teardown.
-     */
-    private static TaskLifecycle adaptToLifecycle(Task task) {
-        if (task instanceof TaskLifecycle) {
-            return (TaskLifecycle) task;
-        }
-        
-        // Adapter for legacy Task interface
-        return new TaskLifecycle() {
-            @Override
-            public void init() throws Exception {
-                task.setup();
-            }
-            
-            @Override
-            public TaskResult execute(long iteration) throws Exception {
-                return task.execute();
-            }
-            
-            @Override
-            public void teardown() throws Exception {
-                task.cleanup();
-            }
-        };
-    }
-    
     /**
      * Runs the load test with full lifecycle management.
      * 
@@ -247,6 +412,11 @@ public final class ExecutionEngine implements AutoCloseable {
      */
     @SuppressWarnings("RV_RETURN_VALUE_IGNORED_BAD_PRACTICE") // Fire-and-forget executor.submit() is intentional
     public void run() throws Exception {
+        // Update engine state and metrics
+        engineState = EngineState.RUNNING;
+        startTimeMillis.set(System.currentTimeMillis());
+        lifecycleStartCounter.increment();
+        
         logger.info("Starting load test runId={} pattern={} duration={}", runId, loadPattern.getClass().getSimpleName(), loadPattern.getDuration());
         
         // Initialize task
@@ -263,6 +433,10 @@ public final class ExecutionEngine implements AutoCloseable {
         try {
             TaskExecutor taskExecutor = new TaskExecutor(taskLifecycle);
             RateController rateController = new RateController(loadPattern);
+            
+            // Register rate controller accuracy metrics
+            com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerRateControllerMetrics(
+                rateController, loadPattern, metricsCollector.getRegistry(), runId);
             
             long testDurationMillis = loadPattern.getDuration().toMillis();
             long iteration = 0;
@@ -284,11 +458,26 @@ public final class ExecutionEngine implements AutoCloseable {
                 logger.info("Stop requested - draining executor runId={}", runId);
             } else {
                 logger.info("Test duration completed, shutting down executor runId={}", runId);
+                lifecycleCompleteCounter.increment();
             }
             
         } finally {
+            // Update engine state to stopping
+            engineState = EngineState.STOPPING;
+            lifecycleStopCounter.increment();
+            
+            // Record uptime
+            long start = startTimeMillis.get();
+            if (start > 0) {
+                long uptime = System.currentTimeMillis() - start;
+                uptimeTimer.record(uptime, TimeUnit.MILLISECONDS);
+            }
+            
             // Graceful shutdown sequence
             boolean graceful = shutdownManager.awaitShutdown(executor);
+            if (!graceful) {
+                logger.warn("Shutdown was not graceful for runId={}", runId);
+            }
             
             // Always call teardown (cleanup resources)
             try {
@@ -297,6 +486,8 @@ public final class ExecutionEngine implements AutoCloseable {
             } catch (Exception e) {
                 logger.error("Task teardown failed for runId={}: {}", runId, e.getMessage(), e);
             } finally {
+                // Update engine state to stopped
+                engineState = EngineState.STOPPED;
                 logger.info("Run finished runId={}", runId);
             }
         }
@@ -305,10 +496,13 @@ public final class ExecutionEngine implements AutoCloseable {
     @Override
     public void close() {
         shutdownManager.removeShutdownHook();
+        // Clean up the Cleaner registration
+        cleanable.clean();
+        
         if (!executor.isShutdown()) {
             executor.shutdown();
             try {
-                if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                if (!executor.awaitTermination(EXECUTOR_TERMINATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                     executor.shutdownNow();
                 }
             } catch (InterruptedException e) {
@@ -398,21 +592,74 @@ public final class ExecutionEngine implements AutoCloseable {
      * <pre>{@code
      * AggregatedMetrics metrics = ExecutionEngine.execute(task, loadPattern, collector);
      * }</pre>
-     * @param task the task to execute
+     * @param taskLifecycle the task lifecycle to execute
      * @param loadPattern the load pattern definition
      * @param metricsCollector metrics collector instance
      * @return aggregated metrics snapshot after execution
      * @throws Exception if setup or cleanup fails
      */
     public static com.vajrapulse.core.metrics.AggregatedMetrics execute(
-            Task task,
+            TaskLifecycle taskLifecycle,
             LoadPattern loadPattern,
             MetricsCollector metricsCollector) throws Exception {
-        try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector)) {
+        try (ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(taskLifecycle)
+                .withLoadPattern(loadPattern)
+                .withMetricsCollector(metricsCollector)
+                .build()) {
             engine.run();
         }
         return metricsCollector.snapshot();
     }
-
     
+    /**
+     * Cleanup action for executor service.
+     * 
+     * <p>This is called by the {@link Cleaner} API if the {@code ExecutionEngine} is not
+     * properly closed via {@link #close()}. The Cleaner API provides a safety net to ensure
+     * that resources are cleaned up even if the caller forgets to call {@code close()} or if
+     * an exception prevents the normal cleanup path.
+     * 
+     * <p><strong>When Cleaner Runs:</strong>
+     * <ul>
+     *   <li>The Cleaner runs when the {@code ExecutionEngine} instance becomes unreachable
+     *       and is eligible for garbage collection</li>
+     *   <li>The cleanup action runs in a separate thread managed by the Cleaner</li>
+     *   <li>There is no guarantee about when cleanup will occur - it depends on GC timing</li>
+     * </ul>
+     * 
+     * <p><strong>Best Practice:</strong> Always use try-with-resources or explicitly call
+     * {@link #close()} to ensure timely cleanup. Do not rely on the Cleaner as the primary
+     * cleanup mechanism.
+     * 
+     * <p><strong>Example:</strong>
+     * <pre>{@code
+     * try (ExecutionEngine engine = ExecutionEngine.builder()
+     *         .withTask(task)
+     *         .withLoadPattern(load)
+     *         .withMetricsCollector(collector)
+     *         .build()) {
+     *     engine.run();
+     * } // Engine automatically closed, Cleaner not invoked
+     * }</pre>
+     * 
+     * @since 0.9.0
+     */
+    private static final class ExecutorCleanup implements Runnable {
+        private final ExecutorService executor;
+        private final String runId;
+        
+        ExecutorCleanup(ExecutorService executor, String runId) {
+            this.executor = executor;
+            this.runId = runId;
+        }
+        
+        @Override
+        public void run() {
+            if (!executor.isShutdown()) {
+                logger.warn("Executor not closed via close() for runId={}, forcing shutdown via Cleaner", runId);
+                executor.shutdownNow();
+            }
+        }
+    }
 }

@@ -3,10 +3,15 @@ package com.vajrapulse.core.engine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -67,20 +72,39 @@ public final class ShutdownManager {
     
     private static final Duration DEFAULT_DRAIN_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration DEFAULT_FORCE_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration DEFAULT_CALLBACK_TIMEOUT = Duration.ofSeconds(5);
     
     private final String runId;
     private final Duration drainTimeout;
     private final Duration forceTimeout;
+    private final Duration callbackTimeout;
     private final Runnable shutdownCallback;
+    private final MeterRegistry registry; // Optional, for metrics
+    private final Counter callbackFailureCounter; // Optional, only if registry provided
     private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
     private final CountDownLatch shutdownComplete = new CountDownLatch(1);
     private volatile Thread shutdownHookThread;
+    private final java.util.List<Exception> callbackExceptions = new java.util.concurrent.CopyOnWriteArrayList<>();
     
     private ShutdownManager(Builder builder) {
         this.runId = builder.runId;
         this.drainTimeout = builder.drainTimeout;
         this.forceTimeout = builder.forceTimeout;
+        this.callbackTimeout = builder.callbackTimeout != null ? builder.callbackTimeout : DEFAULT_CALLBACK_TIMEOUT;
         this.shutdownCallback = builder.shutdownCallback;
+        this.registry = builder.registry;
+        
+        // Register metrics counter if registry provided
+        if (registry != null) {
+            var counterBuilder = Counter.builder("vajrapulse.shutdown.callback.failures")
+                .description("Number of shutdown callback failures");
+            if (runId != null && !runId.isBlank()) {
+                counterBuilder.tag("run_id", runId);
+            }
+            this.callbackFailureCounter = counterBuilder.register(registry);
+        } else {
+            this.callbackFailureCounter = null;
+        }
     }
     
     /**
@@ -242,15 +266,7 @@ public final class ShutdownManager {
         } finally {
             // Execute cleanup callback (metrics flush, task teardown, etc.)
             if (shutdownCallback != null) {
-                long callbackStartNanos = System.nanoTime();
-                try {
-                    logger.debug("Executing shutdown callback for runId={}", runId);
-                    shutdownCallback.run();
-                    long callbackMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - callbackStartNanos);
-                    logger.debug("Shutdown callback completed in {}ms for runId={}", callbackMillis, runId);
-                } catch (Exception e) {
-                    logger.error("Shutdown callback failed for runId={}: {}", runId, e.getMessage(), e);
-                }
+                executeShutdownCallback();
             }
             
             // Signal shutdown complete
@@ -258,7 +274,153 @@ public final class ShutdownManager {
             
             long totalMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
             logger.info("Shutdown sequence completed in {}ms for runId={}", totalMillis, runId);
+            
+            // Throw exception if callbacks failed
+            if (!callbackExceptions.isEmpty()) {
+                if (callbackExceptions.size() == 1) {
+                    throw new ShutdownException("Shutdown callback failed for runId=" + runId, callbackExceptions.get(0));
+                } else {
+                    RuntimeException combined = new ShutdownException("Multiple shutdown callbacks failed for runId=" + runId);
+                    for (Exception e : callbackExceptions) {
+                        combined.addSuppressed(e);
+                    }
+                    throw combined;
+                }
+            }
         }
+    }
+    
+    /**
+     * Exception thrown when shutdown callbacks fail.
+     * 
+     * @since 0.9.5
+     */
+    public static final class ShutdownException extends RuntimeException {
+        /**
+         * Creates a shutdown exception.
+         * 
+         * @param message the error message
+         * @param cause the cause
+         */
+        public ShutdownException(String message, Throwable cause) {
+            super(message, cause);
+        }
+        
+        /**
+         * Creates a shutdown exception.
+         * 
+         * @param message the error message
+         */
+        public ShutdownException(String message) {
+            super(message);
+        }
+    }
+    
+    /**
+     * Executes the shutdown callback with timeout protection and error handling.
+     * 
+     * <p>This method:
+     * <ul>
+     *   <li>Executes callback with timeout protection</li>
+     *   <li>Records metrics for failures</li>
+     *   <li>Logs structured error information</li>
+     *   <li>Collects exceptions for later reporting</li>
+     * </ul>
+     */
+    private void executeShutdownCallback() {
+        long callbackStartNanos = System.nanoTime();
+        
+        try {
+            logger.debug("Executing shutdown callback for runId={}, timeout={}ms", 
+                runId, callbackTimeout.toMillis());
+            
+            // Execute callback with timeout protection using virtual thread executor
+            // This ensures proper isolation and timeout handling
+            // ExecutorService implements AutoCloseable in Java 21
+            try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+                CompletableFuture<Void> callbackFuture = CompletableFuture.runAsync(shutdownCallback, executor);
+                callbackFuture.get(callbackTimeout.toMillis(), TimeUnit.MILLISECONDS);
+                long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - callbackStartNanos);
+                logger.debug("Shutdown callback completed successfully in {}ms for runId={}", 
+                    elapsedMillis, runId);
+            } catch (TimeoutException e) {
+                long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - callbackStartNanos);
+                String errorMsg = String.format(
+                    "Shutdown callback timed out after %dms (timeout: %dms) for runId=%s",
+                    elapsedMillis, callbackTimeout.toMillis(), runId
+                );
+                logger.error(errorMsg);
+                
+                // Record metrics
+                if (callbackFailureCounter != null) {
+                    callbackFailureCounter.increment();
+                }
+                
+                // Create timeout exception
+                TimeoutException timeoutException = new TimeoutException(errorMsg);
+                callbackExceptions.add(timeoutException);
+            }
+        } catch (java.util.concurrent.ExecutionException e) {
+            // Unwrap ExecutionException to get the actual exception from the callback
+            Throwable cause = e.getCause();
+            long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - callbackStartNanos);
+            
+            // Structured logging with context
+            logger.error(
+                "Shutdown callback failed for runId={}, elapsed={}ms, timeout={}ms, error={}: {}", 
+                runId, 
+                elapsedMillis,
+                callbackTimeout.toMillis(),
+                cause != null ? cause.getClass().getSimpleName() : e.getClass().getSimpleName(),
+                cause != null ? cause.getMessage() : e.getMessage(), 
+                cause != null ? cause : e
+            );
+            
+            // Record metrics
+            if (callbackFailureCounter != null) {
+                callbackFailureCounter.increment();
+            }
+            
+            // Collect the actual exception (unwrap ExecutionException)
+            if (cause instanceof Exception) {
+                callbackExceptions.add((Exception) cause);
+            } else if (cause instanceof Error) {
+                // Wrap Error in RuntimeException
+                callbackExceptions.add(new RuntimeException("Shutdown callback threw error", cause));
+            } else {
+                callbackExceptions.add(new RuntimeException("Shutdown callback failed", cause != null ? cause : e));
+            }
+        } catch (Exception e) {
+            long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - callbackStartNanos);
+            
+            // Structured logging with context
+            logger.error(
+                "Shutdown callback failed for runId={}, elapsed={}ms, timeout={}ms, error={}: {}", 
+                runId, 
+                elapsedMillis,
+                callbackTimeout.toMillis(),
+                e.getClass().getSimpleName(),
+                e.getMessage(), 
+                e
+            );
+            
+            // Record metrics
+            if (callbackFailureCounter != null) {
+                callbackFailureCounter.increment();
+            }
+            
+            // Collect exception
+            callbackExceptions.add(e);
+        }
+    }
+    
+    /**
+     * Gets the list of exceptions that occurred during shutdown callbacks.
+     * 
+     * @return list of callback exceptions (may be empty)
+     */
+    public java.util.List<Exception> getCallbackExceptions() {
+        return java.util.Collections.unmodifiableList(callbackExceptions);
     }
     
     /**
@@ -268,7 +430,9 @@ public final class ShutdownManager {
         private String runId = "default";
         private Duration drainTimeout = DEFAULT_DRAIN_TIMEOUT;
         private Duration forceTimeout = DEFAULT_FORCE_TIMEOUT;
+        private Duration callbackTimeout = DEFAULT_CALLBACK_TIMEOUT;
         private Runnable shutdownCallback = () -> {};
+        private MeterRegistry registry; // Optional, for metrics
         
         /**
          * Sets the run ID for logging correlation.
@@ -326,6 +490,35 @@ public final class ShutdownManager {
          */
         public Builder onShutdown(Runnable callback) {
             this.shutdownCallback = callback;
+            return this;
+        }
+        
+        /**
+         * Sets the timeout for shutdown callback execution.
+         * 
+         * <p>Default: 5 seconds
+         * 
+         * <p>If the callback exceeds this timeout, it will be cancelled and
+         * a {@link TimeoutException} will be added to the callback exceptions list.
+         * 
+         * @param callbackTimeout the callback timeout
+         * @return this builder
+         */
+        public Builder withCallbackTimeout(Duration callbackTimeout) {
+            this.callbackTimeout = callbackTimeout;
+            return this;
+        }
+        
+        /**
+         * Sets the meter registry for metrics collection.
+         * 
+         * <p>If provided, shutdown callback failures will be tracked in metrics.
+         * 
+         * @param registry the meter registry (optional)
+         * @return this builder
+         */
+        public Builder withRegistry(MeterRegistry registry) {
+            this.registry = registry;
             return this;
         }
         
