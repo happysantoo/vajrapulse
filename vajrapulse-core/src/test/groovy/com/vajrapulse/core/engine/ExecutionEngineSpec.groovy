@@ -2,6 +2,7 @@ package com.vajrapulse.core.engine
 
 import com.vajrapulse.api.LoadPattern
 import com.vajrapulse.api.Task
+import com.vajrapulse.api.TaskLifecycle
 import com.vajrapulse.api.TaskResult
 import com.vajrapulse.core.config.VajraPulseConfig
 import com.vajrapulse.core.metrics.MetricsCollector
@@ -228,5 +229,68 @@ class ExecutionEngineSpec extends Specification {
         then: "engine runs successfully with AUTO strategy"
         snapshot.totalExecutions() > 0
         engine.config.execution().defaultThreadPool() == VajraPulseConfig.ThreadPoolStrategy.AUTO
+    }
+    
+    def "should register executor metrics for platform threads"() {
+        given: "a task with platform threads annotation"
+        def task = new BranchCoverageSpec.PTTask()
+        def load = new ShortStaticLoad(10.0, Duration.ofMillis(100))
+        def collector = MetricsCollector.createWithRunId("exec-metrics-test", [0.50d] as double[])
+        def registry = collector.getRegistry()
+
+        when: "creating and running engine"
+        def engine = new ExecutionEngine(task, load, collector)
+        engine.run()
+        engine.close()
+
+        then: "executor metrics are registered"
+        def poolSize = registry.find("vajrapulse.executor.pool.size").gauge()
+        def activeThreads = registry.find("vajrapulse.executor.active.threads").gauge()
+        
+        poolSize != null
+        activeThreads != null
+        poolSize.id.tags.find { it.key == "thread_type" && it.value == "platform" } != null
+        poolSize.id.tags.find { it.key == "run_id" && it.value == "exec-metrics-test" } != null
+    }
+    
+    def "should register executor metrics for virtual threads"() {
+        given: "a task with virtual threads annotation"
+        def task = new BranchCoverageSpec.VTTask()
+        def load = new ShortStaticLoad(10.0, Duration.ofMillis(100))
+        def collector = MetricsCollector.createWithRunId("virtual-exec-test", [0.50d] as double[])
+        def registry = collector.getRegistry()
+
+        when: "creating and running engine"
+        def engine = new ExecutionEngine(task, load, collector)
+        engine.run()
+        engine.close()
+
+        then: "virtual thread executor created (no platform thread metrics)"
+        // Virtual threads don't have ThreadPoolExecutor, so no pool metrics
+        def poolSize = registry.find("vajrapulse.executor.pool.size").gauge()
+        poolSize == null  // Virtual threads don't have pool size
+    }
+    
+    def "should close executor even if run throws exception"() {
+        given: "a task that throws in init"
+        TaskLifecycle task = new TaskLifecycle() {
+            @Override void init() { throw new RuntimeException("init failed") }
+            @Override com.vajrapulse.api.TaskResult execute(long iteration) { return com.vajrapulse.api.TaskResult.success() }
+            @Override void teardown() {}
+        }
+        def load = new ShortStaticLoad(10.0, Duration.ofMillis(100))
+        def collector = new MetricsCollector()
+
+        when: "running engine that fails in init"
+        def engine = new ExecutionEngine(task, load, collector)
+        try {
+            engine.run()
+        } catch (Exception e) {
+            // Expected
+        }
+        engine.close()
+
+        then: "close completes without exception"
+        noExceptionThrown()
     }
 }

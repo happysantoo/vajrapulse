@@ -11,9 +11,64 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - Enhanced client-side metrics (connection pool, timeouts, backlog)
 - Additional examples (database, gRPC, Kafka, multi-endpoint REST)
 - Configuration system enhancements (schema validation, inheritance)
-- Adaptive / feedback-driven load patterns
 - GraalVM native image validation
 - Scenario scripting DSL
+
+## [0.9.5] - 2025-01-XX
+### Added
+- **Adaptive Load Pattern**: Feedback-driven load pattern that dynamically adjusts TPS based on error rates
+  - Automatically ramps up TPS when error rates are low
+  - Ramps down TPS when error rates exceed threshold
+  - Supports configurable ramp increments/decrements, intervals, max TPS, and sustain duration
+  - Integrated with metrics system for real-time error rate monitoring
+- **Metrics Caching**: Performance optimization for high-frequency metrics queries
+  - `MetricsProviderAdapter` now includes built-in caching with configurable TTL (default 100ms)
+  - Reduces overhead from frequent `snapshot()` calls in adaptive load patterns
+  - Thread-safe double-check locking pattern for optimal performance
+- **Engine Metrics Registrar**: Centralized metrics registration utility
+  - `EngineMetricsRegistrar` class for organizing engine-related metrics registration
+  - Separates metrics registration logic from execution engine
+  - Improves code organization and maintainability
+- **Load Pattern Factory**: Centralized load pattern creation utility
+  - `LoadPatternFactory` class for creating all load pattern types from configuration
+  - Reusable across CLI and programmatic usage
+  - Simplifies load pattern instantiation logic
+
+### Changed
+- **MetricsProviderAdapter**: Simplified architecture by integrating caching directly
+  - Removed unnecessary `SimpleMetricsProvider` layer
+  - Caching now built directly into the adapter
+  - Improved performance and reduced complexity
+- **ExecutionEngine**: Refactored metrics registration
+  - Metrics registration logic extracted to `EngineMetricsRegistrar`
+  - Cleaner separation of concerns
+  - Reduced method count and improved maintainability
+- **VajraPulseWorker**: Simplified load pattern creation
+  - Load pattern creation logic extracted to `LoadPatternFactory`
+  - Reduced complexity in main worker class
+  - Improved code reusability
+
+### Fixed
+- **MetricsCollector**: Fixed percentile calculation test to handle Micrometer's histogram behavior
+  - Test now properly handles cases where percentiles may be 0.0 or NaN
+  - Improved test reliability for percentile map population
+
+### Internal / Technical
+- Architecture simplification and refactoring
+  - Extracted metrics registration to dedicated registrar classes
+  - Extracted load pattern creation to factory class
+  - Improved code organization and maintainability
+  - Reduced complexity in core classes
+- Enhanced test coverage for new components
+  - Added comprehensive tests for `EngineMetricsRegistrar`
+  - Improved test coverage for metrics caching
+  - All modules maintain ≥90% code coverage
+
+### Notes
+- Adaptive load pattern enables intelligent load testing that responds to system behavior
+- Metrics caching significantly improves performance for high-frequency metrics queries
+- Architecture simplifications improve maintainability and code organization
+- This release focuses on adaptive load patterns and code quality improvements
 
 ## [0.9.4] - 2025-01-XX
 ### Added

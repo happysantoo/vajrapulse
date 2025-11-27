@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.core.metrics.MetricsExporter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +34,7 @@ public final class JsonReportExporter implements MetricsExporter {
     
     private final Path outputPath;
     private final ObjectMapper mapper;
+    private final MeterRegistry registry; // Optional, for adaptive pattern metrics
     
     /**
      * Creates a new JSON report exporter.
@@ -40,7 +42,18 @@ public final class JsonReportExporter implements MetricsExporter {
      * @param outputPath path to output JSON file
      */
     public JsonReportExporter(Path outputPath) {
+        this(outputPath, null);
+    }
+    
+    /**
+     * Creates a new JSON report exporter with registry access for adaptive pattern metrics.
+     * 
+     * @param outputPath path to output JSON file
+     * @param registry meter registry to query for adaptive pattern metrics (optional)
+     */
+    public JsonReportExporter(Path outputPath, MeterRegistry registry) {
         this.outputPath = outputPath;
+        this.registry = registry;
         this.mapper = new ObjectMapper()
             .enable(SerializationFeature.INDENT_OUTPUT)
             .enable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -127,7 +140,53 @@ public final class JsonReportExporter implements MetricsExporter {
             report.put("failureLatencyMs", failureLatency);
         }
         
+        // Adaptive pattern metrics (if available)
+        if (registry != null) {
+            var adaptiveMetrics = buildAdaptivePatternMetrics();
+            if (!adaptiveMetrics.isEmpty()) {
+                report.put("adaptivePattern", adaptiveMetrics);
+            }
+        }
+        
         return report;
+    }
+    
+    private Map<String, Object> buildAdaptivePatternMetrics() {
+        Map<String, Object> adaptive = new LinkedHashMap<>();
+        
+        var phaseGauge = registry.find("vajrapulse.adaptive.phase").gauge();
+        var currentTpsGauge = registry.find("vajrapulse.adaptive.current_tps").gauge();
+        var stableTpsGauge = registry.find("vajrapulse.adaptive.stable_tps").gauge();
+        var transitionsGauge = registry.find("vajrapulse.adaptive.phase_transitions").gauge();
+        
+        if (phaseGauge == null || currentTpsGauge == null) {
+            return adaptive; // Empty if not available
+        }
+        
+        int phaseOrdinal = (int) phaseGauge.value();
+        adaptive.put("phase", getPhaseName(phaseOrdinal));
+        adaptive.put("phaseOrdinal", phaseOrdinal);
+        adaptive.put("currentTps", currentTpsGauge.value());
+        
+        if (stableTpsGauge != null && !Double.isNaN(stableTpsGauge.value())) {
+            adaptive.put("stableTps", stableTpsGauge.value());
+        }
+        
+        if (transitionsGauge != null) {
+            adaptive.put("phaseTransitions", (long) transitionsGauge.value());
+        }
+        
+        return adaptive;
+    }
+    
+    private String getPhaseName(int phaseOrdinal) {
+        return switch (phaseOrdinal) {
+            case 0 -> "RAMP_UP";
+            case 1 -> "RAMP_DOWN";
+            case 2 -> "SUSTAIN";
+            case 3 -> "COMPLETE";
+            default -> "UNKNOWN";
+        };
     }
     
     private String formatPercentile(double percentile) {

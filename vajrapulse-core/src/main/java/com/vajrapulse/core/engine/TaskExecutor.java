@@ -67,10 +67,11 @@ public final class TaskExecutor {
             
             // TRACE logging for manual validation
             if (logger.isTraceEnabled()) {
+                double durationMs = durationNanos / 1_000_000.0;
                 logger.trace("Iteration={} Status=SUCCESS Duration={}ns ({}ms)", 
                     iteration, 
                     durationNanos,
-                    String.format("%.3f", durationNanos / 1_000_000.0));
+                    durationMs);
             }
             
             Tracing.markSuccess(execSpan);
@@ -86,10 +87,11 @@ public final class TaskExecutor {
             
             // TRACE logging for failures
             if (logger.isTraceEnabled()) {
+                double durationMs = durationNanos / 1_000_000.0;
                 logger.trace("Iteration={} Status=FAILURE Duration={}ns ({}ms) Error={}", 
                     iteration, 
                     durationNanos,
-                    String.format("%.3f", durationNanos / 1_000_000.0),
+                    durationMs,
                     e.getMessage());
             }
             

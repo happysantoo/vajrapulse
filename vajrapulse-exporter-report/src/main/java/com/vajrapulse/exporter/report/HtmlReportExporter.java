@@ -2,6 +2,7 @@ package com.vajrapulse.exporter.report;
 
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.core.metrics.MetricsExporter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +32,7 @@ public final class HtmlReportExporter implements MetricsExporter {
     private static final Logger logger = LoggerFactory.getLogger(HtmlReportExporter.class);
     
     private final Path outputPath;
+    private final MeterRegistry registry; // Optional, for adaptive pattern metrics
     
     /**
      * Creates a new HTML report exporter.
@@ -38,7 +40,18 @@ public final class HtmlReportExporter implements MetricsExporter {
      * @param outputPath path to output HTML file
      */
     public HtmlReportExporter(Path outputPath) {
+        this(outputPath, null);
+    }
+    
+    /**
+     * Creates a new HTML report exporter with registry access for adaptive pattern metrics.
+     * 
+     * @param outputPath path to output HTML file
+     * @param registry meter registry to query for adaptive pattern metrics (optional)
+     */
+    public HtmlReportExporter(Path outputPath, MeterRegistry registry) {
         this.outputPath = outputPath;
+        this.registry = registry;
     }
     
     @Override
@@ -83,6 +96,11 @@ public final class HtmlReportExporter implements MetricsExporter {
         html.append("      <p><strong>Generated:</strong> ").append(Instant.now().toString()).append("</p>\n");
         html.append("      <p><strong>Elapsed Time:</strong> ").append(formatDuration(metrics.elapsedMillis())).append("</p>\n");
         html.append("    </div>\n");
+        
+        // Adaptive Pattern Section (if available)
+        if (registry != null) {
+            html.append(generateAdaptivePatternSection());
+        }
         
         // Summary Cards
         html.append("    <div class=\"summary-grid\">\n");
@@ -252,7 +270,87 @@ public final class HtmlReportExporter implements MetricsExporter {
             script.append("});\n");
         }
         
+        // Adaptive pattern chart (if available)
+        if (registry != null) {
+            script.append(generateAdaptivePatternChartScript());
+        }
+        
         return script.toString();
+    }
+    
+    private String generateAdaptivePatternSection() {
+        var phaseGauge = registry.find("vajrapulse.adaptive.phase").gauge();
+        var currentTpsGauge = registry.find("vajrapulse.adaptive.current_tps").gauge();
+        var stableTpsGauge = registry.find("vajrapulse.adaptive.stable_tps").gauge();
+        var transitionsGauge = registry.find("vajrapulse.adaptive.phase_transitions").gauge();
+        
+        if (phaseGauge == null || currentTpsGauge == null) {
+            return ""; // Adaptive pattern metrics not available
+        }
+        
+        StringBuilder html = new StringBuilder();
+        html.append("    <div class=\"section adaptive-section\">\n");
+        html.append("      <h2>Adaptive Load Pattern</h2>\n");
+        html.append("      <div class=\"summary-grid\">\n");
+        
+        // Phase card
+        int phaseOrdinal = (int) phaseGauge.value();
+        String phaseName = getPhaseName(phaseOrdinal);
+        html.append("        <div class=\"card adaptive-card\">\n");
+        html.append("          <h3>Current Phase</h3>\n");
+        html.append("          <p class=\"value phase-").append(phaseOrdinal).append("\">").append(phaseName).append("</p>\n");
+        html.append("        </div>\n");
+        
+        // Current TPS card
+        html.append("        <div class=\"card adaptive-card\">\n");
+        html.append("          <h3>Current TPS</h3>\n");
+        html.append("          <p class=\"value\">").append(String.format("%.2f", currentTpsGauge.value())).append("</p>\n");
+        html.append("        </div>\n");
+        
+        // Stable TPS card (if found)
+        if (stableTpsGauge != null && !Double.isNaN(stableTpsGauge.value())) {
+            html.append("        <div class=\"card adaptive-card\">\n");
+            html.append("          <h3>Stable TPS</h3>\n");
+            html.append("          <p class=\"value\">").append(String.format("%.2f", stableTpsGauge.value())).append("</p>\n");
+            html.append("        </div>\n");
+        }
+        
+        // Phase transitions card
+        if (transitionsGauge != null) {
+            html.append("        <div class=\"card adaptive-card\">\n");
+            html.append("          <h3>Phase Transitions</h3>\n");
+            html.append("          <p class=\"value\">").append((long) transitionsGauge.value()).append("</p>\n");
+            html.append("        </div>\n");
+        }
+        
+        html.append("      </div>\n");
+        html.append("    </div>\n");
+        
+        return html.toString();
+    }
+    
+    private String generateAdaptivePatternChartScript() {
+        var phaseGauge = registry.find("vajrapulse.adaptive.phase").gauge();
+        var currentTpsGauge = registry.find("vajrapulse.adaptive.current_tps").gauge();
+        
+        if (phaseGauge == null || currentTpsGauge == null) {
+            return ""; // Adaptive pattern metrics not available
+        }
+        
+        // For now, just return empty - phase timeline would require time-series data
+        // which we don't have in the final snapshot. This could be enhanced in the future
+        // to collect phase transitions over time.
+        return "";
+    }
+    
+    private String getPhaseName(int phaseOrdinal) {
+        return switch (phaseOrdinal) {
+            case 0 -> "RAMP_UP";
+            case 1 -> "RAMP_DOWN";
+            case 2 -> "SUSTAIN";
+            case 3 -> "COMPLETE";
+            default -> "UNKNOWN";
+        };
     }
     
     private String getCssStyles() {
@@ -329,6 +427,19 @@ public final class HtmlReportExporter implements MetricsExporter {
               max-height: 400px;
               margin-top: 20px;
             }
+            .adaptive-section {
+              background: #f0f8ff;
+              padding: 20px;
+              border-radius: 6px;
+              border: 2px solid #007bff;
+            }
+            .adaptive-card {
+              border-left-color: #28a745;
+            }
+            .phase-0 { color: #007bff; }
+            .phase-1 { color: #ffc107; }
+            .phase-2 { color: #28a745; }
+            .phase-3 { color: #dc3545; }
             """;
     }
     

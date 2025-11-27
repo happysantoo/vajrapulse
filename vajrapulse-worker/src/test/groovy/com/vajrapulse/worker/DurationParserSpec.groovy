@@ -6,8 +6,7 @@ class DurationParserSpec extends Specification {
 
     def "parseDuration should parse seconds"() {
         when:
-        def worker = new VajraPulseWorker()
-        def duration = worker.parseDuration("30s")
+        def duration = LoadPatternFactory.parseDuration("30s")
 
         then:
         duration == java.time.Duration.ofSeconds(30)
@@ -15,8 +14,7 @@ class DurationParserSpec extends Specification {
 
     def "parseDuration should parse minutes"() {
         when:
-        def worker = new VajraPulseWorker()
-        def duration = worker.parseDuration("5m")
+        def duration = LoadPatternFactory.parseDuration("5m")
 
         then:
         duration == java.time.Duration.ofMinutes(5)
@@ -24,8 +22,7 @@ class DurationParserSpec extends Specification {
 
     def "parseDuration should parse hours"() {
         when:
-        def worker = new VajraPulseWorker()
-        def duration = worker.parseDuration("2h")
+        def duration = LoadPatternFactory.parseDuration("2h")
 
         then:
         duration == java.time.Duration.ofHours(2)
@@ -33,8 +30,7 @@ class DurationParserSpec extends Specification {
 
     def "parseDuration should parse milliseconds"() {
         when:
-        def worker = new VajraPulseWorker()
-        def duration = worker.parseDuration("500ms")
+        def duration = LoadPatternFactory.parseDuration("500ms")
 
         then:
         duration == java.time.Duration.ofMillis(500)
@@ -42,8 +38,7 @@ class DurationParserSpec extends Specification {
 
     def "parseDuration should throw on invalid format"() {
         when:
-        def worker = new VajraPulseWorker()
-        worker.parseDuration("invalid")
+        LoadPatternFactory.parseDuration("invalid")
 
         then:
         thrown(IllegalArgumentException)
@@ -51,8 +46,7 @@ class DurationParserSpec extends Specification {
 
     def "parseDuration should throw on invalid unit"() {
         when:
-        def worker = new VajraPulseWorker()
-        worker.parseDuration("10x")
+        LoadPatternFactory.parseDuration("10x")
 
         then:
         thrown(IllegalArgumentException)

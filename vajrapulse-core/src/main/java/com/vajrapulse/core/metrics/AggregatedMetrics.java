@@ -27,6 +27,15 @@ public record AggregatedMetrics(
     java.util.Map<Double, Double> queueWaitPercentiles
 ) {
     /**
+     * Percentage multiplier for rate calculations (100.0 = 100%).
+     */
+    private static final double PERCENTAGE_MULTIPLIER = 100.0;
+    
+    /**
+     * Milliseconds per second for TPS calculations.
+     */
+    private static final double MILLISECONDS_PER_SECOND = 1000.0;
+    /**
      * Compact constructor that creates defensive copies of mutable collections.
      */
     public AggregatedMetrics {
@@ -51,7 +60,7 @@ public record AggregatedMetrics(
         if (totalExecutions == 0) {
             return 0.0;
         }
-        return (successCount * 100.0) / totalExecutions;
+        return (successCount * PERCENTAGE_MULTIPLIER) / totalExecutions;
     }
     
     /**
@@ -63,7 +72,7 @@ public record AggregatedMetrics(
         if (totalExecutions == 0) {
             return 0.0;
         }
-        return (failureCount * 100.0) / totalExecutions;
+        return (failureCount * PERCENTAGE_MULTIPLIER) / totalExecutions;
     }
     
     /**
@@ -75,7 +84,7 @@ public record AggregatedMetrics(
         if (elapsedMillis == 0) {
             return 0.0;
         }
-        return (totalExecutions * 1000.0) / elapsedMillis;
+        return (totalExecutions * MILLISECONDS_PER_SECOND) / elapsedMillis;
     }
     
     /**
@@ -87,7 +96,7 @@ public record AggregatedMetrics(
         if (elapsedMillis == 0) {
             return 0.0;
         }
-        return (successCount * 1000.0) / elapsedMillis;
+        return (successCount * MILLISECONDS_PER_SECOND) / elapsedMillis;
     }
     
     /**
@@ -99,6 +108,6 @@ public record AggregatedMetrics(
         if (elapsedMillis == 0) {
             return 0.0;
         }
-        return (failureCount * 1000.0) / elapsedMillis;
+        return (failureCount * MILLISECONDS_PER_SECOND) / elapsedMillis;
     }
 }

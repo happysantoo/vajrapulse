@@ -35,7 +35,11 @@ public final class PerformanceHarness {
         var metricsCollector = MetricsCollector.createWithRunId("harness-" + System.currentTimeMillis(), new double[]{0.5,0.95,0.99});
 
         long start = System.nanoTime();
-        try (ExecutionEngine engine = new ExecutionEngine(new NoOpTask(), pattern, metricsCollector)) {
+        try (ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(new NoOpTask())
+                .withLoadPattern(pattern)
+                .withMetricsCollector(metricsCollector)
+                .build()) {
             engine.run();
         }
         long end = System.nanoTime();

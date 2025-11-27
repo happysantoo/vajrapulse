@@ -53,3 +53,44 @@ observability:
   # 1.0 = trace all requests, 0.1 = trace 10%
   # Default: 0.1
   tracingSampleRate: 0.1
+
+# Load Pattern Configuration (optional)
+# These settings can be used by CLI or programmatic usage
+# CLI arguments override these values
+loadPattern:
+  # Pattern type: static, ramp, ramp-sustain, step, sine, spike, adaptive
+  # Default: static
+  type: static
+  
+  # Adaptive pattern configuration (used when type: adaptive)
+  adaptive:
+    # Initial TPS to start with
+    # Default: 100
+    initialTps: 100
+    
+    # TPS increment per adjustment interval during ramp-up
+    # Default: 50
+    rampIncrement: 50
+    
+    # TPS decrement per adjustment interval during ramp-down
+    # Default: 100
+    rampDecrement: 100
+    
+    # Time between TPS adjustments
+    # Supports: ms, s, m, h (e.g., 500ms, 30s, 1m, 1h)
+    # Default: 1m
+    rampInterval: 1m
+    
+    # Maximum TPS limit (use "unlimited" for no limit)
+    # Default: 5000
+    maxTps: 5000
+    
+    # Duration to sustain at stable point before continuing indefinitely
+    # Supports: ms, s, m, h (e.g., 500ms, 30s, 10m, 1h)
+    # Default: 10m
+    sustainDuration: 10m
+    
+    # Error rate threshold (0.0 to 1.0, e.g., 0.01 = 1%)
+    # When error rate exceeds this, pattern ramps down
+    # Default: 0.01
+    errorThreshold: 0.01

@@ -1,13 +1,7 @@
 package com.vajrapulse.worker;
 
 import com.vajrapulse.api.LoadPattern;
-import com.vajrapulse.api.RampUpLoad;
-import com.vajrapulse.api.RampUpToMaxLoad;
-import com.vajrapulse.api.StaticLoad;
-import com.vajrapulse.api.StepLoad;
-import com.vajrapulse.api.SineWaveLoad;
-import com.vajrapulse.api.SpikeLoad;
-import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskLifecycle;
 import com.vajrapulse.core.config.ConfigLoader;
 import com.vajrapulse.core.config.VajraPulseConfig;
 import com.vajrapulse.core.engine.ExecutionEngine;
@@ -23,7 +17,6 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
-import java.time.Duration;
 import java.util.concurrent.Callable;
 
 /**
@@ -63,7 +56,7 @@ public final class VajraPulseWorker implements Callable<Integer> {
     
     @Option(
         names = {"-m", "--mode"},
-        description = "Load pattern mode: static, ramp, ramp-sustain, step, sine, spike (default: ${DEFAULT-VALUE})",
+        description = "Load pattern mode: static, ramp, ramp-sustain, step, sine, spike, adaptive (default: ${DEFAULT-VALUE})",
         defaultValue = "static"
     )
     private String mode;
@@ -135,6 +128,56 @@ public final class VajraPulseWorker implements Callable<Integer> {
     )
     private String spikeDuration;
 
+    // Adaptive pattern specific
+    @Option(
+        names = {"--initial-tps"},
+        description = "Initial TPS for adaptive mode (default: ${DEFAULT-VALUE})",
+        defaultValue = "100"
+    )
+    private double adaptiveInitialTps;
+    
+    @Option(
+        names = {"--ramp-increment"},
+        description = "TPS increment per interval for adaptive mode (default: ${DEFAULT-VALUE})",
+        defaultValue = "50"
+    )
+    private double adaptiveRampIncrement;
+    
+    @Option(
+        names = {"--ramp-decrement"},
+        description = "TPS decrement per interval for adaptive mode (default: ${DEFAULT-VALUE})",
+        defaultValue = "100"
+    )
+    private double adaptiveRampDecrement;
+    
+    @Option(
+        names = {"--ramp-interval"},
+        description = "Time between adjustments for adaptive mode (e.g. 1m) (default: ${DEFAULT-VALUE})",
+        defaultValue = "1m"
+    )
+    private String adaptiveRampInterval;
+    
+    @Option(
+        names = {"--max-tps"},
+        description = "Maximum TPS limit for adaptive mode (use 'unlimited' for no limit) (default: ${DEFAULT-VALUE})",
+        defaultValue = "5000"
+    )
+    private String adaptiveMaxTps;
+    
+    @Option(
+        names = {"--sustain-duration"},
+        description = "Duration to sustain at stable point for adaptive mode (e.g. 10m) (default: ${DEFAULT-VALUE})",
+        defaultValue = "10m"
+    )
+    private String adaptiveSustainDuration;
+    
+    @Option(
+        names = {"--error-threshold"},
+        description = "Error rate threshold for adaptive mode (0.0 to 1.0, e.g. 0.01 = 1%%) (default: ${DEFAULT-VALUE})",
+        defaultValue = "0.01"
+    )
+    private double adaptiveErrorThreshold;
+
     // Run ID override
     @Option(
         names = {"--run-id"},
@@ -157,18 +200,20 @@ public final class VajraPulseWorker implements Callable<Integer> {
         logger.info("TPS: {}", tps);
         logger.info("Duration: {}", duration);
         
-        // Load task class
-        Task task = loadTask(taskClassName);
+        // Load task class (now TaskLifecycle)
+        TaskLifecycle task = loadTask(taskClassName);
         logger.info("Task loaded successfully: {}", task.getClass().getName());
         
-        // Create load pattern
-        LoadPattern loadPattern = createLoadPattern();
-        logger.info("Load pattern created: {}", loadPattern.getClass().getSimpleName());
-        
         // Create runId and metrics collector tagged with it
-        String runId = java.util.UUID.randomUUID().toString();
+        String runId = (runIdOverride != null && !runIdOverride.isBlank())
+            ? runIdOverride
+            : java.util.UUID.randomUUID().toString();
         MetricsCollector metricsCollector = MetricsCollector.createWithRunId(runId, new double[]{0.50, 0.95, 0.99});
         logger.info("Run initialized runId={}", runId);
+        
+        // Create load pattern (adaptive mode needs metrics collector)
+        LoadPattern loadPattern = createLoadPattern(metricsCollector);
+        logger.info("Load pattern created: {}", loadPattern.getClass().getSimpleName());
         // Initialize tracing if enabled
         Tracing.initIfEnabled(runId);
         StructuredLogger.info(VajraPulseWorker.class, "start", java.util.Map.of(
@@ -184,7 +229,13 @@ public final class VajraPulseWorker implements Callable<Integer> {
             ? ConfigLoader.load(java.nio.file.Paths.get(configPath))
             : ConfigLoader.load();
 
-        try (ExecutionEngine engine = new ExecutionEngine(task, loadPattern, metricsCollector, runId, config)) {
+        try (ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(loadPattern)
+                .withMetricsCollector(metricsCollector)
+                .withRunId(runId)
+                .withConfig(config)
+                .build()) {
             engine.run();
             logger.info("Load test completed");
         }
@@ -203,15 +254,15 @@ public final class VajraPulseWorker implements Callable<Integer> {
         return 0;
     }
     
-    private Task loadTask(String className) throws Exception {
+    private TaskLifecycle loadTask(String className) throws Exception {
         try {
             Class<?> taskClass = Class.forName(className);
-            if (!Task.class.isAssignableFrom(taskClass)) {
+            if (!TaskLifecycle.class.isAssignableFrom(taskClass)) {
                 throw new IllegalArgumentException(
-                    "Class " + className + " does not implement Task interface"
+                    "Class " + className + " does not implement TaskLifecycle interface"
                 );
             }
-            return (Task) taskClass.getDeclaredConstructor().newInstance();
+            return (TaskLifecycle) taskClass.getDeclaredConstructor().newInstance();
         } catch (ClassNotFoundException e) {
             logger.error("Task class not found: {}", className);
             throw new IllegalArgumentException("Task class not found: " + className, e);
@@ -221,91 +272,29 @@ public final class VajraPulseWorker implements Callable<Integer> {
         }
     }
     
-    private LoadPattern createLoadPattern() {
-        Duration testDuration = parseDuration(duration);
-        
-        switch (mode.toLowerCase()) {
-            case "static" -> {
-                logger.debug("Creating static load: {} TPS for {}", tps, testDuration);
-                return new StaticLoad(tps, testDuration);
-            }
-            case "ramp" -> {
-                Duration ramp = parseDuration(rampDuration);
-                logger.debug("Creating ramp-up load: 0 to {} TPS over {}", tps, ramp);
-                return new RampUpLoad(tps, ramp);
-            }
-            case "ramp-sustain" -> {
-                Duration ramp = parseDuration(rampDuration);
-                Duration sustain = testDuration.minus(ramp);
-                logger.debug("Creating ramp-sustain load: 0 to {} TPS over {}, sustain for {}", 
-                    tps, ramp, sustain);
-                return new RampUpToMaxLoad(tps, ramp, sustain);
-            }
-            case "step" -> {
-                if (stepsSpec == null || stepsSpec.isBlank()) {
-                    throw new IllegalArgumentException("--steps required for step mode");
-                }
-                java.util.List<StepLoad.Step> steps = new java.util.ArrayList<>();
-                for (String part : stepsSpec.split(",")) {
-                    String trimmed = part.trim();
-                    if (trimmed.isEmpty()) continue;
-                    String[] pieces = trimmed.split(":");
-                    if (pieces.length != 2) {
-                        throw new IllegalArgumentException("Invalid step segment: " + trimmed + " (expected rate:duration)");
-                    }
-                    double rate = Double.parseDouble(pieces[0]);
-                    Duration d = parseDuration(pieces[1]);
-                    steps.add(new StepLoad.Step(rate, d));
-                }
-                if (steps.isEmpty()) {
-                    throw new IllegalArgumentException("No valid steps parsed for step mode");
-                }
-                logger.debug("Creating step load with {} steps totalDuration={}", steps.size(), new StepLoad(steps).getDuration());
-                return new StepLoad(java.util.List.copyOf(steps));
-            }
-            case "sine" -> {
-                if (sineMeanRate == null || sineAmplitude == null || sinePeriod == null) {
-                    throw new IllegalArgumentException("--mean-rate, --amplitude, --period required for sine mode");
-                }
-                Duration period = parseDuration(sinePeriod);
-                logger.debug("Creating sine load mean={} amplitude={} period={} totalDuration={}", sineMeanRate, sineAmplitude, period, testDuration);
-                return new SineWaveLoad(sineMeanRate, sineAmplitude, testDuration, period);
-            }
-            case "spike" -> {
-                if (spikeBaseRate == null || spikeSpikeRate == null || spikeInterval == null || spikeDuration == null) {
-                    throw new IllegalArgumentException("--base-rate, --spike-rate, --spike-interval, --spike-duration required for spike mode");
-                }
-                Duration interval = parseDuration(spikeInterval);
-                Duration spikeDur = parseDuration(spikeDuration);
-                logger.debug("Creating spike load baseRate={} spikeRate={} interval={} spikeDuration={} totalDuration={}", spikeBaseRate, spikeSpikeRate, interval, spikeDur, testDuration);
-                return new SpikeLoad(spikeBaseRate, spikeSpikeRate, testDuration, interval, spikeDur);
-            }
-            default -> throw new IllegalArgumentException(
-                "Unknown mode: " + mode + ". Valid modes: static, ramp, ramp-sustain, step, sine, spike"
-            );
-        }
-    }
-    
-    private Duration parseDuration(String durationStr) {
-        durationStr = durationStr.toLowerCase().trim();
-        
-        if (durationStr.endsWith("ms")) {
-            long millis = Long.parseLong(durationStr.substring(0, durationStr.length() - 2));
-            return Duration.ofMillis(millis);
-        } else if (durationStr.endsWith("s")) {
-            long seconds = Long.parseLong(durationStr.substring(0, durationStr.length() - 1));
-            return Duration.ofSeconds(seconds);
-        } else if (durationStr.endsWith("m")) {
-            long minutes = Long.parseLong(durationStr.substring(0, durationStr.length() - 1));
-            return Duration.ofMinutes(minutes);
-        } else if (durationStr.endsWith("h")) {
-            long hours = Long.parseLong(durationStr.substring(0, durationStr.length() - 1));
-            return Duration.ofHours(hours);
-        } else {
-            // Assume seconds if no unit
-            long seconds = Long.parseLong(durationStr);
-            return Duration.ofSeconds(seconds);
-        }
+    private LoadPattern createLoadPattern(MetricsCollector metricsCollector) {
+        return LoadPatternFactory.create(
+            mode,
+            tps,
+            duration,
+            rampDuration,
+            stepsSpec,
+            sineMeanRate,
+            sineAmplitude,
+            sinePeriod,
+            spikeBaseRate,
+            spikeSpikeRate,
+            spikeInterval,
+            spikeDuration,
+            adaptiveInitialTps,
+            adaptiveRampIncrement,
+            adaptiveRampDecrement,
+            adaptiveRampInterval,
+            adaptiveMaxTps,
+            adaptiveSustainDuration,
+            adaptiveErrorThreshold,
+            metricsCollector
+        );
     }
     
     public static void main(String[] args) {

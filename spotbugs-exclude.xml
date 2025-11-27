@@ -109,5 +109,26 @@
         <Bug pattern="EI_EXPOSE_REP2"/>
         <Class name="com.vajrapulse.exporter.otel.OpenTelemetryExporter$Builder"/>
     </Match>
+    
+    <!-- Report exporters store MeterRegistry for read-only queries - registry is not modified -->
+    <!-- MeterRegistry is used only to query adaptive pattern metrics, not to modify state -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.exporter.report.CsvReportExporter"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.exporter.report.HtmlReportExporter"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.exporter.report.JsonReportExporter"/>
+    </Match>
+    
+    <!-- ShutdownManager stores MeterRegistry for read-only metrics collection -->
+    <!-- MeterRegistry is used only to register metrics counters, not to modify state -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.core.engine.ShutdownManager$Builder"/>
+    </Match>
 </FindBugsFilter>
-

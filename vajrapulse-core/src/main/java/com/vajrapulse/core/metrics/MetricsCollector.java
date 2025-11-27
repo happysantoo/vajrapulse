@@ -7,11 +7,15 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleConfig;
 import com.vajrapulse.core.engine.ExecutionMetrics;
 
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryMXBean;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 
 /**
  * Collects and aggregates execution metrics using Micrometer.
@@ -24,8 +28,30 @@ import java.util.HashMap;
  * </ul>
  * 
  * <p>Thread-safe for concurrent metric recording.
+ * 
+ * <p><strong>Resource Management:</strong> This class uses {@link ThreadLocal} instances
+ * for performance optimization. To prevent memory leaks, especially in thread pool
+ * environments, this class implements {@link AutoCloseable}. Always use try-with-resources
+ * or explicitly call {@link #close()} when done:
+ * 
+ * <pre>{@code
+ * try (MetricsCollector collector = new MetricsCollector()) {
+ *     // Use collector
+ *     ExecutionEngine engine = ExecutionEngine.builder()
+ *         .withMetricsCollector(collector)
+ *         .build();
+ *     engine.run();
+ * } // ThreadLocal instances automatically cleaned up
+ * }</pre>
+ * 
+ * <p><strong>Note:</strong> In long-running applications or when threads are reused
+ * (e.g., platform thread pools), failure to close this collector can lead to memory
+ * leaks as ThreadLocal instances accumulate. Virtual threads are less affected but
+ * cleanup is still recommended.
+ * 
+ * @since 0.9.0
  */
-public final class MetricsCollector {
+public final class MetricsCollector implements AutoCloseable {
     private final MeterRegistry registry;
     private final Timer successTimer;
     private final Timer failureTimer;
@@ -37,6 +63,19 @@ public final class MetricsCollector {
     private final double[] configuredPercentiles;
     private final String runId; // Optional run correlation tag
     private final long startMillis; // Track when collection started
+    
+    // Reusable maps for snapshot() to avoid allocations
+    // Using ThreadLocal to ensure thread safety (snapshot() may be called from different threads)
+    private final ThreadLocal<LinkedHashMap<Double, Double>> reusableSuccessMap = 
+        ThreadLocal.withInitial(LinkedHashMap::new);
+    private final ThreadLocal<LinkedHashMap<Double, Double>> reusableFailureMap = 
+        ThreadLocal.withInitial(LinkedHashMap::new);
+    private final ThreadLocal<LinkedHashMap<Double, Double>> reusableQueueWaitMap = 
+        ThreadLocal.withInitial(LinkedHashMap::new);
+    
+    // Reusable intermediate HashMap for indexSnapshot() to avoid allocations
+    private final ThreadLocal<HashMap<Double, Double>> reusableIndexMap = 
+        ThreadLocal.withInitial(HashMap::new);
     
     /**
      * Creates a collector with default SimpleMeterRegistry.
@@ -87,6 +126,9 @@ public final class MetricsCollector {
     }
 
     private MetricsCollector(MeterRegistry registry, String runId, double[] percentiles, Duration... sloBuckets) {
+        if (registry == null) {
+            throw new IllegalArgumentException("Meter registry must not be null");
+        }
         this.registry = registry;
         this.runId = runId;
         this.configuredPercentiles = sanitizePercentiles(percentiles);
@@ -159,6 +201,77 @@ public final class MetricsCollector {
             queueSizeBuilder.tag("run_id", runId);
         }
         this.queueSizeGauge = queueSizeBuilder.register(registry);
+        
+        // Register JVM GC and memory metrics
+        registerJvmMetrics(registry, runId);
+    }
+    
+    /**
+     * Registers JVM GC and memory metrics with the registry.
+     * 
+     * @param registry the meter registry
+     * @param runId optional run ID for tagging
+     */
+    private void registerJvmMetrics(MeterRegistry registry, String runId) {
+        MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
+        
+        // Heap memory metrics
+        var heapUsedBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.jvm.memory.heap.used", 
+                () -> memoryBean.getHeapMemoryUsage().getUsed())
+            .description("Used heap memory in bytes");
+        var heapCommittedBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.jvm.memory.heap.committed",
+                () -> memoryBean.getHeapMemoryUsage().getCommitted())
+            .description("Committed heap memory in bytes");
+        var heapMaxBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.jvm.memory.heap.max",
+                () -> {
+                    long max = memoryBean.getHeapMemoryUsage().getMax();
+                    return max == -1 ? 0 : max;
+                })
+            .description("Maximum heap memory in bytes");
+        
+        // Non-heap memory metrics
+        var nonHeapUsedBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.jvm.memory.nonheap.used",
+                () -> memoryBean.getNonHeapMemoryUsage().getUsed())
+            .description("Used non-heap memory in bytes");
+        var nonHeapCommittedBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.jvm.memory.nonheap.committed",
+                () -> memoryBean.getNonHeapMemoryUsage().getCommitted())
+            .description("Committed non-heap memory in bytes");
+        
+        if (runId != null && !runId.isBlank()) {
+            heapUsedBuilder.tag("run_id", runId);
+            heapCommittedBuilder.tag("run_id", runId);
+            heapMaxBuilder.tag("run_id", runId);
+            nonHeapUsedBuilder.tag("run_id", runId);
+            nonHeapCommittedBuilder.tag("run_id", runId);
+        }
+        
+        heapUsedBuilder.register(registry);
+        heapCommittedBuilder.register(registry);
+        heapMaxBuilder.register(registry);
+        nonHeapUsedBuilder.register(registry);
+        nonHeapCommittedBuilder.register(registry);
+        
+        // GC metrics - collection count and time
+        for (GarbageCollectorMXBean gcBean : ManagementFactory.getGarbageCollectorMXBeans()) {
+            String gcName = gcBean.getName();
+            
+            var gcCountBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.jvm.gc.collections",
+                    gcBean, GarbageCollectorMXBean::getCollectionCount)
+                .tag("gc", gcName)
+                .description("Number of GC collections");
+            var gcTimeBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.jvm.gc.collection.time",
+                    gcBean, GarbageCollectorMXBean::getCollectionTime)
+                .tag("gc", gcName)
+                .description("GC collection time in milliseconds");
+            
+            if (runId != null && !runId.isBlank()) {
+                gcCountBuilder.tag("run_id", runId);
+                gcTimeBuilder.tag("run_id", runId);
+            }
+            
+            gcCountBuilder.register(registry);
+            gcTimeBuilder.register(registry);
+        }
     }
     
     /**
@@ -199,6 +312,19 @@ public final class MetricsCollector {
     /**
      * Creates a snapshot of current metrics.
      * 
+     * <p><strong>Performance Optimizations:</strong>
+     * <ul>
+     *   <li>Reuses map instances (LinkedHashMap and HashMap) to avoid allocations</li>
+     *   <li>Thread-safe via ThreadLocal for reusable maps</li>
+     *   <li>Minimizes GC pressure by reusing intermediate data structures</li>
+     * </ul>
+     * 
+     * <p><strong>ThreadLocal Lifecycle:</strong> This method uses ThreadLocal instances
+     * for map reuse. In long-running applications or thread pool environments, ensure
+     * {@link #close()} is called when the collector is no longer needed to prevent
+     * memory leaks. The ThreadLocal cleanup is the caller's responsibility when using
+     * this collector in a long-lived context.
+     * 
      * @return aggregated metrics snapshot
      */
     public AggregatedMetrics snapshot() {
@@ -215,9 +341,16 @@ public final class MetricsCollector {
         Map<Double, Double> failureIdx = indexSnapshot(failureSnapshot);
         Map<Double, Double> queueWaitIdx = indexSnapshot(queueWaitSnapshot);
 
-        java.util.Map<Double, Double> successMap = new java.util.LinkedHashMap<>();
-        java.util.Map<Double, Double> failureMap = new java.util.LinkedHashMap<>();
-        java.util.Map<Double, Double> queueWaitMap = new java.util.LinkedHashMap<>();
+        // Reuse map instances to avoid allocations
+        LinkedHashMap<Double, Double> successMap = reusableSuccessMap.get();
+        LinkedHashMap<Double, Double> failureMap = reusableFailureMap.get();
+        LinkedHashMap<Double, Double> queueWaitMap = reusableQueueWaitMap.get();
+        
+        // Clear and populate maps
+        successMap.clear();
+        failureMap.clear();
+        queueWaitMap.clear();
+        
         for (double p : configuredPercentiles) {
             successMap.put(p, successIdx.getOrDefault(p, Double.NaN));
             failureMap.put(p, failureIdx.getOrDefault(p, Double.NaN));
@@ -238,8 +371,19 @@ public final class MetricsCollector {
         );
     }
 
+    /**
+     * Indexes a histogram snapshot into a map of percentile -> value.
+     * 
+     * <p><strong>Performance Optimization:</strong> Reuses a HashMap instance
+     * via ThreadLocal to avoid allocations in the hot path.
+     * 
+     * @param snapshot the histogram snapshot to index
+     * @return map of percentile (rounded to 3 decimals) -> value in nanoseconds
+     */
     private Map<Double, Double> indexSnapshot(io.micrometer.core.instrument.distribution.HistogramSnapshot snapshot) {
-        Map<Double, Double> idx = new HashMap<>();
+        // Reuse HashMap instance to avoid allocations
+        HashMap<Double, Double> idx = reusableIndexMap.get();
+        idx.clear();
         for (var pv : snapshot.percentileValues()) {
             double key = round3(pv.percentile());
             idx.put(key, pv.value(TimeUnit.NANOSECONDS));
@@ -263,19 +407,86 @@ public final class MetricsCollector {
     /** Returns runId if present, else null. */
     public String getRunId() { return runId; }
 
+    /**
+     * Sanitizes and validates percentile values.
+     * 
+     * <p>Validates that all percentiles are in the range (0.0, 1.0].
+     * Invalid values are filtered out. If no valid percentiles remain,
+     * defaults to [0.50, 0.95, 0.99].
+     * 
+     * @param input the input percentiles (may be null or empty)
+     * @return sanitized array of valid percentiles
+     * @throws IllegalArgumentException if input contains invalid values and validation fails
+     */
     private double[] sanitizePercentiles(double[] input) {
         if (input == null || input.length == 0) {
             return new double[]{0.50, 0.95, 0.99};
         }
-        return java.util.Arrays.stream(input)
+        
+        // Validate and filter percentiles
+        double[] valid = java.util.Arrays.stream(input)
             .map(p -> round3(p))
-            .filter(p -> p > 0.0 && p <= 1.0)
+            .filter(p -> {
+                if (p <= 0.0 || p > 1.0) {
+                    // Log warning for invalid percentiles but don't throw
+                    // (allows graceful degradation)
+                    return false;
+                }
+                return true;
+            })
             .distinct()
             .sorted()
             .toArray();
+        
+        // If no valid percentiles, use defaults
+        if (valid.length == 0) {
+            return new double[]{0.50, 0.95, 0.99};
+        }
+        
+        return valid;
     }
 
+    /**
+     * Rounding precision multiplier for percentile rounding (3 decimal places).
+     */
+    private static final double PERCENTILE_ROUNDING_PRECISION = 1000.0;
+    
+    /**
+     * Rounds a value to 3 decimal places.
+     * 
+     * @param v the value to round
+     * @return the rounded value
+     */
     private static double round3(double v) {
-        return Math.round(v * 1000.0) / 1000.0;
+        return Math.round(v * PERCENTILE_ROUNDING_PRECISION) / PERCENTILE_ROUNDING_PRECISION;
+    }
+    
+    /**
+     * Closes this metrics collector and cleans up resources.
+     * 
+     * <p>This method cleans up {@link ThreadLocal} instances to prevent memory leaks,
+     * especially important in thread pool environments where threads are reused.
+     * 
+     * <p>After calling this method, the collector should not be used. Calling
+     * {@link #snapshot()} or other methods after close may work but is not guaranteed
+     * and is not recommended.
+     * 
+     * <p>This method is idempotent - calling it multiple times has no additional effect.
+     * 
+     * <p><strong>Best Practice:</strong> Always use try-with-resources:
+     * <pre>{@code
+     * try (MetricsCollector collector = new MetricsCollector()) {
+     *     // Use collector
+     * } // Automatically closed
+     * }</pre>
+     */
+    @Override
+    public void close() {
+        // Clean up ThreadLocal instances to prevent memory leaks
+        // This is critical in thread pool environments where threads are reused
+        reusableSuccessMap.remove();
+        reusableFailureMap.remove();
+        reusableQueueWaitMap.remove();
+        reusableIndexMap.remove();
     }
 }
