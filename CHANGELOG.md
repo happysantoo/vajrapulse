@@ -26,6 +26,12 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
   - Integration with `ExecutionEngine` to handle requests under backpressure
   - Metrics for dropped and rejected requests (`vajrapulse.execution.backpressure.dropped`, `vajrapulse.execution.backpressure.rejected`)
   - HikariCP backpressure example (in examples, not committed to core)
+- **MetricsPipeline.getMetricsProvider()**: Direct access to MetricsProvider from pipeline
+  - Added `getMetricsProvider()` method to `MetricsPipeline` for seamless AdaptiveLoadPattern integration
+  - Returns `MetricsProviderAdapter` wrapping the pipeline's `MetricsCollector`
+  - Eliminates need for manual `MetricsProviderAdapter` creation
+  - Enables clean API usage: `pipeline.getMetricsProvider()` instead of manual collector/provider setup
+  - Comprehensive test coverage added
 - **Adaptive Load Pattern Fixes**: Fixed hanging issue and improved reliability
   - Fixed issue where `AdaptiveLoadPattern` would hang after one iteration
   - Improved loop termination logic in `ExecutionEngine` to handle patterns starting at 0.0 TPS
