@@ -10,3 +10,4 @@ include("vajrapulse-worker")
 
 // Examples
 include("examples:http-load-test")
+include("examples:adaptive-load-test")

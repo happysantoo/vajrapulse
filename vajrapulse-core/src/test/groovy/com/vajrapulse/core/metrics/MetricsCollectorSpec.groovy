@@ -295,4 +295,50 @@ class MetricsCollectorSpec extends Specification {
             executor.shutdownNow()
         }
     }
+    
+    def "should record dropped requests"() {
+        given: "a metrics collector"
+        def collector = new MetricsCollector()
+        
+        when: "recording dropped requests"
+        collector.recordDroppedRequest()
+        collector.recordDroppedRequest()
+        collector.recordDroppedRequest()
+        
+        then: "dropped counter is incremented"
+        def registry = collector.getRegistry()
+        def counter = registry.find("vajrapulse.execution.backpressure.dropped").counter()
+        counter.count() == 3.0
+    }
+    
+    def "should record rejected requests"() {
+        given: "a metrics collector"
+        def collector = new MetricsCollector()
+        
+        when: "recording rejected requests"
+        collector.recordRejectedRequest()
+        collector.recordRejectedRequest()
+        
+        then: "rejected counter is incremented"
+        def registry = collector.getRegistry()
+        def counter = registry.find("vajrapulse.execution.backpressure.rejected").counter()
+        counter.count() == 2.0
+    }
+    
+    def "should record both dropped and rejected requests"() {
+        given: "a metrics collector"
+        def collector = new MetricsCollector()
+        
+        when: "recording both types"
+        collector.recordDroppedRequest()
+        collector.recordRejectedRequest()
+        collector.recordDroppedRequest()
+        
+        then: "both counters are incremented correctly"
+        def registry = collector.getRegistry()
+        def droppedCounter = registry.find("vajrapulse.execution.backpressure.dropped").counter()
+        def rejectedCounter = registry.find("vajrapulse.execution.backpressure.rejected").counter()
+        droppedCounter.count() == 2.0
+        rejectedCounter.count() == 1.0
+    }
 }

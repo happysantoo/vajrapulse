@@ -11,7 +11,7 @@ plugins {
 allprojects {
     // Artifact coordinates moved to 'com.vajrapulse' for 0.9 release alignment.
     group = "com.vajrapulse"
-    version = "0.9.5"
+    version = "0.9.6"
 
     repositories {
         mavenCentral()
