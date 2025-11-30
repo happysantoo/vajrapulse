@@ -14,6 +14,57 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - GraalVM native image validation
 - Scenario scripting DSL
 
+## [0.9.6] - 2025-01-XX
+### Added
+- **Backpressure Support**: Comprehensive backpressure handling for adaptive load patterns
+  - `BackpressureProvider` interface for reporting system backpressure (0.0-1.0 scale)
+  - `BackpressureHandler` interface with multiple strategies (DROP, REJECT, RETRY, DEGRADE, THRESHOLD)
+  - `BackpressureHandlers` factory with built-in strategies
+  - `QueueBackpressureProvider` for queue depth-based backpressure
+  - `CompositeBackpressureProvider` for combining multiple backpressure signals
+  - Integration with `AdaptiveLoadPattern` to incorporate backpressure in ramp decisions
+  - Integration with `ExecutionEngine` to handle requests under backpressure
+  - Metrics for dropped and rejected requests (`vajrapulse.execution.backpressure.dropped`, `vajrapulse.execution.backpressure.rejected`)
+  - HikariCP backpressure example (in examples, not committed to core)
+- **MetricsPipeline.getMetricsProvider()**: Direct access to MetricsProvider from pipeline
+  - Added `getMetricsProvider()` method to `MetricsPipeline` for seamless AdaptiveLoadPattern integration
+  - Returns `MetricsProviderAdapter` wrapping the pipeline's `MetricsCollector`
+  - Eliminates need for manual `MetricsProviderAdapter` creation
+  - Enables clean API usage: `pipeline.getMetricsProvider()` instead of manual collector/provider setup
+  - Comprehensive test coverage added
+- **Adaptive Load Pattern Fixes**: Fixed hanging issue and improved reliability
+  - Fixed issue where `AdaptiveLoadPattern` would hang after one iteration
+  - Improved loop termination logic in `ExecutionEngine` to handle patterns starting at 0.0 TPS
+  - Added comprehensive test coverage (unit, integration, E2E, diagnostic tests)
+  - Enhanced example demonstrating full adaptive cycle with backpressure simulation
+- **Test Infrastructure Improvements**: Migrated to Awaitility 4.3.0
+  - Replaced `Thread.sleep()` with Awaitility for state-waiting scenarios
+  - Improved test reliability and performance (10-30% faster execution)
+  - Better error messages and early failure detection
+  - ~15 state-waiting usages migrated to Awaitility
+  - Kept `Thread.sleep()` for intentional work simulation (appropriate use case)
+
+### Changed
+- **AdaptiveLoadPattern**: Enhanced with backpressure support
+  - Constructor now accepts optional `BackpressureProvider`
+  - `checkAndAdjust()` logic incorporates backpressure level in ramp decisions
+  - Ramp down when backpressure ≥ 0.7, ramp up when backpressure < 0.3
+  - Added `getBackpressureLevel()` method
+- **ExecutionEngine**: Added backpressure handling
+  - `Builder` now accepts `BackpressureHandler` and `backpressureThreshold`
+  - `run()` method checks backpressure before submitting tasks
+  - Handles `DROPPED`, `REJECTED`, `RETRY`, `DEGRADE` results from handler
+  - Records metrics for dropped and rejected requests
+- **MetricsCollector**: Added backpressure metrics
+  - `recordDroppedRequest()` method
+  - `recordRejectedRequest()` method
+  - New counters: `vajrapulse.execution.backpressure.dropped`, `vajrapulse.execution.backpressure.rejected`
+
+### Fixed
+- Fixed `AdaptiveLoadPattern` hanging issue where pattern would stop after one iteration
+- Fixed loop termination in `ExecutionEngine` to correctly handle patterns starting at 0.0 TPS
+- Improved test reliability by migrating from `Thread.sleep()` to Awaitility
+
 ## [0.9.5] - 2025-01-XX
 ### Added
 - **Adaptive Load Pattern**: Feedback-driven load pattern that dynamically adjusts TPS based on error rates

@@ -64,6 +64,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
     private final Duration sustainDuration;
     private final double errorThreshold;
     private final MetricsProvider metricsProvider;
+    private final BackpressureProvider backpressureProvider; // Optional
     
     // Immutable state stored atomically
     private final AtomicReference<AdaptiveState> state;
@@ -174,6 +175,79 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         this.sustainDuration = sustainDuration;
         this.errorThreshold = errorThreshold;
         this.metricsProvider = java.util.Objects.requireNonNull(metricsProvider, "Metrics provider must not be null");
+        this.backpressureProvider = null; // No backpressure provider in this constructor
+        
+        // Initialize state atomically
+        this.state = new AtomicReference<>(new AdaptiveState(
+            Phase.RAMP_UP,
+            initialTps,
+            -1L,  // Will be set on first call
+            -1.0,  // Not found yet
+            -1L,  // Will be set on first call
+            0,
+            0,
+            0L
+        ));
+    }
+    
+    /**
+     * Creates a new adaptive load pattern with backpressure provider.
+     * 
+     * @param initialTps starting TPS (must be positive)
+     * @param rampIncrement TPS increase per interval (must be positive)
+     * @param rampDecrement TPS decrease per interval (must be positive)
+     * @param rampInterval time between adjustments (must be positive)
+     * @param maxTps maximum TPS limit (must be positive or Double.POSITIVE_INFINITY)
+     * @param sustainDuration duration to sustain at stable point (must be positive)
+     * @param errorThreshold error rate threshold 0.0-1.0 (must be between 0 and 1)
+     * @param metricsProvider provides execution metrics (must not be null)
+     * @param backpressureProvider optional backpressure provider for additional signals
+     * @throws IllegalArgumentException if any parameter is invalid
+     * @since 0.9.6
+     */
+    public AdaptiveLoadPattern(
+            double initialTps,
+            double rampIncrement,
+            double rampDecrement,
+            Duration rampInterval,
+            double maxTps,
+            Duration sustainDuration,
+            double errorThreshold,
+            MetricsProvider metricsProvider,
+            BackpressureProvider backpressureProvider) {
+        
+        // Validate parameters with descriptive error messages
+        if (initialTps <= 0) {
+            throw new IllegalArgumentException("Initial TPS must be positive, got: " + initialTps);
+        }
+        if (rampIncrement <= 0) {
+            throw new IllegalArgumentException("Ramp increment must be positive, got: " + rampIncrement);
+        }
+        if (rampDecrement <= 0) {
+            throw new IllegalArgumentException("Ramp decrement must be positive, got: " + rampDecrement);
+        }
+        if (rampInterval == null || rampInterval.isNegative() || rampInterval.isZero()) {
+            throw new IllegalArgumentException("Ramp interval must be positive, got: " + rampInterval);
+        }
+        if (maxTps <= 0 && !Double.isInfinite(maxTps)) {
+            throw new IllegalArgumentException("Max TPS must be positive or infinite, got: " + maxTps);
+        }
+        if (sustainDuration == null || sustainDuration.isNegative() || sustainDuration.isZero()) {
+            throw new IllegalArgumentException("Sustain duration must be positive, got: " + sustainDuration);
+        }
+        if (errorThreshold < 0.0 || errorThreshold > 1.0) {
+            throw new IllegalArgumentException("Error threshold must be between 0.0 and 1.0, got: " + errorThreshold);
+        }
+        
+        this.initialTps = initialTps;
+        this.rampIncrement = rampIncrement;
+        this.rampDecrement = rampDecrement;
+        this.rampInterval = rampInterval;
+        this.maxTps = maxTps;
+        this.sustainDuration = sustainDuration;
+        this.errorThreshold = errorThreshold;
+        this.metricsProvider = java.util.Objects.requireNonNull(metricsProvider, "Metrics provider must not be null");
+        this.backpressureProvider = backpressureProvider; // Can be null
         
         // Initialize state atomically
         this.state = new AtomicReference<>(new AdaptiveState(
@@ -238,6 +312,18 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         return current.currentTps();
     }
     
+    /**
+     * Gets the current backpressure level from the provider.
+     * 
+     * @return backpressure level (0.0 if no provider)
+     */
+    public double getBackpressureLevel() {
+        if (backpressureProvider == null) {
+            return 0.0;
+        }
+        return backpressureProvider.getBackpressureLevel();
+    }
+    
     private double handleRampDown(long elapsedMillis, AdaptiveState current) {
         // Check if we've exhausted attempts
         if (current.rampDownAttempts() >= MAX_RAMP_DOWN_ATTEMPTS) {
@@ -280,15 +366,24 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             errorRate = cachedFailureRate;
         }
         
+        // Get backpressure level (0.0 if no provider)
+        double backpressure = getBackpressureLevel();
+        
+        // Combine error rate and backpressure signals
+        // Ramp down if error rate exceeds threshold OR backpressure is high (>= 0.7)
+        // Ramp up only if error rate is low AND backpressure is low (< 0.3)
+        boolean shouldRampDown = errorRate >= errorThreshold || backpressure >= 0.7;
+        boolean canRampUp = errorRate < errorThreshold && backpressure < 0.3;
+        
         state.updateAndGet(current -> {
             return switch (current.phase()) {
                 case RAMP_UP -> {
-                    if (errorRate >= errorThreshold) {
-                        // Errors detected, start ramping down
+                    if (shouldRampDown) {
+                        // Errors or backpressure detected, start ramping down
                         double newTps = Math.max(0, current.currentTps() - rampDecrement);
                         yield transitionPhaseInternal(current, Phase.RAMP_DOWN, elapsedMillis, current.stableTps(), newTps);
-                    } else {
-                        // No errors, continue ramping up
+                    } else if (canRampUp) {
+                        // No errors, no backpressure - continue ramping up
                         double newTps = Math.min(maxTps, current.currentTps() + rampIncrement);
                         yield new AdaptiveState(
                             current.phase(),
@@ -300,11 +395,24 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                             current.rampDownAttempts(),
                             current.phaseTransitionCount()
                         );
+                    } else {
+                        // Moderate backpressure - hold current TPS
+                        yield new AdaptiveState(
+                            current.phase(),
+                            current.currentTps(),
+                            elapsedMillis,
+                            current.stableTps(),
+                            current.phaseStartTime(),
+                            current.stableIntervalsCount(),
+                            current.rampDownAttempts(),
+                            current.phaseTransitionCount()
+                        );
                     }
                 }
                 case RAMP_DOWN -> {
                     int newAttempts = current.rampDownAttempts() + 1;
-                    if (errorRate < errorThreshold) {
+                    if (!shouldRampDown) {
+                        // Errors and backpressure cleared
                         int newStableCount = current.stableIntervalsCount() + 1;
                         if (newStableCount >= STABLE_INTERVALS_REQUIRED) {
                             // Found stable point
@@ -324,7 +432,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                             );
                         }
                     } else {
-                        // Still errors, continue ramping down
+                        // Still errors or backpressure, continue ramping down
                         double newTps = Math.max(0, current.currentTps() - rampDecrement);
                         yield new AdaptiveState(
                             current.phase(),

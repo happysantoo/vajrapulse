@@ -60,6 +60,8 @@ public final class MetricsCollector implements AutoCloseable {
     @SuppressWarnings("unused") // Gauge is registered and used by Micrometer
     private final io.micrometer.core.instrument.Gauge queueSizeGauge;
     private final AtomicLong queueSizeHolder; // Holder for queue size gauge
+    private final Counter droppedRequestsCounter;
+    private final Counter rejectedRequestsCounter;
     private final double[] configuredPercentiles;
     private final String runId; // Optional run correlation tag
     private final long startMillis; // Track when collection started
@@ -202,6 +204,18 @@ public final class MetricsCollector implements AutoCloseable {
         }
         this.queueSizeGauge = queueSizeBuilder.register(registry);
         
+        // Backpressure metrics - dropped and rejected requests
+        var droppedBuilder = Counter.builder("vajrapulse.execution.backpressure.dropped")
+            .description("Number of requests dropped due to backpressure");
+        var rejectedBuilder = Counter.builder("vajrapulse.execution.backpressure.rejected")
+            .description("Number of requests rejected due to backpressure");
+        if (runId != null && !runId.isBlank()) {
+            droppedBuilder.tag("run_id", runId);
+            rejectedBuilder.tag("run_id", runId);
+        }
+        this.droppedRequestsCounter = droppedBuilder.register(registry);
+        this.rejectedRequestsCounter = rejectedBuilder.register(registry);
+        
         // Register JVM GC and memory metrics
         registerJvmMetrics(registry, runId);
     }
@@ -307,6 +321,24 @@ public final class MetricsCollector implements AutoCloseable {
      */
     public void updateQueueSize(long queueSize) {
         queueSizeHolder.set(queueSize);
+    }
+    
+    /**
+     * Records a dropped request due to backpressure.
+     * 
+     * @since 0.9.6
+     */
+    public void recordDroppedRequest() {
+        droppedRequestsCounter.increment();
+    }
+    
+    /**
+     * Records a rejected request due to backpressure.
+     * 
+     * @since 0.9.6
+     */
+    public void recordRejectedRequest() {
+        rejectedRequestsCounter.increment();
     }
     
     /**

@@ -11,6 +11,9 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 
+import static org.awaitility.Awaitility.*
+import static java.util.concurrent.TimeUnit.*
+
 /**
  * Tests for ShutdownManager graceful shutdown functionality.
  */
@@ -130,8 +133,8 @@ class ShutdownManagerSpec extends Specification {
         then:
         graceful == false
         // Force shutdown should interrupt the task
-        Thread.sleep(200) // Give interrupt a chance to propagate
-        taskInterrupted.get()
+        await().atMost(1, SECONDS)
+            .until { taskInterrupted.get() }
     }
 
     def "should register and remove shutdown hook"() {

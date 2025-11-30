@@ -65,6 +65,7 @@ class CachedMetricsProviderSpec extends Specification {
         callCount.get() == 1
 
         when: "waiting for TTL to expire and calling again"
+        // Wait for TTL to expire (50ms TTL, wait 60ms)
         Thread.sleep(60)
         def rate3 = cached.getFailureRate()
 
@@ -197,7 +198,9 @@ class CachedMetricsProviderSpec extends Specification {
 
         when: "accessing cache, waiting for expiration, then accessing again concurrently"
         def firstValue = cached.getFailureRate()
-        Thread.sleep(20) // Wait for TTL to expire
+        // Wait for TTL to expire (10ms TTL, wait 20ms to ensure expiration)
+        // Using Thread.sleep directly since we're waiting for time to pass, not a condition
+        Thread.sleep(20)
         
         def results = []
         def threads = []

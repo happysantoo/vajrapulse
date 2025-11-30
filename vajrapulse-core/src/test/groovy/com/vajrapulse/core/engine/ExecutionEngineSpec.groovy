@@ -293,4 +293,110 @@ class ExecutionEngineSpec extends Specification {
         then: "close completes without exception"
         noExceptionThrown()
     }
+    
+    def "should support backpressure handler in builder"() {
+        given: "a task, load pattern, and backpressure handler"
+        Task task = new Task() {
+            @Override TaskResult execute() { return TaskResult.success() }
+            @Override void setup() {}
+            @Override void cleanup() {}
+        }
+        def load = new ShortStaticLoad(10.0, Duration.ofMillis(100))
+        def collector = new MetricsCollector()
+        def handler = com.vajrapulse.core.backpressure.BackpressureHandlers.DROP
+        
+        when: "building engine with backpressure handler"
+        def engine = ExecutionEngine.builder()
+            .withTask(task)
+            .withLoadPattern(load)
+            .withMetricsCollector(collector)
+            .withBackpressureHandler(handler)
+            .withBackpressureThreshold(0.7)
+            .build()
+        
+        then: "engine should be created successfully"
+        engine != null
+        engine.runId != null
+        
+        cleanup:
+        engine?.close()
+        collector?.close()
+    }
+    
+    def "should support backpressure threshold configuration"() {
+        given: "a task and load pattern"
+        Task task = new Task() {
+            @Override TaskResult execute() { return TaskResult.success() }
+            @Override void setup() {}
+            @Override void cleanup() {}
+        }
+        def load = new ShortStaticLoad(10.0, Duration.ofMillis(100))
+        def collector = new MetricsCollector()
+        
+        when: "building engine with custom threshold"
+        def engine = ExecutionEngine.builder()
+            .withTask(task)
+            .withLoadPattern(load)
+            .withMetricsCollector(collector)
+            .withBackpressureThreshold(0.5)
+            .build()
+        
+        then: "engine should be created successfully"
+        engine != null
+        
+        cleanup:
+        engine?.close()
+        collector?.close()
+    }
+    
+    def "should accept requests when backpressure is below threshold"() {
+        given: "a task, load pattern, and backpressure handler"
+        Task task = new Task() {
+            @Override TaskResult execute() { return TaskResult.success() }
+            @Override void setup() {}
+            @Override void cleanup() {}
+        }
+        def load = new ShortStaticLoad(50.0, Duration.ofMillis(200))
+        def collector = new MetricsCollector()
+        def handler = Mock(com.vajrapulse.api.BackpressureHandler)
+        
+        when: "running engine with backpressure handler but low backpressure"
+        def engine = ExecutionEngine.builder()
+            .withTask(task)
+            .withLoadPattern(load)
+            .withMetricsCollector(collector)
+            .withBackpressureHandler(handler)
+            .withBackpressureThreshold(0.9) // High threshold
+            .build()
+        engine.run()
+        def snapshot = collector.snapshot()
+        
+        then: "handler should not be called (backpressure is 0.0 for non-adaptive patterns)"
+        snapshot.totalExecutions() > 0
+        0 * handler.handle(_, _, _)
+    }
+    
+    def "should throw exception when backpressure threshold is invalid"() {
+        when: "building engine with invalid threshold"
+        ExecutionEngine.builder()
+            .withTask(Mock(Task))
+            .withLoadPattern(Mock(LoadPattern))
+            .withMetricsCollector(new MetricsCollector())
+            .withBackpressureThreshold(-0.1)
+            .build()
+        
+        then: "should throw IllegalArgumentException"
+        thrown(IllegalArgumentException)
+        
+        when: "building engine with threshold > 1.0"
+        ExecutionEngine.builder()
+            .withTask(Mock(Task))
+            .withLoadPattern(Mock(LoadPattern))
+            .withMetricsCollector(new MetricsCollector())
+            .withBackpressureThreshold(1.1)
+            .build()
+        
+        then: "should throw IllegalArgumentException"
+        thrown(IllegalArgumentException)
+    }
 }
