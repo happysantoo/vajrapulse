@@ -5,9 +5,6 @@ import spock.lang.Specification
 
 import java.time.Duration
 
-import static org.awaitility.Awaitility.*
-import static java.util.concurrent.TimeUnit.*
-
 class CachedMetricsProviderSpec extends Specification {
 
     def "should cache metrics with default TTL"() {
@@ -202,13 +199,8 @@ class CachedMetricsProviderSpec extends Specification {
         when: "accessing cache, waiting for expiration, then accessing again concurrently"
         def firstValue = cached.getFailureRate()
         // Wait for TTL to expire (10ms TTL, wait 20ms to ensure expiration)
-        await().atMost(100, MILLISECONDS)
-            .pollInterval(5, MILLISECONDS)
-            .until {
-                // Just wait for time to pass - TTL is 10ms, we wait 20ms
-                true
-            }
-        Thread.sleep(10) // Additional small delay to ensure TTL expired
+        // Using Thread.sleep directly since we're waiting for time to pass, not a condition
+        Thread.sleep(20)
         
         def results = []
         def threads = []
