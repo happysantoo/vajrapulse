@@ -1,8 +1,10 @@
 package com.vajrapulse.worker.pipeline;
 
 import com.vajrapulse.api.LoadPattern;
+import com.vajrapulse.api.MetricsProvider;
 import com.vajrapulse.api.TaskLifecycle;
 import com.vajrapulse.core.engine.ExecutionEngine;
+import com.vajrapulse.core.engine.MetricsProviderAdapter;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.core.metrics.MetricsCollector;
 import com.vajrapulse.core.metrics.MetricsExporter;
@@ -47,6 +49,34 @@ public final class MetricsPipeline implements AutoCloseable {
     }
 
     public static Builder builder() { return new Builder(); }
+
+    /**
+     * Returns a MetricsProvider that provides real-time metrics from this pipeline.
+     * 
+     * <p>The MetricsProvider is updated as tasks execute, providing current
+     * failure rate and total execution count for use with AdaptiveLoadPattern.
+     * 
+     * <p>Example:
+     * <pre>{@code
+     * try (MetricsPipeline pipeline = MetricsPipeline.builder()
+     *         .addExporter(new ConsoleMetricsExporter())
+     *         .build()) {
+     *     MetricsProvider provider = pipeline.getMetricsProvider();
+     *     AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
+     *         100.0, Duration.ofSeconds(10), ..., provider);
+     *     pipeline.run(task, pattern);
+     * }
+     * }</pre>
+     * 
+     * <p><strong>Note:</strong> The returned MetricsProvider uses caching internally
+     * to optimize performance. Metrics are refreshed at most once per 100ms by default.
+     * 
+     * @return a MetricsProvider backed by this pipeline's metrics collector
+     * @since 0.9.6
+     */
+    public MetricsProvider getMetricsProvider() {
+        return new MetricsProviderAdapter(collector);
+    }
 
     /** Executes the task under the provided load pattern returning final aggregated metrics. */
     public AggregatedMetrics run(TaskLifecycle task, LoadPattern loadPattern) throws Exception {
