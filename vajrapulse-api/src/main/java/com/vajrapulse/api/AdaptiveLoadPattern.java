@@ -506,14 +506,14 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                 case RAMP_DOWN -> {
                     int newAttempts = current.rampDownAttempts() + 1;
                     if (!shouldRampDown) {
-                        // Errors and backpressure cleared
+                        // Errors and backpressure cleared - check for stability
                         int newStableCount = current.stableIntervalsCount() + 1;
                         if (newStableCount >= STABLE_INTERVALS_REQUIRED) {
-                            // Found stable point
+                            // Found stable point at current TPS
                             double stable = current.currentTps();
                             yield transitionPhaseInternal(current, Phase.SUSTAIN, elapsedMillis, stable, stable);
                         } else {
-                            // Not stable yet, keep current TPS
+                            // Not stable yet, keep current TPS and continue in RAMP_DOWN
                             yield new AdaptiveState(
                                 current.phase(),
                                 current.currentTps(),
@@ -548,8 +548,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                 case SUSTAIN -> {
                     // Check if conditions changed during sustain
                     if (shouldRampDown) {
-                        // Conditions worsened - ramp down
-                        yield transitionPhaseInternal(current, Phase.RAMP_DOWN, elapsedMillis, current.stableTps(), current.currentTps());
+                        // Conditions worsened - ramp down immediately
+                        double newTps = Math.max(minimumTps, current.currentTps() - rampDecrement);
+                        yield transitionPhaseInternal(current, Phase.RAMP_DOWN, elapsedMillis, current.stableTps(), newTps);
                     } else if (canRampUp && current.currentTps() < maxTps) {
                         // Conditions good and below max - ramp up
                         yield transitionPhaseInternal(current, Phase.RAMP_UP, elapsedMillis, current.stableTps(), current.currentTps());
