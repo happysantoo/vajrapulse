@@ -366,7 +366,7 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
     }
     
     def "should not hang when pattern returns 0.0 TPS"() {
-        given: "an adaptive pattern that may enter COMPLETE phase"
+        given: "an adaptive pattern that may enter RECOVERY phase"
         def metrics = new MetricsCollector()
         def task = new FailingTask(50) // 50% failure rate - will trigger RAMP_DOWN
         def provider = new MetricsProviderAdapter(metrics)
@@ -382,7 +382,7 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
             .withMetricsCollector(metrics)
             .build()
         
-        when: "running engine until pattern may enter COMPLETE phase"
+        when: "running engine until pattern may enter RECOVERY phase"
         def startTime = System.currentTimeMillis()
         def executionThread = Thread.start {
             try {
@@ -392,15 +392,15 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
             }
         }
         
-        // Wait for pattern to potentially exhaust ramp down attempts or reach COMPLETE
+        // Wait for pattern to potentially reach minimum TPS or enter RECOVERY
         // This test verifies the pattern doesn't hang, so we wait for either:
-        // 1. COMPLETE phase (exhausted attempts)
+        // 1. RECOVERY phase (reached minimum TPS)
         // 2. Or sufficient time has passed (pattern is still running)
         await().atMost(20, SECONDS)
             .pollInterval(1, SECONDS)
             .until {
                 def currentPhase = pattern.getCurrentPhase()
-                currentPhase == AdaptiveLoadPattern.Phase.COMPLETE || 
+                currentPhase == AdaptiveLoadPattern.Phase.RECOVERY || 
                 (System.currentTimeMillis() - startTime) > 12000 // At least 12s passed
             }
         

@@ -70,14 +70,31 @@ public final class AdaptiveLoadPattern implements LoadPattern {
     private final AtomicReference<AdaptiveState> state;
     
     /**
-     * Maximum number of ramp-down attempts before giving up and transitioning to COMPLETE phase.
+     * Minimum TPS to maintain. When TPS reaches this level, pattern enters RECOVERY phase.
      */
-    private static final int MAX_RAMP_DOWN_ATTEMPTS = 10;
+    private final double minimumTps;
     
     /**
      * Number of consecutive stable intervals required to identify a stable TPS point.
      */
     private static final int STABLE_INTERVALS_REQUIRED = 3;
+    
+    /**
+     * TPS tolerance for stability detection. TPS can vary by this amount and still be considered stable.
+     */
+    private static final double TPS_TOLERANCE = 50.0;
+    
+    /**
+     * Tracks the candidate TPS level being evaluated for stability.
+     * -1 means no candidate is being tracked.
+     */
+    private volatile double stableTpsCandidate = -1.0;
+    
+    /**
+     * Timestamp when the current stability candidate was first observed.
+     * -1 means no candidate is being tracked.
+     */
+    private volatile long stabilityStartTime = -1L;
     
     /**
      * Conversion factor from percentage to ratio (100.0% = 1.0).
@@ -117,8 +134,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         RAMP_DOWN,
         /** Sustaining at stable TPS */
         SUSTAIN,
-        /** Test complete (only if stable point never found) */
-        COMPLETE
+        /** Recovery phase - waiting for conditions to improve before ramping up again */
+        RECOVERY
     }
     
     /**
@@ -176,6 +193,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         this.errorThreshold = errorThreshold;
         this.metricsProvider = java.util.Objects.requireNonNull(metricsProvider, "Metrics provider must not be null");
         this.backpressureProvider = null; // No backpressure provider in this constructor
+        this.minimumTps = 0.0; // Default: no minimum TPS
         
         // Initialize state atomically
         this.state = new AtomicReference<>(new AdaptiveState(
@@ -248,6 +266,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         this.errorThreshold = errorThreshold;
         this.metricsProvider = java.util.Objects.requireNonNull(metricsProvider, "Metrics provider must not be null");
         this.backpressureProvider = backpressureProvider; // Can be null
+        this.minimumTps = 0.0; // Default: no minimum TPS
         
         // Initialize state atomically
         this.state = new AtomicReference<>(new AdaptiveState(
@@ -297,7 +316,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             case RAMP_UP -> handleRampUp(elapsedMillis, current);
             case RAMP_DOWN -> handleRampDown(elapsedMillis, current);
             case SUSTAIN -> handleSustain(elapsedMillis, current);
-            case COMPLETE -> 0.0;  // Test ends (only if stable point never found)
+            case RECOVERY -> handleRecovery(elapsedMillis, current);
         };
     }
     
@@ -307,6 +326,12 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             // Treat max TPS as stable point
             transitionPhase(Phase.SUSTAIN, elapsedMillis, maxTps);
             return maxTps;
+        }
+        
+        // Check if stable at current TPS (intermediate stability)
+        if (isStableAtCurrentTps(current.currentTps(), elapsedMillis)) {
+            transitionPhase(Phase.SUSTAIN, elapsedMillis, current.currentTps());
+            return current.currentTps();
         }
         
         return current.currentTps();
@@ -325,13 +350,82 @@ public final class AdaptiveLoadPattern implements LoadPattern {
     }
     
     private double handleRampDown(long elapsedMillis, AdaptiveState current) {
-        // Check if we've exhausted attempts
-        if (current.rampDownAttempts() >= MAX_RAMP_DOWN_ATTEMPTS) {
-            transitionPhase(Phase.COMPLETE, elapsedMillis, current.stableTps());
-            return 0.0;
+        // Check if TPS has reached minimum
+        if (current.currentTps() <= minimumTps) {
+            transitionPhase(Phase.RECOVERY, elapsedMillis, current.stableTps());
+            return minimumTps;
         }
         
+        // Note: Stability detection in RAMP_DOWN is handled by checkAndAdjust()
+        // using stableIntervalsCount. The new isStableAtCurrentTps() is only
+        // used for intermediate stability detection during RAMP_UP.
+        
         return current.currentTps();
+    }
+    
+    /**
+     * Handles the RECOVERY phase, checking if conditions have improved.
+     * 
+     * <p>In RECOVERY phase, the pattern checks if error rate and backpressure
+     * have improved. If conditions are good (error rate &lt; threshold and
+     * backpressure &lt; 0.3), it transitions to RAMP_UP. If conditions worsen,
+     * it transitions to RAMP_DOWN.
+     * 
+     * <p>Note: Phase transitions are handled in checkAndAdjust(), this method
+     * just returns the current TPS for the RECOVERY phase.
+     * 
+     * @param elapsedMillis elapsed time since pattern start
+     * @param current the current adaptive state
+     * @return the TPS for the RECOVERY phase
+     */
+    private double handleRecovery(long elapsedMillis, AdaptiveState current) {
+        // Phase transitions are handled in checkAndAdjust()
+        // Just return the current TPS (ensuring it's at least minimumTps)
+        return Math.max(minimumTps, current.currentTps());
+    }
+    
+    /**
+     * Checks if the current TPS level is stable.
+     * 
+     * <p>A TPS level is considered stable if:
+     * <ul>
+     *   <li>Error rate &lt; errorThreshold</li>
+     *   <li>Backpressure &lt; 0.3</li>
+     *   <li>TPS hasn't changed significantly (within tolerance)</li>
+     *   <li>Stable conditions maintained for SUSTAIN_DURATION</li>
+     * </ul>
+     * 
+     * @param currentTps the current TPS
+     * @param elapsedMillis elapsed time since start
+     * @return true if stable, false otherwise
+     */
+    private boolean isStableAtCurrentTps(double currentTps, long elapsedMillis) {
+        double errorRate = metricsProvider.getFailureRate() / PERCENTAGE_TO_RATIO;
+        double backpressure = getBackpressureLevel();
+        
+        // Check if conditions are good
+        boolean conditionsGood = errorRate < errorThreshold && backpressure < 0.3;
+        
+        if (!conditionsGood) {
+            // Conditions not good - reset stability tracking
+            stableTpsCandidate = -1.0;
+            stabilityStartTime = -1L;
+            return false;
+        }
+        
+        // Check if TPS is within tolerance of candidate
+        if (stableTpsCandidate < 0 || Math.abs(currentTps - stableTpsCandidate) > TPS_TOLERANCE) {
+            // New candidate or TPS changed significantly
+            stableTpsCandidate = currentTps;
+            stabilityStartTime = elapsedMillis;
+            return false;
+        }
+        
+        // Check if stable for required duration
+        // Use 3 intervals worth of time for stability detection (same as old logic)
+        long stabilityDuration = elapsedMillis - stabilityStartTime;
+        long requiredStabilityDuration = rampInterval.toMillis() * STABLE_INTERVALS_REQUIRED;
+        return stabilityDuration >= requiredStabilityDuration;
     }
     
     private double handleSustain(long elapsedMillis, AdaptiveState current) {
@@ -380,7 +474,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                 case RAMP_UP -> {
                     if (shouldRampDown) {
                         // Errors or backpressure detected, start ramping down
-                        double newTps = Math.max(0, current.currentTps() - rampDecrement);
+                        double newTps = Math.max(minimumTps, current.currentTps() - rampDecrement);
                         yield transitionPhaseInternal(current, Phase.RAMP_DOWN, elapsedMillis, current.stableTps(), newTps);
                     } else if (canRampUp) {
                         // No errors, no backpressure - continue ramping up
@@ -433,44 +527,69 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                         }
                     } else {
                         // Still errors or backpressure, continue ramping down
-                        double newTps = Math.max(0, current.currentTps() - rampDecrement);
+                        double newTps = Math.max(minimumTps, current.currentTps() - rampDecrement);
+                        // If we've reached minimum, transition to RECOVERY
+                        if (newTps <= minimumTps) {
+                            yield transitionPhaseInternal(current, Phase.RECOVERY, elapsedMillis, current.stableTps(), minimumTps);
+                        } else {
+                            yield new AdaptiveState(
+                                current.phase(),
+                                newTps,
+                                elapsedMillis,
+                                current.stableTps(),
+                                current.phaseStartTime(),
+                                0,  // Reset counter
+                                newAttempts,
+                                current.phaseTransitionCount()
+                            );
+                        }
+                    }
+                }
+                case SUSTAIN -> {
+                    // Check if conditions changed during sustain
+                    if (shouldRampDown) {
+                        // Conditions worsened - ramp down
+                        yield transitionPhaseInternal(current, Phase.RAMP_DOWN, elapsedMillis, current.stableTps(), current.currentTps());
+                    } else if (canRampUp && current.currentTps() < maxTps) {
+                        // Conditions good and below max - ramp up
+                        yield transitionPhaseInternal(current, Phase.RAMP_UP, elapsedMillis, current.stableTps(), current.currentTps());
+                    } else {
+                        // Stay in SUSTAIN
                         yield new AdaptiveState(
                             current.phase(),
-                            newTps,
+                            current.currentTps(),
                             elapsedMillis,
                             current.stableTps(),
                             current.phaseStartTime(),
-                            0,  // Reset counter
-                            newAttempts,
+                            current.stableIntervalsCount(),
+                            current.rampDownAttempts(),
                             current.phaseTransitionCount()
                         );
                     }
                 }
-                case SUSTAIN -> {
-                    // Monitor during sustain, but don't adjust
-                    yield new AdaptiveState(
-                        current.phase(),
-                        current.currentTps(),
-                        elapsedMillis,
-                        current.stableTps(),
-                        current.phaseStartTime(),
-                        current.stableIntervalsCount(),
-                        current.rampDownAttempts(),
-                        current.phaseTransitionCount()
-                    );
-                }
-                case COMPLETE -> {
-                    // No adjustments in complete phase
-                    yield new AdaptiveState(
-                        current.phase(),
-                        current.currentTps(),
-                        elapsedMillis,
-                        current.stableTps(),
-                        current.phaseStartTime(),
-                        current.stableIntervalsCount(),
-                        current.rampDownAttempts(),
-                        current.phaseTransitionCount()
-                    );
+                case RECOVERY -> {
+                    // Check if conditions improved or worsened
+                    if (canRampUp) {
+                        // Conditions improved - transition to RAMP_UP
+                        double recoveryTps = Math.max(minimumTps, initialTps * 0.5);
+                        yield transitionPhaseInternal(current, Phase.RAMP_UP, elapsedMillis, current.stableTps(), recoveryTps);
+                    } else if (shouldRampDown) {
+                        // Conditions worsened - transition to RAMP_DOWN
+                        double reducedTps = Math.max(minimumTps, current.currentTps() - rampDecrement);
+                        yield transitionPhaseInternal(current, Phase.RAMP_DOWN, elapsedMillis, current.stableTps(), reducedTps);
+                    } else {
+                        // Stay in RECOVERY
+                        yield new AdaptiveState(
+                            current.phase(),
+                            Math.max(minimumTps, current.currentTps()),
+                            elapsedMillis,
+                            current.stableTps(),
+                            current.phaseStartTime(),
+                            current.stableIntervalsCount(),
+                            current.rampDownAttempts(),
+                            current.phaseTransitionCount()
+                        );
+                    }
                 }
             };
         });
