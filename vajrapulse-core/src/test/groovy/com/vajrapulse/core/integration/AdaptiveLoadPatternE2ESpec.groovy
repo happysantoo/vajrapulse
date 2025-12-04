@@ -120,6 +120,7 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         def finalPhase = pattern.getCurrentPhase()
         finalPhase in [AdaptiveLoadPattern.Phase.RAMP_UP, 
                        AdaptiveLoadPattern.Phase.RAMP_DOWN,
+                       AdaptiveLoadPattern.Phase.RECOVERY,
                        AdaptiveLoadPattern.Phase.SUSTAIN]
         
         and: "should have seen phase transitions"
@@ -288,6 +289,7 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         def finalPhase = pattern.getCurrentPhase()
         finalPhase in [AdaptiveLoadPattern.Phase.RAMP_UP,
                        AdaptiveLoadPattern.Phase.RAMP_DOWN,
+                       AdaptiveLoadPattern.Phase.RECOVERY,
                        AdaptiveLoadPattern.Phase.SUSTAIN]
         
         cleanup:

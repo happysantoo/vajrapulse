@@ -187,6 +187,7 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
             .until {
                 def currentPhase = pattern.getCurrentPhase()
                 currentPhase == AdaptiveLoadPattern.Phase.RAMP_DOWN || 
+                currentPhase == AdaptiveLoadPattern.Phase.RECOVERY ||
                 currentPhase == AdaptiveLoadPattern.Phase.SUSTAIN
             }
         
@@ -194,10 +195,12 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         engine.stop()
         executionThread.join(5000)
         
-        then: "pattern should transition to RAMP_DOWN or be in RAMP_DOWN"
+        then: "pattern should transition to RAMP_DOWN, RECOVERY, or SUSTAIN"
         def phase = pattern.getCurrentPhase()
-        // May be in RAMP_DOWN or may have found stable point and moved to SUSTAIN
-        phase in [AdaptiveLoadPattern.Phase.RAMP_DOWN, AdaptiveLoadPattern.Phase.SUSTAIN]
+        // May be in RAMP_DOWN, RECOVERY (if TPS reached minimum), or SUSTAIN (if stable point found)
+        phase in [AdaptiveLoadPattern.Phase.RAMP_DOWN, 
+                  AdaptiveLoadPattern.Phase.RECOVERY,
+                  AdaptiveLoadPattern.Phase.SUSTAIN]
         
         and: "some executions should have occurred"
         def snapshot = metrics.snapshot()
@@ -241,7 +244,8 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
             .until {
                 def currentPhase = pattern.getCurrentPhase()
                 currentPhase == AdaptiveLoadPattern.Phase.SUSTAIN || 
-                currentPhase == AdaptiveLoadPattern.Phase.RAMP_DOWN
+                currentPhase == AdaptiveLoadPattern.Phase.RAMP_DOWN ||
+                currentPhase == AdaptiveLoadPattern.Phase.RECOVERY
             }
         
         // Stop the engine
@@ -250,8 +254,10 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         
         then: "pattern may have found stable point"
         def phase = pattern.getCurrentPhase()
-        // May be in SUSTAIN if stable point found, or still in RAMP_DOWN
-        phase in [AdaptiveLoadPattern.Phase.RAMP_DOWN, AdaptiveLoadPattern.Phase.SUSTAIN]
+        // May be in SUSTAIN if stable point found, RAMP_DOWN if still searching, or RECOVERY if TPS reached minimum
+        phase in [AdaptiveLoadPattern.Phase.RAMP_DOWN, 
+                  AdaptiveLoadPattern.Phase.RECOVERY,
+                  AdaptiveLoadPattern.Phase.SUSTAIN]
         
         and: "executions should have occurred"
         def snapshot = metrics.snapshot()
