@@ -242,11 +242,85 @@ create_tag() {
         return
     fi
     
+    # Check if tag already exists
+    if git rev-parse "v${VERSION}" &>/dev/null; then
+        echo -e "${YELLOW}Tag v${VERSION} already exists, skipping tag creation${NC}"
+        return
+    fi
+    
     echo -e "${BLUE}Creating Git tag v${VERSION}...${NC}"
     git tag -a "v${VERSION}" -m "Release v${VERSION}"
     echo -e "${GREEN}✓ Tag created${NC}"
+    
+    # Push tag to remote
+    echo -e "${BLUE}Pushing tag to remote...${NC}"
+    git push origin "v${VERSION}"
+    echo -e "${GREEN}✓ Tag pushed${NC}"
     echo ""
-    echo -e "${YELLOW}Note: Push the tag with: git push origin v${VERSION}${NC}"
+}
+
+# Create GitHub release
+create_github_release() {
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        echo -e "${YELLOW}DRY RUN: Would create GitHub release v${VERSION}${NC}"
+        return
+    fi
+    
+    if [[ "${PUBLISH}" != "true" ]]; then
+        echo -e "${YELLOW}Skipping GitHub release (use --publish to enable)${NC}"
+        return
+    fi
+    
+    # Check if GitHub CLI is available
+    if ! command -v gh &> /dev/null; then
+        echo -e "${YELLOW}Warning: GitHub CLI (gh) not found. Skipping GitHub release creation.${NC}"
+        echo "Install GitHub CLI: https://cli.github.com/"
+        echo "Or create release manually: https://github.com/happysantoo/vajrapulse/releases/new"
+        return
+    fi
+    
+    # Check if already authenticated
+    if ! gh auth status &>/dev/null; then
+        echo -e "${YELLOW}Warning: GitHub CLI not authenticated. Skipping GitHub release creation.${NC}"
+        echo "Authenticate with: gh auth login"
+        return
+    fi
+    
+    echo -e "${BLUE}Creating GitHub release v${VERSION}...${NC}"
+    
+    # Extract release notes from CHANGELOG.md
+    local release_notes=""
+    if [[ -f "CHANGELOG.md" ]]; then
+        # Extract the section for this version from CHANGELOG
+        release_notes=$(awk "/^## \[${VERSION}\]/,/^## \[/" CHANGELOG.md | sed '$d')
+        if [[ -z "${release_notes}" ]]; then
+            # Fallback to simple message
+            release_notes="Release ${VERSION}
+
+See CHANGELOG.md for details."
+        fi
+    else
+        release_notes="Release ${VERSION}"
+    fi
+    
+    # Create GitHub release
+    if gh release create "v${VERSION}" \
+        --title "Release v${VERSION}" \
+        --notes "${release_notes}" \
+        --repo "happysantoo/vajrapulse" 2>&1; then
+        echo -e "${GREEN}✓ GitHub release created${NC}"
+        echo ""
+        echo "Release URL: https://github.com/happysantoo/vajrapulse/releases/tag/v${VERSION}"
+    else
+        # Check if release already exists
+        if gh release view "v${VERSION}" --repo "happysantoo/vajrapulse" &>/dev/null; then
+            echo -e "${YELLOW}GitHub release v${VERSION} already exists${NC}"
+        else
+            echo -e "${RED}Failed to create GitHub release${NC}"
+            echo "Create manually: https://github.com/happysantoo/vajrapulse/releases/new"
+        fi
+    fi
+    echo ""
 }
 
 # Main execution
@@ -258,8 +332,9 @@ main() {
     build_project
     prepare_release
     publish_local
-    publish_central
     create_tag
+    create_github_release
+    publish_central
     
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}Release process completed!${NC}"
@@ -269,13 +344,20 @@ main() {
     if [[ "${DRY_RUN}" == "true" ]]; then
         echo -e "${YELLOW}This was a dry run. No changes were published.${NC}"
     elif [[ "${PUBLISH}" == "true" ]]; then
-        echo -e "${GREEN}Version ${VERSION} has been published to Maven Central${NC}"
+        echo -e "${GREEN}Version ${VERSION} release completed!${NC}"
+        echo ""
+        echo "Completed steps:"
+        echo "  ✓ Git tag created and pushed: v${VERSION}"
+        echo "  ✓ GitHub release created (if GitHub CLI available)"
+        echo "  ✓ Maven Central bundle uploaded"
         echo ""
         echo "Next steps:"
-        echo "  1. Verify artifacts: https://repo1.maven.org/maven2/com/vajrapulse/"
-        echo "  2. Push Git tag: git push origin v${VERSION}"
-        echo "  3. Create GitHub release (if enabled)"
-        echo "  4. Update documentation with new version"
+        echo "  1. Monitor Maven Central sync (10-120 minutes):"
+        echo "     https://central.sonatype.com/"
+        echo "  2. Verify artifacts after sync:"
+        echo "     https://repo1.maven.org/maven2/com/vajrapulse/"
+        echo "  3. Check GitHub release:"
+        echo "     https://github.com/happysantoo/vajrapulse/releases/tag/v${VERSION}"
     else
         echo -e "${YELLOW}Release artifacts prepared but not published${NC}"
         echo "To publish, run: ./scripts/release.sh ${VERSION} --publish"
