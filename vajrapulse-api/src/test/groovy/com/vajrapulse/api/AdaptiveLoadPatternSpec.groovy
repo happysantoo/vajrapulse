@@ -32,9 +32,15 @@ class AdaptiveLoadPatternSpec extends Specification {
     static class MockMetricsProvider implements MetricsProvider {
         private volatile double failureRate = 0.0
         private volatile long totalExecutions = 0
+        private volatile double recentFailureRate = 0.0
         
         void setFailureRate(double rate) {
             this.failureRate = rate
+            this.recentFailureRate = rate // Default: same as all-time
+        }
+        
+        void setRecentFailureRate(double rate) {
+            this.recentFailureRate = rate
         }
         
         void setTotalExecutions(long count) {
@@ -47,8 +53,27 @@ class AdaptiveLoadPatternSpec extends Specification {
         }
         
         @Override
+        double getRecentFailureRate(int windowSeconds) {
+            return recentFailureRate
+        }
+        
+        @Override
         long getTotalExecutions() {
             return totalExecutions
+        }
+    }
+    
+    // Mock BackpressureProvider for testing
+    static class MockBackpressureProvider implements BackpressureProvider {
+        private volatile double backpressure = 0.0
+        
+        void setBackpressure(double level) {
+            this.backpressure = level
+        }
+        
+        @Override
+        double getBackpressureLevel() {
+            return backpressure
         }
     }
     
@@ -200,15 +225,18 @@ class AdaptiveLoadPatternSpec extends Specification {
     def "should transition to RECOVERY phase when TPS reaches minimum"() {
         given: "a new adaptive pattern that ramps down to minimum TPS"
         def provider = new MockMetricsProvider()
+        def backpressureProvider = new MockBackpressureProvider()
         def pattern = new AdaptiveLoadPattern(
             100.0, 50.0, 100.0, Duration.ofSeconds(1),
-            1000.0, Duration.ofSeconds(10), 0.01, provider
+            1000.0, Duration.ofSeconds(10), 0.01, provider, backpressureProvider
         )
         
         when: "ramping down until TPS reaches minimum"
         pattern.calculateTps(0) // Initialize
         // Trigger RAMP_DOWN
         provider.setFailureRate(2.0)
+        provider.setRecentFailureRate(2.0) // Keep recent rate high to prevent recovery
+        backpressureProvider.setBackpressure(0.8) // High backpressure to prevent recovery
         pattern.calculateTps(1001) // First ramp down: 100 -> 0 (minimum)
         
         def tps = pattern.calculateTps(2001)
@@ -230,16 +258,144 @@ class AdaptiveLoadPatternSpec extends Specification {
         pattern.calculateTps(0) // Initialize
         // Trigger RAMP_DOWN to minimum
         provider.setFailureRate(2.0)
+        provider.setRecentFailureRate(2.0)
         pattern.calculateTps(1001) // Ramp down to 0 -> RECOVERY
         
-        // Conditions improve
+        // Conditions improve - use recent window for recovery decision
         provider.setFailureRate(0.0)
+        provider.setRecentFailureRate(0.0) // Recent window shows improvement
         def tps = pattern.calculateTps(2001) // Should transition to RAMP_UP
         
         then: "should transition to RAMP_UP with recovery TPS"
         pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_UP
         tps >= 0.0 // Recovery TPS should be at least minimum (50% of initial = 50.0)
         tps == 50.0 // Recovery TPS is initialTps * 0.5 = 100 * 0.5 = 50.0
+    }
+    
+    def "should transition from RECOVERY to RAMP_UP when backpressure is low"() {
+        given: "a pattern in RECOVERY phase with backpressure provider"
+        def provider = new MockMetricsProvider()
+        def backpressureProvider = new MockBackpressureProvider()
+        def pattern = new AdaptiveLoadPattern(
+            100.0, 50.0, 100.0, Duration.ofSeconds(1),
+            1000.0, Duration.ofSeconds(10), 0.01, provider, backpressureProvider
+        )
+        
+        when: "pattern enters RECOVERY, then backpressure becomes low"
+        pattern.calculateTps(0) // Initialize
+        // Trigger RAMP_DOWN to minimum
+        provider.setFailureRate(2.0)
+        provider.setRecentFailureRate(2.0)
+        backpressureProvider.setBackpressure(0.8) // High backpressure
+        pattern.calculateTps(1001) // Ramp down to 0 -> RECOVERY
+        
+        // Backpressure improves (low backpressure allows recovery)
+        backpressureProvider.setBackpressure(0.2) // Low backpressure (< 0.3)
+        provider.setRecentFailureRate(1.0) // Error rate still elevated but backpressure is low
+        def tps = pattern.calculateTps(2001) // Should transition to RAMP_UP
+        
+        then: "should transition to RAMP_UP when backpressure is low"
+        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_UP
+        tps == 50.0 // Recovery TPS is 50% of initial
+    }
+    
+    def "should stay in RECOVERY when conditions are poor"() {
+        given: "a pattern in RECOVERY phase"
+        def provider = new MockMetricsProvider()
+        def backpressureProvider = new MockBackpressureProvider()
+        def pattern = new AdaptiveLoadPattern(
+            100.0, 50.0, 100.0, Duration.ofSeconds(1),
+            1000.0, Duration.ofSeconds(10), 0.01, provider, backpressureProvider
+        )
+        
+        when: "pattern enters RECOVERY with poor conditions"
+        pattern.calculateTps(0) // Initialize
+        // Trigger RAMP_DOWN to minimum
+        provider.setFailureRate(2.0)
+        provider.setRecentFailureRate(2.0)
+        backpressureProvider.setBackpressure(0.8) // High backpressure
+        pattern.calculateTps(1001) // Ramp down to 0 -> RECOVERY
+        
+        // Conditions remain poor
+        provider.setRecentFailureRate(2.0) // High error rate
+        backpressureProvider.setBackpressure(0.8) // High backpressure
+        def tps = pattern.calculateTps(2001) // Should stay in RECOVERY
+        
+        then: "should stay in RECOVERY"
+        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RECOVERY
+        tps == 0.0 // Minimum TPS
+    }
+    
+    def "should use lastKnownGoodTps for recovery TPS calculation"() {
+        given: "a pattern that ramps up then down to RECOVERY"
+        def provider = new MockMetricsProvider()
+        def pattern = new AdaptiveLoadPattern(
+            100.0, 50.0, 100.0, Duration.ofSeconds(1),
+            1000.0, Duration.ofSeconds(10), 0.01, provider
+        )
+        
+        when: "pattern ramps up to 500 TPS, then down to RECOVERY"
+        pattern.calculateTps(0) // Initialize at 100 TPS
+        // Ramp up to 500 TPS
+        provider.setFailureRate(0.0)
+        pattern.calculateTps(1001) // 100 -> 150
+        pattern.calculateTps(2001) // 150 -> 200
+        pattern.calculateTps(3001) // 200 -> 250
+        pattern.calculateTps(4001) // 250 -> 300
+        pattern.calculateTps(5001) // 300 -> 350
+        pattern.calculateTps(6001) // 350 -> 400
+        pattern.calculateTps(7001) // 400 -> 450
+        pattern.calculateTps(8001) // 450 -> 500
+        
+        // Now ramp down to RECOVERY
+        provider.setFailureRate(2.0)
+        provider.setRecentFailureRate(2.0)
+        pattern.calculateTps(9001) // 500 -> 400 (RAMP_DOWN, lastKnownGoodTps = 500)
+        pattern.calculateTps(10001) // 400 -> 300
+        pattern.calculateTps(11001) // 300 -> 200
+        pattern.calculateTps(12001) // 200 -> 100
+        pattern.calculateTps(13001) // 100 -> 0 (RECOVERY)
+        
+        // Conditions improve
+        provider.setFailureRate(0.0)
+        provider.setRecentFailureRate(0.0)
+        def recoveryTps = pattern.calculateTps(14001) // Should recover at 50% of 500 = 250
+        
+        then: "recovery TPS should be 50% of last known good (500)"
+        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_UP
+        recoveryTps == 250.0 // 50% of 500
+    }
+    
+    def "should check for intermediate stability during RAMP_DOWN"() {
+        given: "a pattern ramping down"
+        def provider = new MockMetricsProvider()
+        def pattern = new AdaptiveLoadPattern(
+            100.0, 50.0, 50.0, Duration.ofSeconds(1), // Smaller decrement to stay above 0
+            1000.0, Duration.ofSeconds(10), 0.01, provider
+        )
+        
+        when: "pattern ramps down to intermediate TPS"
+        pattern.calculateTps(0) // Initialize at 100
+        // Trigger RAMP_DOWN
+        provider.setFailureRate(2.0)
+        provider.setRecentFailureRate(2.0)
+        pattern.calculateTps(1001) // Ramp down: 100 -> 50
+        
+        // Conditions improve - no errors, low backpressure
+        provider.setFailureRate(0.0)
+        provider.setRecentFailureRate(0.0)
+        // Stay at 50 TPS with good conditions
+        def tps1 = pattern.calculateTps(2001) // Still in RAMP_DOWN, conditions good
+        def phase1 = pattern.getCurrentPhase()
+        def tps2 = pattern.calculateTps(3001) // Still in RAMP_DOWN, conditions good
+        
+        then: "should remain at intermediate TPS and check for stability"
+        // The pattern should be in RAMP_DOWN and checking for stability
+        // handleRampDown() now calls isStableAtCurrentTps() to check for intermediate stability
+        phase1 == AdaptiveLoadPattern.Phase.RAMP_DOWN
+        tps1 == 50.0 // Should be at 50 TPS
+        tps2 == 50.0 // Should remain at 50 TPS
+        // Note: Full stability detection requires 3 intervals, which is tested in integration tests
     }
     
     def "should detect intermediate stability during RAMP_UP"() {

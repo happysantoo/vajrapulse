@@ -102,13 +102,36 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         int rampDownAttempts,
         long phaseTransitionCount,
         double stableTpsCandidate,  // -1 means no candidate is being tracked
-        long stabilityStartTime  // -1 means no candidate is being tracked
+        long stabilityStartTime,  // -1 means no candidate is being tracked
+        double lastKnownGoodTps  // Highest TPS achieved before entering RECOVERY
     ) {
         AdaptiveState {
             // Compact constructor validation
             if (phase == null) {
                 throw new IllegalArgumentException("Phase must not be null");
             }
+        }
+        
+        /**
+         * Creates a new state with updated last known good TPS.
+         * 
+         * @param tps the TPS to set as last known good (only if higher than current)
+         * @return new state with updated lastKnownGoodTps
+         */
+        AdaptiveState withLastKnownGoodTps(double tps) {
+            return new AdaptiveState(
+                phase,
+                currentTps,
+                lastAdjustmentTime,
+                stableTps,
+                phaseStartTime,
+                stableIntervalsCount,
+                rampDownAttempts,
+                phaseTransitionCount,
+                stableTpsCandidate,
+                stabilityStartTime,
+                Math.max(lastKnownGoodTps, tps)
+            );
         }
     }
     
@@ -196,7 +219,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             0,
             0L,
             -1.0,  // No stability candidate yet
-            -1L  // No stability start time yet
+            -1L,  // No stability start time yet
+            initialTps  // Initialize to initialTps
         ));
     }
     
@@ -271,7 +295,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             0,
             0L,
             -1.0,  // No stability candidate yet
-            -1L  // No stability start time yet
+            -1L,  // No stability start time yet
+            initialTps  // Initialize to initialTps
         ));
     }
     
@@ -295,7 +320,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                 s.rampDownAttempts(),
                 s.phaseTransitionCount(),
                 s.stableTpsCandidate(),
-                s.stabilityStartTime()
+                s.stabilityStartTime(),
+                s.lastKnownGoodTps()
             ));
             current = state.get();
         }
@@ -352,9 +378,12 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             return minimumTps;
         }
         
-        // Note: Stability detection in RAMP_DOWN is handled by checkAndAdjust()
-        // using stableIntervalsCount. The new isStableAtCurrentTps() is only
-        // used for intermediate stability detection during RAMP_UP.
+        // Check if stable at current TPS (intermediate stability)
+        // This allows the pattern to sustain at intermediate TPS levels during ramp-down
+        if (isStableAtCurrentTps(current.currentTps(), elapsedMillis)) {
+            transitionPhase(Phase.SUSTAIN, elapsedMillis, current.currentTps());
+            return current.currentTps();
+        }
         
         return current.currentTps();
     }
@@ -367,12 +396,21 @@ public final class AdaptiveLoadPattern implements LoadPattern {
      * backpressure &lt; 0.3), it transitions to RAMP_UP. If conditions worsen,
      * it transitions to RAMP_DOWN.
      * 
+     * <p>Recovery uses recent window failure rate (last 10 seconds) to make
+     * decisions, allowing the pattern to recover even when historical failures
+     * keep the all-time error rate elevated.
+     * 
+     * <p>When transitioning to RAMP_UP, the recovery TPS is set to 50% of the
+     * last known good TPS (the highest TPS achieved before entering RECOVERY),
+     * ensuring a conservative recovery approach.
+     * 
      * <p>Note: Phase transitions are handled in checkAndAdjust(), this method
      * just returns the current TPS for the RECOVERY phase.
      * 
      * @param elapsedMillis elapsed time since pattern start
      * @param current the current adaptive state
      * @return the TPS for the RECOVERY phase
+     * @since 0.9.8
      */
     private double handleRecovery(long elapsedMillis, AdaptiveState current) {
         // Phase transitions are handled in checkAndAdjust()
@@ -388,12 +426,17 @@ public final class AdaptiveLoadPattern implements LoadPattern {
      *   <li>Error rate &lt; errorThreshold</li>
      *   <li>Backpressure &lt; 0.3</li>
      *   <li>TPS hasn't changed significantly (within tolerance)</li>
-     *   <li>Stable conditions maintained for SUSTAIN_DURATION</li>
+     *   <li>Stable conditions maintained for required duration (3 intervals)</li>
      * </ul>
+     * 
+     * <p>This method enables intermediate stability detection, allowing the pattern
+     * to sustain at optimal TPS levels (not just MAX_TPS). Stability can be detected
+     * during both RAMP_UP and RAMP_DOWN phases.
      * 
      * @param currentTps the current TPS
      * @param elapsedMillis elapsed time since start
      * @return true if stable, false otherwise
+     * @since 0.9.8
      */
     private boolean isStableAtCurrentTps(double currentTps, long elapsedMillis) {
         double errorRate = metricsProvider.getFailureRate() / PERCENTAGE_TO_RATIO;
@@ -419,7 +462,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                 s.rampDownAttempts(),
                 s.phaseTransitionCount(),
                 -1.0,  // Reset candidate
-                -1L  // Reset start time
+                -1L,  // Reset start time
+                s.lastKnownGoodTps()
             ));
             return false;
         }
@@ -437,7 +481,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                 s.rampDownAttempts(),
                 s.phaseTransitionCount(),
                 currentTps,  // New candidate
-                elapsedMillis  // New start time
+                elapsedMillis,  // New start time
+                s.lastKnownGoodTps()
             ));
             return false;
         }
@@ -510,7 +555,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                             current.rampDownAttempts(),
                             current.phaseTransitionCount(),
                             current.stableTpsCandidate(),
-                            current.stabilityStartTime()
+                            current.stabilityStartTime(),
+                            current.lastKnownGoodTps()
                         );
                     } else {
                         // Moderate backpressure - hold current TPS
@@ -524,7 +570,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                             current.rampDownAttempts(),
                             current.phaseTransitionCount(),
                             current.stableTpsCandidate(),
-                            current.stabilityStartTime()
+                            current.stabilityStartTime(),
+                            current.lastKnownGoodTps()
                         );
                     }
                 }
@@ -549,7 +596,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                                 newAttempts,
                                 current.phaseTransitionCount(),
                                 current.stableTpsCandidate(),
-                                current.stabilityStartTime()
+                                current.stabilityStartTime(),
+                                current.lastKnownGoodTps()
                             );
                         }
                     } else {
@@ -569,7 +617,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                                 newAttempts,
                                 current.phaseTransitionCount(),
                                 current.stableTpsCandidate(),
-                                current.stabilityStartTime()
+                                current.stabilityStartTime(),
+                                current.lastKnownGoodTps()
                             );
                         }
                     }
@@ -595,15 +644,28 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                             current.rampDownAttempts(),
                             current.phaseTransitionCount(),
                             current.stableTpsCandidate(),
-                            current.stabilityStartTime()
+                            current.stabilityStartTime(),
+                            current.lastKnownGoodTps()
                         );
                     }
                 }
                 case RECOVERY -> {
-                    // Check if conditions improved or worsened
-                    if (canRampUp) {
+                    // Use recent window failure rate for recovery decisions (last 10 seconds)
+                    double recentErrorRate = metricsProvider.getRecentFailureRate(10) / PERCENTAGE_TO_RATIO;
+                    double recoveryBackpressure = getBackpressureLevel();
+                    
+                    // Recovery conditions: backpressure low OR (error rate low AND backpressure moderate)
+                    // This is lenient to allow recovery even if error rate is slightly elevated
+                    boolean canRecover = recoveryBackpressure < 0.3 
+                        || (recentErrorRate < errorThreshold && recoveryBackpressure < 0.5);
+                    
+                    if (canRecover) {
                         // Conditions improved - transition to RAMP_UP
-                        double recoveryTps = Math.max(minimumTps, initialTps * 0.5);
+                        // Calculate recovery TPS: 50% of last known good, but at least minimum
+                        double lastKnownGoodTps = current.lastKnownGoodTps() > 0 
+                            ? current.lastKnownGoodTps() 
+                            : initialTps;
+                        double recoveryTps = Math.max(minimumTps, lastKnownGoodTps * 0.5);
                         yield transitionPhaseInternal(current, Phase.RAMP_UP, elapsedMillis, current.stableTps(), recoveryTps);
                     } else if (shouldRampDown) {
                         // Conditions worsened - transition to RAMP_DOWN
@@ -621,7 +683,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                             current.rampDownAttempts(),
                             current.phaseTransitionCount(),
                             current.stableTpsCandidate(),
-                            current.stabilityStartTime()
+                            current.stabilityStartTime(),
+                            current.lastKnownGoodTps()
                         );
                     }
                 }
@@ -630,6 +693,16 @@ public final class AdaptiveLoadPattern implements LoadPattern {
     }
     
     private AdaptiveState transitionPhaseInternal(AdaptiveState current, Phase newPhase, long elapsedMillis, double stableTps, double newTps) {
+        // Update lastKnownGoodTps when transitioning to RAMP_DOWN or RECOVERY
+        double updatedLastKnownGoodTps = current.lastKnownGoodTps();
+        if (newPhase == Phase.RAMP_DOWN || newPhase == Phase.RECOVERY) {
+            // Update last known good TPS before transitioning
+            double currentTps = current.currentTps();
+            if (currentTps > current.lastKnownGoodTps()) {
+                updatedLastKnownGoodTps = currentTps;
+            }
+        }
+        
         if (current.phase() != newPhase) {
             return new AdaptiveState(
                 newPhase,
@@ -641,7 +714,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                 current.rampDownAttempts(),
                 current.phaseTransitionCount() + 1,
                 current.stableTpsCandidate(),  // Preserve stability tracking
-                current.stabilityStartTime()  // Preserve stability tracking
+                current.stabilityStartTime(),  // Preserve stability tracking
+                updatedLastKnownGoodTps  // Updated last known good TPS
             );
         }
         // Same phase, just update TPS and time
@@ -655,7 +729,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             current.rampDownAttempts(),
             current.phaseTransitionCount(),
             current.stableTpsCandidate(),  // Preserve stability tracking
-            current.stabilityStartTime()  // Preserve stability tracking
+            current.stabilityStartTime(),  // Preserve stability tracking
+            updatedLastKnownGoodTps  // Updated last known good TPS
         );
     }
     
