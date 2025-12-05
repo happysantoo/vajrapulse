@@ -101,7 +101,7 @@ class AdaptiveLoadPatternHangingDiagnosticSpec extends Specification {
         phaseBeforeStop in [AdaptiveLoadPattern.Phase.RAMP_UP, 
                             AdaptiveLoadPattern.Phase.RAMP_DOWN,
                             AdaptiveLoadPattern.Phase.SUSTAIN,
-                            AdaptiveLoadPattern.Phase.COMPLETE]
+                            AdaptiveLoadPattern.Phase.RECOVERY]
         
         and: "TPS should be valid"
         tpsBeforeStop >= 0.0
@@ -138,14 +138,14 @@ class AdaptiveLoadPatternHangingDiagnosticSpec extends Specification {
             .withMetricsCollector(metrics)
             .build()
         
-        when: "manually triggering COMPLETE phase (returns 0.0)"
-        // Force pattern to COMPLETE phase by exhausting ramp down attempts
+        when: "manually triggering RECOVERY phase (returns minimum TPS)"
+        // Force pattern to RECOVERY phase by reaching minimum TPS
         // This is a simulation - in real scenario, this would happen naturally
         
         // First, check what happens when calculateTps returns 0.0
         def tpsAtZero = pattern.calculateTps(0)
         
-        // Simulate pattern in COMPLETE phase by checking behavior
+        // Simulate pattern in RECOVERY phase by checking behavior
         // Note: We can't directly set phase, but we can observe behavior
         
         def executionThread = Thread.start {

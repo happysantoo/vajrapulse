@@ -8,11 +8,135 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 ### Planned
 - Distributed execution layer (multi-worker coordination)
 - Health & metrics endpoints for Kubernetes deployments
-- Enhanced client-side metrics (connection pool, timeouts, backlog)
 - Additional examples (database, gRPC, Kafka, multi-endpoint REST)
 - Configuration system enhancements (schema validation, inheritance)
 - GraalVM native image validation
 - Scenario scripting DSL
+
+## [0.9.7] - 2025-01-XX
+### Added
+- **AdaptiveLoadPattern Enhancements**: Continuous operation with recovery and stability detection
+  - **RECOVERY Phase**: Replaced terminal COMPLETE phase with RECOVERY phase that can transition back to RAMP_UP
+  - **Intermediate Stability Detection**: Pattern can now detect and sustain at optimal TPS levels (not just MAX_TPS)
+  - **Minimum TPS Configuration**: Configurable minimum TPS to prevent pattern from going to zero
+  - Pattern now operates continuously without terminal states
+  - Enhanced phase transitions: RAMP_UP → SUSTAIN (at intermediate TPS) → RAMP_UP → SUSTAIN (at higher TPS)
+  - Recovery from low TPS when system conditions improve
+- **Client-Side Metrics**: Comprehensive client-side metrics tracking
+  - `ClientMetrics` record for connection pool, queue, and error metrics
+  - Connection pool metrics: active, idle, waiting connections, utilization
+  - Client queue metrics: depth, average wait time
+  - Client-side errors: connection timeouts, request timeouts, connection refused
+  - Integrated into `MetricsCollector` and `AggregatedMetrics`
+  - Console exporter displays client metrics
+  - Micrometer gauges and counters for all client metrics
+- **Warm-up/Cool-down Phases**: Built-in warm-up and cool-down support for load patterns
+  - `WarmupCooldownLoadPattern` wrapper that adds warm-up and cool-down phases to any load pattern
+  - Warm-up phase: Gradually ramps from 0 to initial TPS (metrics not recorded)
+  - Steady-state phase: Executes base pattern at full TPS (metrics recorded)
+  - Cool-down phase: Gradually ramps from final TPS to 0 (metrics not recorded)
+  - Phase detection API: `getCurrentPhase()`, `shouldRecordMetrics()`
+  - Factory methods: `withWarmup()`, `withCooldown()`
+  - `ExecutionEngine` automatically skips metrics during warm-up/cool-down
+  - Works with all existing load patterns
+- **Assertion Framework**: Built-in assertion framework for test validation
+  - `Assertion` interface for evaluating metrics against criteria
+  - `AssertionResult` record for success/failure results with messages
+  - `Assertions` factory with built-in validators:
+    - Latency assertions (percentile-based, e.g., P95 < 100ms)
+    - Error rate assertions (e.g., error rate < 1%)
+    - Success rate assertions (e.g., success rate > 99%)
+    - Throughput assertions (e.g., TPS > 1000)
+    - Execution count assertions (e.g., total executions > 10000)
+    - Composite assertions: `all()` (all must pass), `any()` (at least one must pass)
+  - `Metrics` interface for module boundary compliance (API module has zero dependencies)
+  - Zero dependencies, lightweight, tailored for load testing use cases
+
+### Changed
+- **AdaptiveLoadPattern**: Enhanced with continuous operation capabilities
+  - Phase enum: `COMPLETE` → `RECOVERY` (breaking change, but pre-1.0)
+  - `handleRecovery()` method for recovery phase transitions
+  - `isStableAtCurrentTps()` method for intermediate stability detection
+  - `minimumTps` parameter added to constructors (defaults to 0.0 for backward compatibility)
+  - `handleRampUp()` and `handleSustain()` updated to detect intermediate stability
+  - `handleRampDown()` transitions to RECOVERY at minimum TPS instead of stopping
+- **AggregatedMetrics**: Enhanced with client metrics
+  - Added `clientMetrics` parameter (defaults to empty `ClientMetrics` for backward compatibility)
+  - Implements `Metrics` interface for assertion framework compatibility
+- **MetricsCollector**: Enhanced with client metrics tracking
+  - `recordClientMetrics()` method for updating client metrics
+  - `recordConnectionTimeout()`, `recordRequestTimeout()`, `recordConnectionRefused()` methods
+  - `recordClientQueueWait()` method for queue wait time tracking
+  - Micrometer gauges and counters for all client metrics
+- **ExecutionEngine**: Enhanced with warm-up/cool-down support
+  - Detects `WarmupCooldownLoadPattern` instances
+  - Skips metrics recording during warm-up and cool-down phases
+  - Only records metrics during steady-state phase
+- **ConsoleMetricsExporter**: Enhanced to display client metrics
+  - Shows connection pool metrics (active, idle, waiting, utilization)
+  - Shows client queue metrics (depth, average wait time)
+  - Shows client-side errors (timeouts, connection refused)
+
+### Fixed
+- Fixed test failures in exporter modules after `ClientMetrics` addition
+- Fixed `AdaptiveLoadPattern` phase transitions to properly handle RECOVERY phase
+- Fixed `ClientMetrics.averageQueueWaitTimeMs()` calculation by adding `queueOperationCount` field
+- Consolidated `AdaptiveLoadPattern` state management by moving volatile fields into `AdaptiveState` record
+
+### Migration Guide
+
+#### AdaptiveLoadPattern Phase Changes
+
+**Breaking Change**: The `COMPLETE` phase has been replaced with `RECOVERY` phase.
+
+**Before (0.9.6)**:
+```java
+if (pattern.getPhase() == Phase.COMPLETE) {
+    // Handle completion - pattern is done
+}
+```
+
+**After (0.9.7)**:
+```java
+if (pattern.getPhase() == Phase.RECOVERY) {
+    // Handle recovery - pattern may continue if conditions improve
+}
+
+// To check if pattern is truly complete:
+if (pattern.calculateTps(elapsedMillis) == 0.0) {
+    // Pattern is complete
+}
+```
+
+**Key Differences**:
+- `COMPLETE` was a terminal state - pattern would stop
+- `RECOVERY` is a non-terminal state - pattern can transition back to `RAMP_UP` when conditions improve
+- Pattern now operates continuously without terminal states
+- Use `calculateTps()` returning 0.0 to detect completion
+
+#### ClientMetrics Changes
+
+**New Field**: `queueOperationCount` has been added to properly calculate average queue wait time.
+
+**Before (0.9.6)**:
+```java
+ClientMetrics metrics = new ClientMetrics(
+    activeConnections, idleConnections, waitingConnections,
+    queueDepth, queueWaitTimeNanos,
+    connectionTimeouts, requestTimeouts, connectionRefused
+);
+```
+
+**After (0.9.7)**:
+```java
+ClientMetrics metrics = new ClientMetrics(
+    activeConnections, idleConnections, waitingConnections,
+    queueDepth, queueWaitTimeNanos, queueOperationCount,  // Added queueOperationCount
+    connectionTimeouts, requestTimeouts, connectionRefused
+);
+```
+
+**Note**: The default constructor `new ClientMetrics()` still works and initializes all fields to zero.
 
 ## [0.9.6] - 2025-01-XX
 ### Added

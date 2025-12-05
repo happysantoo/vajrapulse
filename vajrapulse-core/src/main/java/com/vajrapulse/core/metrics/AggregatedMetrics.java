@@ -1,11 +1,15 @@
 package com.vajrapulse.core.metrics;
 
+import com.vajrapulse.api.Metrics;
 import java.util.Collections;
 
 /**
  * Aggregated metrics snapshot at a point in time.
  * 
  * <p>All latency values are in nanoseconds.
+ * 
+ * <p>This class implements {@link Metrics} to enable assertion evaluation
+ * without creating a dependency from the API module to the core module.
  * 
  * @param totalExecutions total number of executions
  * @param successCount number of successful executions
@@ -15,6 +19,8 @@ import java.util.Collections;
  * @param elapsedMillis time elapsed since metrics collection started
  * @param queueSize current number of pending executions in queue
  * @param queueWaitPercentiles map of percentile→wait time nanos for queue wait
+ * @param clientMetrics client-side metrics (connection pools, queues, timeouts)
+ * @since 0.9.7
  */
 public record AggregatedMetrics(
     long totalExecutions,
@@ -24,8 +30,9 @@ public record AggregatedMetrics(
     java.util.Map<Double, Double> failurePercentiles,
     long elapsedMillis,
     long queueSize,
-    java.util.Map<Double, Double> queueWaitPercentiles
-) {
+    java.util.Map<Double, Double> queueWaitPercentiles,
+    ClientMetrics clientMetrics
+) implements Metrics {
     /**
      * Percentage multiplier for rate calculations (100.0 = 100%).
      */
@@ -49,6 +56,8 @@ public record AggregatedMetrics(
         queueWaitPercentiles = queueWaitPercentiles != null
             ? Collections.unmodifiableMap(new java.util.LinkedHashMap<>(queueWaitPercentiles))
             : Collections.emptyMap();
+        // ClientMetrics is immutable (record), so no defensive copy needed
+        clientMetrics = clientMetrics != null ? clientMetrics : new ClientMetrics();
     }
     
     /**

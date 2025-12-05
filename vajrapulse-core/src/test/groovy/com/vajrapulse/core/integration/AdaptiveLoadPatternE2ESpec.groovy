@@ -120,6 +120,7 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         def finalPhase = pattern.getCurrentPhase()
         finalPhase in [AdaptiveLoadPattern.Phase.RAMP_UP, 
                        AdaptiveLoadPattern.Phase.RAMP_DOWN,
+                       AdaptiveLoadPattern.Phase.RECOVERY,
                        AdaptiveLoadPattern.Phase.SUSTAIN]
         
         and: "should have seen phase transitions"
@@ -136,8 +137,8 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         and: "TPS should be valid throughout"
         tpsValues.every { it >= 0.0 && !Double.isNaN(it) && !Double.isInfinite(it) }
         
-        and: "pattern should not be in COMPLETE phase (unless stable point not found)"
-        // COMPLETE phase only occurs if stable point is never found after max attempts
+        and: "pattern should not be in RECOVERY phase (unless minimum TPS reached)"
+        // RECOVERY phase occurs when TPS reaches minimum, allowing recovery
         // This is acceptable, but we prefer SUSTAIN
         
         cleanup:
@@ -288,6 +289,7 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         def finalPhase = pattern.getCurrentPhase()
         finalPhase in [AdaptiveLoadPattern.Phase.RAMP_UP,
                        AdaptiveLoadPattern.Phase.RAMP_DOWN,
+                       AdaptiveLoadPattern.Phase.RECOVERY,
                        AdaptiveLoadPattern.Phase.SUSTAIN]
         
         cleanup:

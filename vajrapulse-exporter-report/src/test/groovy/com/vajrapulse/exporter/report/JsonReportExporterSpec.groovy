@@ -27,7 +27,8 @@ class JsonReportExporterSpec extends Specification {
             [0.5d: 150_300_000.0d, 0.99d: 380_100_000.0d],
             30_000L,
             10L,
-            [0.5d: 2_000_000.0d, 0.95d: 15_000_000.0d]
+            [0.5d: 2_000_000.0d, 0.95d: 15_000_000.0d],
+            new com.vajrapulse.core.metrics.ClientMetrics()
         )
         
         when:
@@ -52,7 +53,7 @@ class JsonReportExporterSpec extends Specification {
         given:
         def outputPath = tempDir.resolve("subdir/report.json")
         def exporter = new JsonReportExporter(outputPath)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
         
         when:
         exporter.export("Test", metrics)
@@ -66,7 +67,7 @@ class JsonReportExporterSpec extends Specification {
         given:
         def outputPath = tempDir.resolve("empty-report.json")
         def exporter = new JsonReportExporter(outputPath)
-        def metrics = new AggregatedMetrics(0L, 0L, 0L, [:], [:], 0L, 0L, [:])
+        def metrics = new AggregatedMetrics(0L, 0L, 0L, [:], [:], 0L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
         
         when:
         exporter.export("Empty Report", metrics)
@@ -84,7 +85,7 @@ class JsonReportExporterSpec extends Specification {
         def outputPath = tempDir.resolve("adaptive-report.json")
         def registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry()
         def exporter = new JsonReportExporter(outputPath, registry)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
         
         // Register adaptive pattern metrics
         io.micrometer.core.instrument.Gauge.builder("vajrapulse.adaptive.phase", { -> 1.0 }).register(registry)
@@ -111,7 +112,7 @@ class JsonReportExporterSpec extends Specification {
         def outputPath = tempDir.resolve("no-adaptive-report.json")
         def registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry()
         def exporter = new JsonReportExporter(outputPath, registry)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
         
         when:
         exporter.export("No Adaptive", metrics)
@@ -132,7 +133,8 @@ class JsonReportExporterSpec extends Specification {
             [:], [:],
             1000L,
             5L,
-            [0.5d: 1_000_000.0d, 0.95d: 5_000_000.0d]
+            [0.5d: 1_000_000.0d, 0.95d: 5_000_000.0d],
+            new com.vajrapulse.core.metrics.ClientMetrics()
         )
         
         when:

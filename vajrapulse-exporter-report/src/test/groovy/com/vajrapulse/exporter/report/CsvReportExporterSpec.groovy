@@ -27,7 +27,8 @@ class CsvReportExporterSpec extends Specification {
             [0.5d: 150_300_000.0d],
             30_000L,
             10L,
-            [0.5d: 2_000_000.0d]
+            [0.5d: 2_000_000.0d],
+            new com.vajrapulse.core.metrics.ClientMetrics()
         )
         
         when:
@@ -49,7 +50,7 @@ class CsvReportExporterSpec extends Specification {
         given:
         def outputPath = tempDir.resolve("subdir/report.csv")
         def exporter = new CsvReportExporter(outputPath)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
         
         when:
         exporter.export("Test", metrics)
@@ -63,7 +64,7 @@ class CsvReportExporterSpec extends Specification {
         given:
         def outputPath = tempDir.resolve("test.csv")
         def exporter = new CsvReportExporter(outputPath)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
         
         when:
         exporter.export("Test, Report", metrics)
@@ -77,7 +78,7 @@ class CsvReportExporterSpec extends Specification {
         given:
         def outputPath = tempDir.resolve("empty.csv")
         def exporter = new CsvReportExporter(outputPath)
-        def metrics = new AggregatedMetrics(0L, 0L, 0L, [:], [:], 0L, 0L, [:])
+        def metrics = new AggregatedMetrics(0L, 0L, 0L, [:], [:], 0L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
         
         when:
         exporter.export("Empty", metrics)
@@ -93,7 +94,7 @@ class CsvReportExporterSpec extends Specification {
         def outputPath = tempDir.resolve("adaptive.csv")
         def registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry()
         def exporter = new CsvReportExporter(outputPath, registry)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
         
         // Register adaptive pattern metrics
         io.micrometer.core.instrument.Gauge.builder("vajrapulse.adaptive.phase", { -> 0.0 }).register(registry)
@@ -119,7 +120,7 @@ class CsvReportExporterSpec extends Specification {
         def outputPath = tempDir.resolve("no-adaptive.csv")
         def registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry()
         def exporter = new CsvReportExporter(outputPath, registry)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
         
         when:
         exporter.export("No Adaptive", metrics)
@@ -133,7 +134,7 @@ class CsvReportExporterSpec extends Specification {
         given:
         def outputPath = tempDir.resolve("escape.csv")
         def exporter = new CsvReportExporter(outputPath)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
         
         when:
         exporter.export('Test "quoted" Report', metrics)
@@ -147,7 +148,7 @@ class CsvReportExporterSpec extends Specification {
         given:
         def outputPath = tempDir.resolve("newline.csv")
         def exporter = new CsvReportExporter(outputPath)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
         
         when:
         exporter.export("Test\nReport", metrics)

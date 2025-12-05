@@ -24,8 +24,9 @@
 
 - ⚡ **Massive Concurrency**: Virtual threads enable millions of concurrent operations with minimal memory
 - 🎯 **Simple API**: Implement one interface (`Task`) and you're ready to test
-- 📊 **Rich Metrics**: Built-in latency percentiles, queue depth tracking, and OpenTelemetry support
-- 🔄 **Flexible Patterns**: 6 load patterns (static, ramp, step, spike, sine, ramp-sustain)
+- 📊 **Rich Metrics**: Built-in latency percentiles, queue depth tracking, client-side metrics, and OpenTelemetry support
+- 🔄 **Flexible Patterns**: 7 load patterns (static, ramp, step, spike, sine, ramp-sustain, adaptive) with warm-up/cool-down support
+- ✅ **Assertion Framework**: Built-in assertions for latency, error rate, throughput, and success rate validation
 - 📦 **Minimal Dependencies**: ~1.6MB fat JAR, zero-dependency API module
 - 🚀 **Production Ready**: OpenTelemetry integration, comprehensive metrics, graceful shutdown
 
@@ -40,7 +41,7 @@
 **Gradle (Kotlin DSL)** - Using BOM (Recommended):
 ```kotlin
 dependencies {
-    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.3"))
+    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.7"))
     implementation("com.vajrapulse:vajrapulse-core")
     implementation("com.vajrapulse:vajrapulse-worker") // For CLI
 }
@@ -53,7 +54,7 @@ dependencies {
         <dependency>
             <groupId>com.vajrapulse</groupId>
             <artifactId>vajrapulse-bom</artifactId>
-            <version>0.9.3</version>
+            <version>0.9.7</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -111,7 +112,7 @@ public class ApiLoadTest implements Task {
 
 **CLI (Recommended for quick tests):**
 ```bash
-java -jar vajrapulse-worker-0.9.3-all.jar \
+java -jar vajrapulse-worker-0.9.7-all.jar \
   com.example.ApiLoadTest \
   --mode static \
   --tps 100 \
@@ -162,7 +163,7 @@ public class CpuTask implements Task { }
 
 **Performance**: 10,000+ TPS on typical hardware, millions of concurrent requests with minimal memory.
 
-### 📊 Six Load Patterns
+### 📊 Seven Load Patterns
 
 Choose the pattern that matches your testing scenario:
 
@@ -174,13 +175,25 @@ Choose the pattern that matches your testing scenario:
 | **Step** | Phased testing | `--mode step --steps "50@30s,200@1m,500@2m"` |
 | **Spike** | Burst absorption testing | `--mode spike --base-rate 100 --spike-rate 800 --spike-interval 60s` |
 | **Sine** | Smooth oscillation | `--mode sine --mean-rate 300 --amplitude 150 --period 120s` |
+| **Adaptive** | Dynamic TPS adjustment based on error rates and backpressure | `new AdaptiveLoadPattern(...)` |
+
+**Warm-up/Cool-down Support**: All patterns can be wrapped with warm-up and cool-down phases:
+```java
+LoadPattern basePattern = new StaticLoad(100.0, Duration.ofMinutes(5));
+LoadPattern pattern = new WarmupCooldownLoadPattern(
+    basePattern,
+    Duration.ofSeconds(30),  // Warm-up: 30 seconds
+    Duration.ofSeconds(10)   // Cool-down: 10 seconds
+);
+```
 
 ### 📈 Comprehensive Metrics
 
 Built-in metrics collection with Micrometer:
 
 - **Latency Percentiles**: P50, P95, P99 for success and failure cases
-- **Queue Depth Tracking**: Monitor pending executions (new in 0.9.3)
+- **Queue Depth Tracking**: Monitor pending executions
+- **Client-Side Metrics**: Connection pool metrics, queue depth, timeouts (new in 0.9.7)
 - **TPS Metrics**: Request TPS, Success TPS, Failure TPS
 - **OpenTelemetry Export**: Full OTLP support for integration with observability platforms
 
@@ -202,6 +215,18 @@ Queue Metrics:
   Current Size:       5
   Wait Time P95:     2.34 ms
 
+Client Metrics:
+  Connection Pool:
+    Active:           10
+    Idle:             5
+    Utilization:      66.7%
+  Client Queue:
+    Depth:            3
+    Avg Wait Time:    1.25 ms
+  Client Errors:
+    Connection Timeouts:  1
+    Request Timeouts:     2
+
 Request TPS:         100.0
 Success TPS:         99.5
 ========================================
@@ -219,6 +244,41 @@ Success TPS:         99.5
 - Human-readable formatted output
 - Real-time metrics during test execution
 - Custom percentile configuration
+- Client-side metrics display (connection pools, queues, errors)
+
+### ✅ Assertion Framework
+
+Built-in assertion framework for validating test results against SLOs and requirements.
+
+```java
+// Create assertions
+Assertion latencyAssertion = Assertions.latency(0.95, Duration.ofMillis(100));
+Assertion errorRateAssertion = Assertions.errorRate(0.01); // 1% max
+Assertion throughputAssertion = Assertions.throughput(1000.0);
+
+// Composite assertion (all must pass)
+Assertion allAssertions = Assertions.all(
+    latencyAssertion,
+    errorRateAssertion,
+    throughputAssertion
+);
+
+// Evaluate after test
+AggregatedMetrics metrics = metricsCollector.snapshot();
+AssertionResult result = allAssertions.evaluate(metrics);
+
+if (result.failed()) {
+    System.err.println("Assertion failed: " + result.message());
+}
+```
+
+**Available Assertions:**
+- **Latency**: Validate percentile latency (e.g., P95 < 100ms)
+- **Error Rate**: Validate maximum error rate (e.g., < 1%)
+- **Success Rate**: Validate minimum success rate (e.g., > 99%)
+- **Throughput**: Validate minimum TPS (e.g., > 1000 TPS)
+- **Execution Count**: Validate minimum total executions
+- **Composite**: `all()` (all must pass) or `any()` (at least one must pass)
 
 ### 🏗️ Modular Architecture
 
@@ -243,7 +303,7 @@ Success TPS:         99.5
 **Gradle (Kotlin DSL):**
 ```kotlin
 dependencies {
-    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.3"))
+    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.7"))
     implementation("com.vajrapulse:vajrapulse-core")
     implementation("com.vajrapulse:vajrapulse-worker")
     // Optional exporters
@@ -255,7 +315,7 @@ dependencies {
 **Gradle (Groovy DSL):**
 ```groovy
 dependencies {
-    implementation platform('com.vajrapulse:vajrapulse-bom:0.9.3')
+    implementation platform('com.vajrapulse:vajrapulse-bom:0.9.7')
     implementation 'com.vajrapulse:vajrapulse-core'
     implementation 'com.vajrapulse:vajrapulse-worker'
 }
@@ -268,7 +328,7 @@ dependencies {
         <dependency>
             <groupId>com.vajrapulse</groupId>
             <artifactId>vajrapulse-bom</artifactId>
-            <version>0.9.3</version>
+            <version>0.9.7</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -290,8 +350,8 @@ dependencies {
 **Without BOM** - Specify versions individually:
 ```kotlin
 dependencies {
-    implementation("com.vajrapulse:vajrapulse-core:0.9.3")
-    implementation("com.vajrapulse:vajrapulse-worker:0.9.3")
+    implementation("com.vajrapulse:vajrapulse-core:0.9.7")
+    implementation("com.vajrapulse:vajrapulse-worker:0.9.7")
 }
 ```
 
@@ -444,6 +504,48 @@ Smooth oscillation around a mean. Reveals latency drift and GC sensitivity.
   --period 120s \
   --duration 15m
 ```
+
+### Adaptive Load Pattern
+Dynamically adjusts TPS based on error rates and backpressure. Automatically ramps up when conditions are good and ramps down when errors or backpressure increase.
+
+```java
+MetricsProvider metricsProvider = ...; // From MetricsCollector
+LoadPattern pattern = new AdaptiveLoadPattern(
+    metricsProvider,
+    100.0,                    // Initial TPS
+    1000.0,                   // Max TPS
+    50.0,                     // Ramp increment
+    25.0,                     // Ramp decrement
+    Duration.ofSeconds(10),   // Ramp interval
+    Duration.ofSeconds(30),   // Sustain duration
+    5.0,                      // Error threshold (%)
+    10.0                      // Minimum TPS
+);
+```
+
+**Features:**
+- **Continuous Operation**: No terminal states - pattern runs indefinitely
+- **Recovery Phase**: Automatically recovers from low TPS when conditions improve
+- **Intermediate Stability Detection**: Finds and sustains at optimal TPS levels (not just MAX_TPS)
+- **Backpressure Support**: Incorporates system backpressure in ramp decisions
+
+### Warm-up/Cool-down Phases
+Add warm-up and cool-down phases to any load pattern for accurate baseline measurements.
+
+```java
+LoadPattern basePattern = new StaticLoad(100.0, Duration.ofMinutes(5));
+LoadPattern pattern = new WarmupCooldownLoadPattern(
+    basePattern,
+    Duration.ofSeconds(30),  // Warm-up: ramp from 0 to initial TPS
+    Duration.ofSeconds(10)   // Cool-down: ramp from final TPS to 0
+);
+```
+
+**Benefits:**
+- Metrics are only recorded during steady-state phase
+- Clean separation between initialization and measurement
+- No warm-up artifacts in metrics
+- Graceful shutdown with cool-down phase
 
 ---
 

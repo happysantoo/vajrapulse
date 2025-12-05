@@ -162,6 +162,53 @@ public final class ConsoleMetricsExporter implements MetricsExporter {
                 });
         }
         out.println();
+        
+        // Client-side metrics
+        var clientMetrics = metrics.clientMetrics();
+        if (clientMetrics != null && (clientMetrics.totalConnections() > 0 || 
+            clientMetrics.queueDepth() > 0 || 
+            clientMetrics.connectionTimeouts() > 0 || 
+            clientMetrics.requestTimeouts() > 0 || 
+            clientMetrics.connectionRefused() > 0)) {
+            out.println("Client Metrics:");
+            
+            // Connection pool metrics
+            if (clientMetrics.totalConnections() > 0) {
+                out.println("  Connection Pool:");
+                out.printf("    Active:           %d%n", clientMetrics.activeConnections());
+                out.printf("    Idle:             %d%n", clientMetrics.idleConnections());
+                out.printf("    Waiting:          %d%n", clientMetrics.waitingConnections());
+                out.printf("    Total:            %d%n", clientMetrics.totalConnections());
+                out.printf("    Utilization:      %.1f%%%n", clientMetrics.connectionPoolUtilization() * 100.0);
+            }
+            
+            // Client queue metrics
+            if (clientMetrics.queueDepth() > 0) {
+                out.println("  Client Queue:");
+                out.printf("    Depth:            %d%n", clientMetrics.queueDepth());
+                if (clientMetrics.queueWaitTimeNanos() > 0) {
+                    out.printf("    Avg Wait Time:    %.2f ms%n", clientMetrics.averageQueueWaitTimeMs());
+                }
+            }
+            
+            // Client-side errors
+            long totalClientErrors = clientMetrics.connectionTimeouts() + 
+                                    clientMetrics.requestTimeouts() + 
+                                    clientMetrics.connectionRefused();
+            if (totalClientErrors > 0) {
+                out.println("  Client Errors:");
+                if (clientMetrics.connectionTimeouts() > 0) {
+                    out.printf("    Connection Timeouts:  %d%n", clientMetrics.connectionTimeouts());
+                }
+                if (clientMetrics.requestTimeouts() > 0) {
+                    out.printf("    Request Timeouts:     %d%n", clientMetrics.requestTimeouts());
+                }
+                if (clientMetrics.connectionRefused() > 0) {
+                    out.printf("    Connection Refused:   %d%n", clientMetrics.connectionRefused());
+                }
+            }
+            out.println();
+        }
     }
     
     private double nanosToMillis(double nanos) {
