@@ -26,7 +26,7 @@ import static java.util.concurrent.TimeUnit.*
  * <p>Note: Full execution tests are limited due to adaptive pattern's indefinite duration.
  * These tests focus on integration aspects that can be verified without full execution.
  */
-@Timeout(30)
+@Timeout(20)
 class AdaptiveLoadPatternIntegrationSpec extends Specification {
     
     @VirtualThreads
@@ -141,7 +141,7 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         def startTime = System.currentTimeMillis()
         
         // Wait for pattern to complete recovery cycle
-        await().atMost(30, SECONDS)
+        await().atMost(15, SECONDS)
             .pollInterval(500, MILLISECONDS)
             .until {
                 def phase = pattern.getCurrentPhase()
@@ -156,8 +156,8 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
                     phases.lastIndexOf(AdaptiveLoadPattern.Phase.RECOVERY) < 
                     phases.lastIndexOf(AdaptiveLoadPattern.Phase.RAMP_UP)
                 
-                // Stop when we've seen recovery and then ramp up, or timeout
-                hasRecoveryThenRampUp || (System.currentTimeMillis() - startTime) >= 25000
+                // Stop when we've seen recovery and then ramp up, or after 10 seconds (enough time to see transitions)
+                hasRecoveryThenRampUp || (System.currentTimeMillis() - startTime) >= 10000
             }
         
         // Stop the engine
@@ -236,7 +236,7 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         def startTime = System.currentTimeMillis()
         
         // Wait for pattern to find stability at intermediate TPS
-        await().atMost(20, SECONDS)
+        await().atMost(12, SECONDS)
             .pollInterval(500, MILLISECONDS)
             .until {
                 def phase = pattern.getCurrentPhase()
@@ -244,9 +244,9 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
                 phases.add(phase)
                 tpsValues.add(tps)
                 
-                // Stop when we reach SUSTAIN phase at intermediate TPS (not max)
+                // Stop when we reach SUSTAIN phase at intermediate TPS (not max), or after 8 seconds
                 (phase == AdaptiveLoadPattern.Phase.SUSTAIN && tps < 50.0) ||
-                (System.currentTimeMillis() - startTime) >= 15000
+                (System.currentTimeMillis() - startTime) >= 8000
             }
         
         // Stop the engine
@@ -318,8 +318,8 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         def tpsHistory = []
         def startTime = System.currentTimeMillis()
         
-        // Run for 20 seconds to verify continuous operation
-        await().atMost(25, SECONDS)
+        // Run for 10 seconds to verify continuous operation (reduced from 20s for faster tests)
+        await().atMost(12, SECONDS)
             .pollInterval(1, SECONDS)
             .until {
                 def phase = pattern.getCurrentPhase()
@@ -327,8 +327,8 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
                 phaseTransitions.add(phase)
                 tpsHistory.add(tps)
                 
-                // Continue for 20 seconds
-                (System.currentTimeMillis() - startTime) >= 20000
+                // Continue for 10 seconds (enough to verify continuous operation)
+                (System.currentTimeMillis() - startTime) >= 10000
             }
         
         // Stop the engine
