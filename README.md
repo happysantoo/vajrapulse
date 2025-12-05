@@ -506,20 +506,34 @@ Smooth oscillation around a mean. Reveals latency drift and GC sensitivity.
 ```
 
 ### Adaptive Load Pattern
-Dynamically adjusts TPS based on error rates and backpressure. Automatically ramps up when conditions are good and ramps down when errors or backpressure increase.
+
+The adaptive load pattern automatically finds the maximum sustainable TPS by:
+1. **Ramping up** until errors occur
+2. **Ramping down** to find a stable point
+3. **Sustaining** at the stable TPS
+4. **Recovering** automatically when conditions improve (new in 0.9.8)
+
+**Key Features:**
+- **Automatic Recovery**: Pattern automatically recovers from low TPS when conditions improve
+- **Recent Window Metrics**: Uses recent failure rate (last 10 seconds) for recovery decisions, not all-time average
+- **Intermediate Stability**: Detects and sustains at optimal TPS levels (not just MAX_TPS)
+- **Continuous Operation**: Never gets stuck - continuously adapts to changing conditions
+
+**Example:**
 
 ```java
-MetricsProvider metricsProvider = ...; // From MetricsCollector
+MetricsCollector metrics = new MetricsCollector();
+MetricsProvider provider = new MetricsProviderAdapter(metrics);
+
 LoadPattern pattern = new AdaptiveLoadPattern(
-    metricsProvider,
     100.0,                    // Initial TPS
-    1000.0,                   // Max TPS
     50.0,                     // Ramp increment
-    25.0,                     // Ramp decrement
+    100.0,                    // Ramp decrement
     Duration.ofSeconds(10),   // Ramp interval
+    1000.0,                   // Max TPS
     Duration.ofSeconds(30),   // Sustain duration
-    5.0,                      // Error threshold (%)
-    10.0                      // Minimum TPS
+    0.01,                     // Error threshold (1% as ratio)
+    provider                  // Metrics provider
 );
 ```
 

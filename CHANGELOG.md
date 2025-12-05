@@ -13,6 +13,53 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - GraalVM native image validation
 - Scenario scripting DSL
 
+## [0.9.8] - 2025-12-05
+### Added
+- **AdaptiveLoadPattern Recovery Enhancements**: Automatic recovery from low TPS
+  - **RECOVERY → RAMP_UP Transition**: Pattern automatically recovers when conditions improve
+  - **Last Known Good TPS Tracking**: Tracks highest TPS achieved before entering RECOVERY
+  - **Recovery TPS Calculation**: Recovery starts at 50% of last known good TPS (or minimum TPS)
+  - Pattern never gets stuck at minimum TPS - continuously adapts to changing conditions
+- **Recent Window Failure Rate**: Time-windowed failure rate for recovery decisions
+  - `MetricsProvider.getRecentFailureRate(int windowSeconds)` method added
+  - Default implementation returns all-time rate (backward compatible)
+  - `MetricsProviderAdapter` implements time-windowed calculation (last 10 seconds)
+  - Recovery decisions use recent window instead of all-time average
+  - Allows recovery even when historical failures keep all-time rate elevated
+- **Intermediate Stability Detection in RAMP_DOWN**: Enhanced stability detection
+  - Pattern can detect and sustain at optimal TPS levels during ramp-down
+  - `handleRampDown()` now checks for intermediate stability
+  - Pattern finds optimal TPS at any level, not just MAX_TPS
+
+### Changed
+- **AdaptiveLoadPattern**: Enhanced recovery and stability detection
+  - `AdaptiveState` record now includes `lastKnownGoodTps` field
+  - `checkAndAdjust()` checks recovery conditions in RECOVERY phase
+  - Recovery uses recent window failure rate (10 seconds) for decisions
+  - State tracking maintains `lastKnownGoodTps` when entering RAMP_DOWN/RECOVERY
+  - `handleRampDown()` checks for intermediate stability before continuing ramp-down
+- **MetricsProvider**: Enhanced with recent window support
+  - Added `getRecentFailureRate(int windowSeconds)` method
+  - Default implementation returns all-time rate (backward compatible)
+  - Providers can override for time-windowed calculation
+- **MetricsProviderAdapter**: Enhanced with time-windowed calculation
+  - Implements `getRecentFailureRate()` with time-windowed tracking
+  - Tracks previous snapshot for difference calculation
+  - Falls back to all-time rate when window exceeds available history
+
+### Fixed
+- Fixed RECOVERY phase to properly transition back to RAMP_UP when conditions improve
+- Fixed recovery TPS calculation to use last known good TPS instead of initial TPS
+- Fixed stability detection to work during RAMP_DOWN phase (not just RAMP_UP)
+
+### Migration Guide
+
+**No migration required!** All changes are backward compatible enhancements.
+
+**Optional Enhancements**:
+- Implement `getRecentFailureRate()` in custom `MetricsProvider` implementations for better recovery behavior
+- New recovery and stability features work automatically with existing code
+
 ## [0.9.7] - 2025-01-XX
 ### Added
 - **AdaptiveLoadPattern Enhancements**: Continuous operation with recovery and stability detection

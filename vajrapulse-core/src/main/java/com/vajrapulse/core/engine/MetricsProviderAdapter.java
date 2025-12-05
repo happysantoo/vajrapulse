@@ -5,6 +5,7 @@ import com.vajrapulse.core.metrics.MetricsCollector;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Adapter that makes MetricsCollector implement MetricsProvider interface with caching.
@@ -34,6 +35,9 @@ public final class MetricsProviderAdapter implements MetricsProvider {
     // Cached snapshot with timestamp
     private volatile CachedSnapshot cached;
     private final AtomicLong cacheTimeNanos = new AtomicLong(0);
+    
+    // Recent window tracking: store previous snapshot for time-windowed calculations
+    private final AtomicReference<WindowSnapshot> previousSnapshot = new AtomicReference<>();
     
     /**
      * Creates an adapter for the given metrics collector with default caching (100ms TTL).
@@ -71,6 +75,51 @@ public final class MetricsProviderAdapter implements MetricsProvider {
     @Override
     public long getTotalExecutions() {
         return getCachedSnapshot().totalExecutions();
+    }
+    
+    @Override
+    public double getRecentFailureRate(int windowSeconds) {
+        if (windowSeconds <= 0) {
+            // Invalid window, return all-time rate
+            return getFailureRate();
+        }
+        
+        long windowMillis = windowSeconds * 1000L;
+        
+        // Get current snapshot
+        var currentSnapshot = metricsCollector.snapshot();
+        long currentTime = System.currentTimeMillis();
+        long currentTotal = currentSnapshot.totalExecutions();
+        long currentFailures = currentSnapshot.failureCount();
+        
+        // Get previous snapshot
+        WindowSnapshot previous = previousSnapshot.get();
+        
+        // Update previous snapshot if needed (refresh every second to track recent changes)
+        if (previous == null || (currentTime - previous.timestampMillis()) >= 1000) {
+            previousSnapshot.set(new WindowSnapshot(currentTime, currentTotal, currentFailures));
+            previous = previousSnapshot.get();
+        }
+        
+        // Calculate time difference
+        long timeDiff = currentTime - previous.timestampMillis();
+        
+        // If window is larger than available history, fall back to all-time rate
+        if (timeDiff < windowMillis) {
+            // Not enough history, use all-time rate
+            return currentSnapshot.failureRate();
+        }
+        
+        // Calculate failure rate from the difference
+        long totalDiff = currentTotal - previous.totalExecutions();
+        long failureDiff = currentFailures - previous.failureCount();
+        
+        if (totalDiff == 0) {
+            return 0.0;  // No executions in window
+        }
+        
+        // Calculate failure rate for the window
+        return (failureDiff * 100.0) / totalDiff;
     }
     
     /**
@@ -133,5 +182,14 @@ public final class MetricsProviderAdapter implements MetricsProvider {
      * Cached snapshot of metrics.
      */
     private record CachedSnapshot(double failureRate, long totalExecutions) {}
+    
+    /**
+     * Snapshot for time-windowed calculations.
+     * 
+     * @param timestampMillis timestamp when snapshot was taken
+     * @param totalExecutions total executions at this time
+     * @param failureCount failure count at this time
+     */
+    private record WindowSnapshot(long timestampMillis, long totalExecutions, long failureCount) {}
 }
 
