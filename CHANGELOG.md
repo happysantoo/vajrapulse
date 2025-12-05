@@ -80,6 +80,63 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 ### Fixed
 - Fixed test failures in exporter modules after `ClientMetrics` addition
 - Fixed `AdaptiveLoadPattern` phase transitions to properly handle RECOVERY phase
+- Fixed `ClientMetrics.averageQueueWaitTimeMs()` calculation by adding `queueOperationCount` field
+- Consolidated `AdaptiveLoadPattern` state management by moving volatile fields into `AdaptiveState` record
+
+### Migration Guide
+
+#### AdaptiveLoadPattern Phase Changes
+
+**Breaking Change**: The `COMPLETE` phase has been replaced with `RECOVERY` phase.
+
+**Before (0.9.6)**:
+```java
+if (pattern.getPhase() == Phase.COMPLETE) {
+    // Handle completion - pattern is done
+}
+```
+
+**After (0.9.7)**:
+```java
+if (pattern.getPhase() == Phase.RECOVERY) {
+    // Handle recovery - pattern may continue if conditions improve
+}
+
+// To check if pattern is truly complete:
+if (pattern.calculateTps(elapsedMillis) == 0.0) {
+    // Pattern is complete
+}
+```
+
+**Key Differences**:
+- `COMPLETE` was a terminal state - pattern would stop
+- `RECOVERY` is a non-terminal state - pattern can transition back to `RAMP_UP` when conditions improve
+- Pattern now operates continuously without terminal states
+- Use `calculateTps()` returning 0.0 to detect completion
+
+#### ClientMetrics Changes
+
+**New Field**: `queueOperationCount` has been added to properly calculate average queue wait time.
+
+**Before (0.9.6)**:
+```java
+ClientMetrics metrics = new ClientMetrics(
+    activeConnections, idleConnections, waitingConnections,
+    queueDepth, queueWaitTimeNanos,
+    connectionTimeouts, requestTimeouts, connectionRefused
+);
+```
+
+**After (0.9.7)**:
+```java
+ClientMetrics metrics = new ClientMetrics(
+    activeConnections, idleConnections, waitingConnections,
+    queueDepth, queueWaitTimeNanos, queueOperationCount,  // Added queueOperationCount
+    connectionTimeouts, requestTimeouts, connectionRefused
+);
+```
+
+**Note**: The default constructor `new ClientMetrics()` still works and initializes all fields to zero.
 
 ## [0.9.6] - 2025-01-XX
 ### Added

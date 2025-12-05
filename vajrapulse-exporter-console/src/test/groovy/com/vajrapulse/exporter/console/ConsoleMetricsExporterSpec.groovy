@@ -277,6 +277,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             2L,   // waiting connections
             3L,   // queue depth
             50_000_000L, // 50ms queue wait time
+            100L, // queue operation count
             1L,   // connection timeouts
             2L,   // request timeouts
             0L    // connection refused

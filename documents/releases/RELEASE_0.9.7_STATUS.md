@@ -88,19 +88,53 @@ The following tasks were deprioritized for 0.9.7:
 - ✅ Warm-up/Cool-down Phases: 100% (1/1 task)
 - ✅ Assertion Framework: 100% (1/1 task)
 
+## ✅ Phase 1 & Phase 2 Fixes (Post-Review)
+
+### Phase 1: Critical Fixes ✅
+1. **✅ Fixed ClientMetrics.averageQueueWaitTimeMs()**
+   - Added `queueOperationCount` field
+   - Fixed calculation to properly divide by operation count
+   - Updated all factory methods and tests
+
+2. **✅ Consolidated AdaptiveLoadPattern State**
+   - Moved volatile fields into `AdaptiveState` record
+   - Eliminated race conditions through atomic state management
+   - All state transitions now atomic
+
+3. **✅ Added Migration Guide**
+   - Comprehensive CHANGELOG section
+   - Before/after examples for all breaking changes
+   - Clear migration path documented
+
+### Phase 2: Important Improvements ✅
+4. **✅ Improved ClientMetrics API**
+   - Added builder pattern with fluent API
+   - Maintains backward compatibility
+   - Comprehensive JavaDoc
+
+5. **✅ Added Integration Tests**
+   - `FeatureCombinationSpec` for feature combinations
+   - Tests verify AdaptiveLoadPattern + WarmupCooldownLoadPattern
+   - Tests verify ClientMetrics + Assertion Framework
+
+6. **✅ Added Usage Examples**
+   - `ClientMetricsHttpExample` - Client-side metrics with HTTP
+   - `AdaptiveWithWarmupExample` - Adaptive pattern with warm-up/cool-down
+   - `AssertionFrameworkExample` - Assertion framework in CI/CD
+
 ## 🎯 Next Steps
 
 1. **Pre-Release Checklist**
-   - [ ] All tests pass (unit, integration, performance)
-   - [ ] Code coverage ≥90%
-   - [ ] Static analysis passes (SpotBugs)
-   - [ ] JavaDoc complete (no warnings)
-   - [ ] Documentation updated
-   - [ ] Examples updated
-   - [ ] CHANGELOG.md updated
+   - [x] All tests pass (unit, integration, performance)
+   - [x] Code coverage ≥90%
+   - [x] Static analysis passes (SpotBugs)
+   - [x] JavaDoc complete (no warnings)
+   - [x] Documentation updated
+   - [x] Examples updated
+   - [x] CHANGELOG.md updated
 
 3. **Release Preparation**
-   - [ ] Version bumped to 0.9.7
+   - [x] Version bumped to 0.9.7
    - [ ] Tagged in git
    - [ ] GitHub release created
    - [ ] Published to Maven Central

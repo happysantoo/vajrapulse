@@ -526,12 +526,14 @@ public final class MetricsCollector implements AutoCloseable {
         long currentQueueSize = queueSizeHolder.get();
         
         // Get client metrics
+        // Note: queueOperationCount is tracked via clientQueueWaitTimer.count()
         ClientMetrics clientMetrics = new ClientMetrics(
             activeConnectionsHolder.get(),
             idleConnectionsHolder.get(),
             waitingConnectionsHolder.get(),
             clientQueueDepthHolder.get(),
             clientQueueWaitTimeNanos.get(),
+            clientQueueWaitTimer.count(), // Use timer count as queue operation count
             (long) connectionTimeoutsCounter.count(),
             (long) requestTimeoutsCounter.count(),
             (long) connectionRefusedCounter.count()

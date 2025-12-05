@@ -15,6 +15,7 @@ package com.vajrapulse.core.metrics;
  * @param waitingConnections number of threads waiting for a connection
  * @param queueDepth current depth of the request queue
  * @param queueWaitTimeNanos total time spent waiting in queue (nanoseconds)
+ * @param queueOperationCount total number of queue operations (for calculating average wait time)
  * @param connectionTimeouts number of connection timeout errors
  * @param requestTimeouts number of request timeout errors
  * @param connectionRefused number of connection refused errors
@@ -26,6 +27,7 @@ public record ClientMetrics(
     long waitingConnections,
     long queueDepth,
     long queueWaitTimeNanos,
+    long queueOperationCount,
     long connectionTimeouts,
     long requestTimeouts,
     long connectionRefused
@@ -34,7 +36,7 @@ public record ClientMetrics(
      * Default constructor with all values set to zero.
      */
     public ClientMetrics() {
-        this(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
+        this(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
     }
     
     /**
@@ -46,7 +48,7 @@ public record ClientMetrics(
      * @return ClientMetrics instance
      */
     public static ClientMetrics connectionPool(long activeConnections, long idleConnections, long waitingConnections) {
-        return new ClientMetrics(activeConnections, idleConnections, waitingConnections, 0L, 0L, 0L, 0L, 0L);
+        return new ClientMetrics(activeConnections, idleConnections, waitingConnections, 0L, 0L, 0L, 0L, 0L, 0L);
     }
     
     /**
@@ -54,10 +56,11 @@ public record ClientMetrics(
      * 
      * @param queueDepth current queue depth
      * @param queueWaitTimeNanos total queue wait time in nanoseconds
+     * @param queueOperationCount total number of queue operations
      * @return ClientMetrics instance
      */
-    public static ClientMetrics queue(long queueDepth, long queueWaitTimeNanos) {
-        return new ClientMetrics(0L, 0L, 0L, queueDepth, queueWaitTimeNanos, 0L, 0L, 0L);
+    public static ClientMetrics queue(long queueDepth, long queueWaitTimeNanos, long queueOperationCount) {
+        return new ClientMetrics(0L, 0L, 0L, queueDepth, queueWaitTimeNanos, queueOperationCount, 0L, 0L, 0L);
     }
     
     /**
@@ -68,7 +71,7 @@ public record ClientMetrics(
      * @return ClientMetrics instance
      */
     public static ClientMetrics timeouts(long connectionTimeouts, long requestTimeouts) {
-        return new ClientMetrics(0L, 0L, 0L, 0L, 0L, connectionTimeouts, requestTimeouts, 0L);
+        return new ClientMetrics(0L, 0L, 0L, 0L, 0L, 0L, connectionTimeouts, requestTimeouts, 0L);
     }
     
     /**
@@ -96,13 +99,179 @@ public record ClientMetrics(
     /**
      * Calculates average queue wait time in milliseconds.
      * 
+     * <p>The average is calculated as total wait time divided by the number of operations.
+     * If no operations have been recorded, returns 0.0.
+     * 
      * @return average wait time in milliseconds, or 0.0 if no queue operations
      */
     public double averageQueueWaitTimeMs() {
-        // Note: This is a simple calculation. In practice, you'd need
-        // to track the number of queue operations separately.
-        // For now, this returns the total wait time converted to milliseconds.
-        return queueWaitTimeNanos / 1_000_000.0;
+        if (queueOperationCount == 0) {
+            return 0.0;
+        }
+        return (queueWaitTimeNanos / (double) queueOperationCount) / 1_000_000.0;
+    }
+    
+    /**
+     * Builder for creating ClientMetrics instances with a fluent API.
+     * 
+     * <p>Example usage:
+     * <pre>{@code
+     * ClientMetrics metrics = ClientMetrics.builder()
+     *     .activeConnections(10)
+     *     .idleConnections(5)
+     *     .waitingConnections(2)
+     *     .queueDepth(3)
+     *     .queueWaitTimeNanos(50_000_000L)
+     *     .queueOperationCount(100L)
+     *     .connectionTimeouts(1)
+     *     .requestTimeouts(2)
+     *     .connectionRefused(0)
+     *     .build();
+     * }</pre>
+     * 
+     * @since 0.9.7
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
+    
+    /**
+     * Builder for ClientMetrics.
+     * 
+     * @since 0.9.7
+     */
+    public static final class Builder {
+        private long activeConnections = 0L;
+        private long idleConnections = 0L;
+        private long waitingConnections = 0L;
+        private long queueDepth = 0L;
+        private long queueWaitTimeNanos = 0L;
+        private long queueOperationCount = 0L;
+        private long connectionTimeouts = 0L;
+        private long requestTimeouts = 0L;
+        private long connectionRefused = 0L;
+        
+        private Builder() {
+            // Private constructor
+        }
+        
+        /**
+         * Sets the number of active connections.
+         * 
+         * @param activeConnections number of active connections
+         * @return this builder
+         */
+        public Builder activeConnections(long activeConnections) {
+            this.activeConnections = activeConnections;
+            return this;
+        }
+        
+        /**
+         * Sets the number of idle connections.
+         * 
+         * @param idleConnections number of idle connections
+         * @return this builder
+         */
+        public Builder idleConnections(long idleConnections) {
+            this.idleConnections = idleConnections;
+            return this;
+        }
+        
+        /**
+         * Sets the number of waiting connections.
+         * 
+         * @param waitingConnections number of waiting connections
+         * @return this builder
+         */
+        public Builder waitingConnections(long waitingConnections) {
+            this.waitingConnections = waitingConnections;
+            return this;
+        }
+        
+        /**
+         * Sets the queue depth.
+         * 
+         * @param queueDepth queue depth
+         * @return this builder
+         */
+        public Builder queueDepth(long queueDepth) {
+            this.queueDepth = queueDepth;
+            return this;
+        }
+        
+        /**
+         * Sets the total queue wait time in nanoseconds.
+         * 
+         * @param queueWaitTimeNanos total queue wait time in nanoseconds
+         * @return this builder
+         */
+        public Builder queueWaitTimeNanos(long queueWaitTimeNanos) {
+            this.queueWaitTimeNanos = queueWaitTimeNanos;
+            return this;
+        }
+        
+        /**
+         * Sets the queue operation count.
+         * 
+         * @param queueOperationCount queue operation count
+         * @return this builder
+         */
+        public Builder queueOperationCount(long queueOperationCount) {
+            this.queueOperationCount = queueOperationCount;
+            return this;
+        }
+        
+        /**
+         * Sets the number of connection timeouts.
+         * 
+         * @param connectionTimeouts number of connection timeouts
+         * @return this builder
+         */
+        public Builder connectionTimeouts(long connectionTimeouts) {
+            this.connectionTimeouts = connectionTimeouts;
+            return this;
+        }
+        
+        /**
+         * Sets the number of request timeouts.
+         * 
+         * @param requestTimeouts number of request timeouts
+         * @return this builder
+         */
+        public Builder requestTimeouts(long requestTimeouts) {
+            this.requestTimeouts = requestTimeouts;
+            return this;
+        }
+        
+        /**
+         * Sets the number of connection refused errors.
+         * 
+         * @param connectionRefused number of connection refused errors
+         * @return this builder
+         */
+        public Builder connectionRefused(long connectionRefused) {
+            this.connectionRefused = connectionRefused;
+            return this;
+        }
+        
+        /**
+         * Builds the ClientMetrics instance.
+         * 
+         * @return ClientMetrics instance
+         */
+        public ClientMetrics build() {
+            return new ClientMetrics(
+                activeConnections,
+                idleConnections,
+                waitingConnections,
+                queueDepth,
+                queueWaitTimeNanos,
+                queueOperationCount,
+                connectionTimeouts,
+                requestTimeouts,
+                connectionRefused
+            );
+        }
     }
 }
 

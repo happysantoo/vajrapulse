@@ -85,18 +85,6 @@ public final class AdaptiveLoadPattern implements LoadPattern {
     private static final double TPS_TOLERANCE = 50.0;
     
     /**
-     * Tracks the candidate TPS level being evaluated for stability.
-     * -1 means no candidate is being tracked.
-     */
-    private volatile double stableTpsCandidate = -1.0;
-    
-    /**
-     * Timestamp when the current stability candidate was first observed.
-     * -1 means no candidate is being tracked.
-     */
-    private volatile long stabilityStartTime = -1L;
-    
-    /**
      * Conversion factor from percentage to ratio (100.0% = 1.0).
      */
     private static final double PERCENTAGE_TO_RATIO = 100.0;
@@ -112,7 +100,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         long phaseStartTime,
         int stableIntervalsCount,
         int rampDownAttempts,
-        long phaseTransitionCount
+        long phaseTransitionCount,
+        double stableTpsCandidate,  // -1 means no candidate is being tracked
+        long stabilityStartTime  // -1 means no candidate is being tracked
     ) {
         AdaptiveState {
             // Compact constructor validation
@@ -204,7 +194,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             -1L,  // Will be set on first call
             0,
             0,
-            0L
+            0L,
+            -1.0,  // No stability candidate yet
+            -1L  // No stability start time yet
         ));
     }
     
@@ -277,7 +269,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             -1L,  // Will be set on first call
             0,
             0,
-            0L
+            0L,
+            -1.0,  // No stability candidate yet
+            -1L  // No stability start time yet
         ));
     }
     
@@ -299,7 +293,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                 0L,
                 s.stableIntervalsCount(),
                 s.rampDownAttempts(),
-                s.phaseTransitionCount()
+                s.phaseTransitionCount(),
+                s.stableTpsCandidate(),
+                s.stabilityStartTime()
             ));
             current = state.get();
         }
@@ -406,24 +402,49 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         // Check if conditions are good
         boolean conditionsGood = errorRate < errorThreshold && backpressure < 0.3;
         
+        // Get current state to access stability tracking fields
+        AdaptiveState currentState = state.get();
+        double candidate = currentState.stableTpsCandidate();
+        long startTime = currentState.stabilityStartTime();
+        
         if (!conditionsGood) {
-            // Conditions not good - reset stability tracking
-            stableTpsCandidate = -1.0;
-            stabilityStartTime = -1L;
+            // Conditions not good - reset stability tracking atomically
+            state.updateAndGet(s -> new AdaptiveState(
+                s.phase(),
+                s.currentTps(),
+                s.lastAdjustmentTime(),
+                s.stableTps(),
+                s.phaseStartTime(),
+                s.stableIntervalsCount(),
+                s.rampDownAttempts(),
+                s.phaseTransitionCount(),
+                -1.0,  // Reset candidate
+                -1L  // Reset start time
+            ));
             return false;
         }
         
         // Check if TPS is within tolerance of candidate
-        if (stableTpsCandidate < 0 || Math.abs(currentTps - stableTpsCandidate) > TPS_TOLERANCE) {
-            // New candidate or TPS changed significantly
-            stableTpsCandidate = currentTps;
-            stabilityStartTime = elapsedMillis;
+        if (candidate < 0 || Math.abs(currentTps - candidate) > TPS_TOLERANCE) {
+            // New candidate or TPS changed significantly - update atomically
+            state.updateAndGet(s -> new AdaptiveState(
+                s.phase(),
+                s.currentTps(),
+                s.lastAdjustmentTime(),
+                s.stableTps(),
+                s.phaseStartTime(),
+                s.stableIntervalsCount(),
+                s.rampDownAttempts(),
+                s.phaseTransitionCount(),
+                currentTps,  // New candidate
+                elapsedMillis  // New start time
+            ));
             return false;
         }
         
         // Check if stable for required duration
         // Use 3 intervals worth of time for stability detection (same as old logic)
-        long stabilityDuration = elapsedMillis - stabilityStartTime;
+        long stabilityDuration = elapsedMillis - startTime;
         long requiredStabilityDuration = rampInterval.toMillis() * STABLE_INTERVALS_REQUIRED;
         return stabilityDuration >= requiredStabilityDuration;
     }
@@ -487,7 +508,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                             current.phaseStartTime(),
                             current.stableIntervalsCount(),
                             current.rampDownAttempts(),
-                            current.phaseTransitionCount()
+                            current.phaseTransitionCount(),
+                            current.stableTpsCandidate(),
+                            current.stabilityStartTime()
                         );
                     } else {
                         // Moderate backpressure - hold current TPS
@@ -499,7 +522,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                             current.phaseStartTime(),
                             current.stableIntervalsCount(),
                             current.rampDownAttempts(),
-                            current.phaseTransitionCount()
+                            current.phaseTransitionCount(),
+                            current.stableTpsCandidate(),
+                            current.stabilityStartTime()
                         );
                     }
                 }
@@ -522,7 +547,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                                 current.phaseStartTime(),
                                 newStableCount,
                                 newAttempts,
-                                current.phaseTransitionCount()
+                                current.phaseTransitionCount(),
+                                current.stableTpsCandidate(),
+                                current.stabilityStartTime()
                             );
                         }
                     } else {
@@ -540,7 +567,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                                 current.phaseStartTime(),
                                 0,  // Reset counter
                                 newAttempts,
-                                current.phaseTransitionCount()
+                                current.phaseTransitionCount(),
+                                current.stableTpsCandidate(),
+                                current.stabilityStartTime()
                             );
                         }
                     }
@@ -564,7 +593,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                             current.phaseStartTime(),
                             current.stableIntervalsCount(),
                             current.rampDownAttempts(),
-                            current.phaseTransitionCount()
+                            current.phaseTransitionCount(),
+                            current.stableTpsCandidate(),
+                            current.stabilityStartTime()
                         );
                     }
                 }
@@ -588,7 +619,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                             current.phaseStartTime(),
                             current.stableIntervalsCount(),
                             current.rampDownAttempts(),
-                            current.phaseTransitionCount()
+                            current.phaseTransitionCount(),
+                            current.stableTpsCandidate(),
+                            current.stabilityStartTime()
                         );
                     }
                 }
@@ -606,7 +639,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                 elapsedMillis,  // New phase start time
                 newPhase == Phase.SUSTAIN ? 0 : current.stableIntervalsCount(),  // Reset for sustain
                 current.rampDownAttempts(),
-                current.phaseTransitionCount() + 1
+                current.phaseTransitionCount() + 1,
+                current.stableTpsCandidate(),  // Preserve stability tracking
+                current.stabilityStartTime()  // Preserve stability tracking
             );
         }
         // Same phase, just update TPS and time
@@ -618,7 +653,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             current.phaseStartTime(),
             current.stableIntervalsCount(),
             current.rampDownAttempts(),
-            current.phaseTransitionCount()
+            current.phaseTransitionCount(),
+            current.stableTpsCandidate(),  // Preserve stability tracking
+            current.stabilityStartTime()  // Preserve stability tracking
         );
     }
     
