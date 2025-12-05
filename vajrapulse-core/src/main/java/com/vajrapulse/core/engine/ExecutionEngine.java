@@ -4,6 +4,7 @@ import com.vajrapulse.api.LoadPattern;
 import com.vajrapulse.api.PlatformThreads;
 import com.vajrapulse.api.TaskLifecycle;
 import com.vajrapulse.api.VirtualThreads;
+import com.vajrapulse.api.WarmupCooldownLoadPattern;
 import com.vajrapulse.core.config.ConfigLoader;
 import com.vajrapulse.core.config.VajraPulseConfig;
 import com.vajrapulse.core.metrics.MetricsCollector;
@@ -491,6 +492,9 @@ public final class ExecutionEngine implements AutoCloseable {
             long testDurationMillis = loadPattern.getDuration().toMillis();
             long iteration = 0;
             
+            // Check if load pattern supports warm-up/cool-down
+            boolean hasWarmupCooldown = loadPattern instanceof WarmupCooldownLoadPattern;
+            
             while (!stopRequested.get() && rateController.getElapsedMillis() < testDurationMillis) {
                 rateController.waitForNext();
                 
@@ -508,6 +512,10 @@ public final class ExecutionEngine implements AutoCloseable {
                         iteration, elapsedMillis, runId);
                     break;
                 }
+                
+                // Check if we should record metrics (only during steady-state phase)
+                boolean shouldRecordMetrics = !hasWarmupCooldown || 
+                    ((WarmupCooldownLoadPattern) loadPattern).shouldRecordMetrics(elapsedMillis);
                 
                 long currentIteration = iteration++;
                 long queueStartNanos = System.nanoTime();
@@ -539,14 +547,16 @@ public final class ExecutionEngine implements AutoCloseable {
                                 // Fail immediately - record as failure
                                 pendingExecutions.decrementAndGet();
                                 metricsCollector.updateQueueSize(pendingExecutions.get());
-                                metricsCollector.recordRejectedRequest();
-                                metricsCollector.record(new ExecutionMetrics(
-                                    System.nanoTime(),
-                                    System.nanoTime(),
-                                    com.vajrapulse.api.TaskResult.failure(
-                                        new RuntimeException("Request rejected due to backpressure: " + String.format("%.2f", backpressure))),
-                                    currentIteration
-                                ));
+                                if (shouldRecordMetrics) {
+                                    metricsCollector.recordRejectedRequest();
+                                    metricsCollector.record(new ExecutionMetrics(
+                                        System.nanoTime(),
+                                        System.nanoTime(),
+                                        com.vajrapulse.api.TaskResult.failure(
+                                            new RuntimeException("Request rejected due to backpressure: " + String.format("%.2f", backpressure))),
+                                        currentIteration
+                                    ));
+                                }
                                 logger.debug("Request {} rejected due to backpressure {} runId={}", 
                                     currentIteration, String.format("%.2f", backpressure), runId);
                                 continue; // Skip to next iteration
@@ -570,7 +580,7 @@ public final class ExecutionEngine implements AutoCloseable {
                     }
                 }
                 
-                executor.submit(new ExecutionCallable(taskExecutor, metricsCollector, currentIteration, queueStartNanos, pendingExecutions));
+                executor.submit(new ExecutionCallable(taskExecutor, metricsCollector, currentIteration, queueStartNanos, pendingExecutions, shouldRecordMetrics));
             }
             
             if (stopRequested.get()) {
@@ -706,21 +716,27 @@ public final class ExecutionEngine implements AutoCloseable {
         private final long iteration;
         private final long queueStartNanos;
         private final java.util.concurrent.atomic.AtomicLong pendingExecutions;
+        private final boolean shouldRecordMetrics;
         
         ExecutionCallable(TaskExecutor taskExecutor, MetricsCollector metricsCollector, long iteration, 
-                         long queueStartNanos, java.util.concurrent.atomic.AtomicLong pendingExecutions) {
+                         long queueStartNanos, java.util.concurrent.atomic.AtomicLong pendingExecutions,
+                         boolean shouldRecordMetrics) {
             this.taskExecutor = taskExecutor;
             this.metricsCollector = metricsCollector;
             this.iteration = iteration;
             this.queueStartNanos = queueStartNanos;
             this.pendingExecutions = pendingExecutions;
+            this.shouldRecordMetrics = shouldRecordMetrics;
         }
         
         @Override
         public Void call() {
             // Record queue wait time (time from submission to actual execution start)
-            long queueWaitNanos = System.nanoTime() - queueStartNanos;
-            metricsCollector.recordQueueWait(queueWaitNanos);
+            // Only record during steady-state phase
+            if (shouldRecordMetrics) {
+                long queueWaitNanos = System.nanoTime() - queueStartNanos;
+                metricsCollector.recordQueueWait(queueWaitNanos);
+            }
             
             // Decrement pending count when execution starts (before actual execution)
             // This ensures queue size metric reflects only tasks waiting in queue,
@@ -730,7 +746,10 @@ public final class ExecutionEngine implements AutoCloseable {
             
             try {
                 ExecutionMetrics metrics = taskExecutor.executeWithMetrics(iteration);
-                metricsCollector.record(metrics);
+                // Only record metrics during steady-state phase (warm-up/cool-down excluded)
+                if (shouldRecordMetrics) {
+                    metricsCollector.record(metrics);
+                }
             } finally {
                 // No cleanup needed - queue size already updated above
             }
