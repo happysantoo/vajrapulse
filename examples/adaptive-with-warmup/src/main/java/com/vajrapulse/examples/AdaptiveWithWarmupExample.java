@@ -77,16 +77,16 @@ public class AdaptiveWithWarmupExample implements TaskLifecycle {
             var metricsProvider = new MetricsProviderAdapter(collector);
             
             // Create adaptive pattern
-            LoadPattern adaptivePattern = new AdaptiveLoadPattern(
-                20.0,                    // Initial TPS
-                10.0,                    // Ramp increment
-                20.0,                    // Ramp decrement
-                Duration.ofSeconds(5),   // Ramp interval
-                100.0,                   // Max TPS
-                Duration.ofSeconds(10),  // Sustain duration
-                0.05,                    // Error threshold (5% as ratio)
-                metricsProvider
-            );
+            LoadPattern adaptivePattern = AdaptiveLoadPattern.builder()
+                .initialTps(20.0)                    // Initial TPS
+                .rampIncrement(10.0)                 // Ramp increment
+                .rampDecrement(20.0)                  // Ramp decrement
+                .rampInterval(Duration.ofSeconds(5))  // Ramp interval
+                .maxTps(100.0)                        // Max TPS
+                .sustainDuration(Duration.ofSeconds(10)) // Sustain duration
+                .errorThreshold(0.05)                 // Error threshold (5% as ratio)
+                .metricsProvider(metricsProvider)
+                .build();
             
             // Wrap with warm-up and cool-down
             LoadPattern pattern = new WarmupCooldownLoadPattern(
