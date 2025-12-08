@@ -136,5 +136,65 @@ class MetricsProviderAdapterSpec extends Specification {
         rate == adapter.getFailureRate()
         rate2 == adapter.getFailureRate()
     }
+    
+    def "should return failure count from metrics"() {
+        given: "a metrics collector with failures"
+        def collector = new MetricsCollector()
+        def adapter = new MetricsProviderAdapter(collector)
+        
+        // Record one success and two failures
+        def successMetrics = new com.vajrapulse.core.engine.ExecutionMetrics(
+            System.nanoTime(),
+            System.nanoTime() + 1_000_000,
+            com.vajrapulse.api.TaskResult.success("ok"),
+            0
+        )
+        collector.record(successMetrics)
+        
+        def failureMetrics1 = new com.vajrapulse.core.engine.ExecutionMetrics(
+            System.nanoTime(),
+            System.nanoTime() + 1_000_000,
+            com.vajrapulse.api.TaskResult.failure(new RuntimeException("error1")),
+            0
+        )
+        collector.record(failureMetrics1)
+        
+        def failureMetrics2 = new com.vajrapulse.core.engine.ExecutionMetrics(
+            System.nanoTime(),
+            System.nanoTime() + 1_000_000,
+            com.vajrapulse.api.TaskResult.failure(new RuntimeException("error2")),
+            0
+        )
+        collector.record(failureMetrics2)
+
+        when: "getting failure count"
+        def count = adapter.getFailureCount()
+
+        then: "failure count is 2"
+        count == 2
+    }
+    
+    def "should return zero when no failures"() {
+        given: "a metrics collector with only successes"
+        def collector = new MetricsCollector()
+        def adapter = new MetricsProviderAdapter(collector)
+        
+        // Record successes only
+        3.times {
+            def successMetrics = new com.vajrapulse.core.engine.ExecutionMetrics(
+                System.nanoTime(),
+                System.nanoTime() + 1_000_000,
+                com.vajrapulse.api.TaskResult.success("ok"),
+                0
+            )
+            collector.record(successMetrics)
+        }
+
+        when: "getting failure count"
+        def count = adapter.getFailureCount()
+
+        then: "failure count is zero"
+        count == 0
+    }
 }
 

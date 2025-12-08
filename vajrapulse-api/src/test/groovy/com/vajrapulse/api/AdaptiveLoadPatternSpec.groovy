@@ -32,6 +32,7 @@ class AdaptiveLoadPatternSpec extends Specification {
     static class MockMetricsProvider implements MetricsProvider {
         private volatile double failureRate = 0.0
         private volatile long totalExecutions = 0
+        private volatile long failureCount = 0
         private volatile double recentFailureRate = 0.0
         
         void setFailureRate(double rate) {
@@ -47,6 +48,10 @@ class AdaptiveLoadPatternSpec extends Specification {
             this.totalExecutions = count
         }
         
+        void setFailureCount(long count) {
+            this.failureCount = count
+        }
+        
         @Override
         double getFailureRate() {
             return failureRate
@@ -60,6 +65,11 @@ class AdaptiveLoadPatternSpec extends Specification {
         @Override
         long getTotalExecutions() {
             return totalExecutions
+        }
+        
+        @Override
+        long getFailureCount() {
+            return failureCount
         }
     }
     
@@ -166,10 +176,10 @@ class AdaptiveLoadPatternSpec extends Specification {
         pattern.calculateTps(0) // Initialize
         def tps = pattern.calculateTps(1001) // After 1 second
         
-        then: "should transition to RAMP_DOWN and decrease TPS (or RECOVERY if TPS reaches minimum)"
-        // When TPS reaches 0 (minimum), pattern transitions to RECOVERY
+        then: "should transition to RAMP_DOWN and decrease TPS (recovery behavior when at minimum)"
+        // When TPS reaches 0 (minimum), pattern stays in RAMP_DOWN with recovery behavior
         def phase = pattern.getCurrentPhase()
-        (phase == AdaptiveLoadPattern.Phase.RAMP_DOWN || phase == AdaptiveLoadPattern.Phase.RECOVERY)
+        phase == AdaptiveLoadPattern.Phase.RAMP_DOWN
         tps >= 0.0 // TPS should be at least 0 (minimum)
     }
     
@@ -222,7 +232,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         pattern.getStableTps() == 150.0
     }
     
-    def "should transition to RECOVERY phase when TPS reaches minimum"() {
+    def "should handle recovery behavior when TPS reaches minimum in RAMP_DOWN"() {
         given: "a new adaptive pattern that ramps down to minimum TPS"
         def provider = new MockMetricsProvider()
         def backpressureProvider = new MockBackpressureProvider()
@@ -241,25 +251,25 @@ class AdaptiveLoadPatternSpec extends Specification {
         
         def tps = pattern.calculateTps(2001)
         
-        then: "should transition to RECOVERY and return minimum TPS"
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RECOVERY
+        then: "should stay in RAMP_DOWN at minimum TPS (recovery behavior)"
+        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_DOWN
         tps == 0.0 // minimumTps is 0.0 by default
     }
     
-    def "should transition from RECOVERY to RAMP_UP when conditions improve"() {
-        given: "a pattern in RECOVERY phase"
+    def "should transition from RAMP_DOWN (at minimum) to RAMP_UP when conditions improve"() {
+        given: "a pattern at minimum TPS in RAMP_DOWN phase"
         def provider = new MockMetricsProvider()
         def pattern = new AdaptiveLoadPattern(
             100.0, 50.0, 100.0, Duration.ofSeconds(1),
             1000.0, Duration.ofSeconds(10), 0.01, provider
         )
         
-        when: "pattern enters RECOVERY, then conditions improve"
+        when: "pattern ramps down to minimum, then conditions improve"
         pattern.calculateTps(0) // Initialize
         // Trigger RAMP_DOWN to minimum
         provider.setFailureRate(2.0)
         provider.setRecentFailureRate(2.0)
-        pattern.calculateTps(1001) // Ramp down to 0 -> RECOVERY
+        pattern.calculateTps(1001) // Ramp down to 0 (minimum, recovery behavior in RAMP_DOWN)
         
         // Conditions improve - use recent window for recovery decision
         provider.setFailureRate(0.0)
@@ -272,8 +282,8 @@ class AdaptiveLoadPatternSpec extends Specification {
         tps == 50.0 // Recovery TPS is initialTps * 0.5 = 100 * 0.5 = 50.0
     }
     
-    def "should transition from RECOVERY to RAMP_UP when backpressure is low"() {
-        given: "a pattern in RECOVERY phase with backpressure provider"
+    def "should transition from RAMP_DOWN (at minimum) to RAMP_UP when backpressure is low"() {
+        given: "a pattern at minimum TPS in RAMP_DOWN phase with backpressure provider"
         def provider = new MockMetricsProvider()
         def backpressureProvider = new MockBackpressureProvider()
         def pattern = new AdaptiveLoadPattern(
@@ -281,13 +291,13 @@ class AdaptiveLoadPatternSpec extends Specification {
             1000.0, Duration.ofSeconds(10), 0.01, provider, backpressureProvider
         )
         
-        when: "pattern enters RECOVERY, then backpressure becomes low"
+        when: "pattern ramps down to minimum, then backpressure becomes low"
         pattern.calculateTps(0) // Initialize
         // Trigger RAMP_DOWN to minimum
         provider.setFailureRate(2.0)
         provider.setRecentFailureRate(2.0)
         backpressureProvider.setBackpressure(0.8) // High backpressure
-        pattern.calculateTps(1001) // Ramp down to 0 -> RECOVERY
+        pattern.calculateTps(1001) // Ramp down to 0 (minimum, recovery behavior in RAMP_DOWN)
         
         // Backpressure improves (low backpressure allows recovery)
         backpressureProvider.setBackpressure(0.2) // Low backpressure (< 0.3)
@@ -299,8 +309,8 @@ class AdaptiveLoadPatternSpec extends Specification {
         tps == 50.0 // Recovery TPS is 50% of initial
     }
     
-    def "should stay in RECOVERY when conditions are poor"() {
-        given: "a pattern in RECOVERY phase"
+    def "should stay in RAMP_DOWN (at minimum) when conditions are poor"() {
+        given: "a pattern at minimum TPS in RAMP_DOWN phase"
         def provider = new MockMetricsProvider()
         def backpressureProvider = new MockBackpressureProvider()
         def pattern = new AdaptiveLoadPattern(
@@ -308,33 +318,33 @@ class AdaptiveLoadPatternSpec extends Specification {
             1000.0, Duration.ofSeconds(10), 0.01, provider, backpressureProvider
         )
         
-        when: "pattern enters RECOVERY with poor conditions"
+        when: "pattern ramps down to minimum with poor conditions"
         pattern.calculateTps(0) // Initialize
         // Trigger RAMP_DOWN to minimum
         provider.setFailureRate(2.0)
         provider.setRecentFailureRate(2.0)
         backpressureProvider.setBackpressure(0.8) // High backpressure
-        pattern.calculateTps(1001) // Ramp down to 0 -> RECOVERY
+        pattern.calculateTps(1001) // Ramp down to 0 (minimum, recovery behavior in RAMP_DOWN)
         
         // Conditions remain poor
         provider.setRecentFailureRate(2.0) // High error rate
         backpressureProvider.setBackpressure(0.8) // High backpressure
-        def tps = pattern.calculateTps(2001) // Should stay in RECOVERY
+        def tps = pattern.calculateTps(2001) // Should stay in RAMP_DOWN at minimum
         
-        then: "should stay in RECOVERY"
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RECOVERY
+        then: "should stay in RAMP_DOWN at minimum TPS"
+        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_DOWN
         tps == 0.0 // Minimum TPS
     }
     
     def "should use lastKnownGoodTps for recovery TPS calculation"() {
-        given: "a pattern that ramps up then down to RECOVERY"
+        given: "a pattern that ramps up then down to minimum"
         def provider = new MockMetricsProvider()
         def pattern = new AdaptiveLoadPattern(
             100.0, 50.0, 100.0, Duration.ofSeconds(1),
             1000.0, Duration.ofSeconds(10), 0.01, provider
         )
         
-        when: "pattern ramps up to 500 TPS, then down to RECOVERY"
+        when: "pattern ramps up to 500 TPS, then down to minimum"
         pattern.calculateTps(0) // Initialize at 100 TPS
         // Ramp up to 500 TPS
         provider.setFailureRate(0.0)
@@ -347,14 +357,14 @@ class AdaptiveLoadPatternSpec extends Specification {
         pattern.calculateTps(7001) // 400 -> 450
         pattern.calculateTps(8001) // 450 -> 500
         
-        // Now ramp down to RECOVERY
+        // Now ramp down to minimum (recovery behavior in RAMP_DOWN)
         provider.setFailureRate(2.0)
         provider.setRecentFailureRate(2.0)
         pattern.calculateTps(9001) // 500 -> 400 (RAMP_DOWN, lastKnownGoodTps = 500)
         pattern.calculateTps(10001) // 400 -> 300
         pattern.calculateTps(11001) // 300 -> 200
         pattern.calculateTps(12001) // 200 -> 100
-        pattern.calculateTps(13001) // 100 -> 0 (RECOVERY)
+        pattern.calculateTps(13001) // 100 -> 0 (minimum, recovery behavior in RAMP_DOWN)
         
         // Conditions improve
         provider.setFailureRate(0.0)

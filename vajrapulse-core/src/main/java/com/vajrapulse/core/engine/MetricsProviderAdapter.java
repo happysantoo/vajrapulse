@@ -78,6 +78,11 @@ public final class MetricsProviderAdapter implements MetricsProvider {
     }
     
     @Override
+    public long getFailureCount() {
+        return getCachedSnapshot().failureCount();
+    }
+    
+    @Override
     public double getRecentFailureRate(int windowSeconds) {
         if (windowSeconds <= 0) {
             // Invalid window, return all-time rate
@@ -155,12 +160,9 @@ public final class MetricsProviderAdapter implements MetricsProvider {
                 cachedTime = cacheTimeNanos.get(); // Atomic read inside synchronized
                 
                 if (snapshot == null || (now - cachedTime) > ttlNanos) {
-                    // Refresh cache - call snapshot() once and cache both values
+                    // Refresh cache - call snapshot() once and cache all values
                     var aggregatedMetrics = metricsCollector.snapshot();
-                    snapshot = new CachedSnapshot(
-                        aggregatedMetrics.failureRate(),
-                        aggregatedMetrics.totalExecutions()
-                    );
+                    snapshot = CachedSnapshot.from(aggregatedMetrics);
                     
                     // Write both values with proper ordering
                     // Write timestamp first (atomic with memory ordering)
@@ -181,7 +183,15 @@ public final class MetricsProviderAdapter implements MetricsProvider {
     /**
      * Cached snapshot of metrics.
      */
-    private record CachedSnapshot(double failureRate, long totalExecutions) {}
+    private record CachedSnapshot(double failureRate, long totalExecutions, long failureCount) {
+        static CachedSnapshot from(com.vajrapulse.core.metrics.AggregatedMetrics metrics) {
+            return new CachedSnapshot(
+                metrics.failureRate(),
+                metrics.totalExecutions(),
+                metrics.failureCount()
+            );
+        }
+    }
     
     /**
      * Snapshot for time-windowed calculations.

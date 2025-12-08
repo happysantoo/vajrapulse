@@ -504,7 +504,7 @@ public final class ExecutionEngine implements AutoCloseable {
                 // 2. Elapsed time is significant (> 100ms) to ensure we're not breaking too early
                 // 3. TPS is 0.0 (pattern is complete)
                 // This prevents breaking on RampUpLoad which starts at 0.0, but still catches
-                // AdaptiveLoadPattern in RECOVERY phase which returns minimum TPS
+                // AdaptiveLoadPattern at minimum TPS (recovery behavior in RAMP_DOWN phase)
                 long elapsedMillis = rateController.getElapsedMillis();
                 double currentTps = rateController.getCurrentTps();
                 if (iteration >= 10 && elapsedMillis > 100 && currentTps <= 0.0) {

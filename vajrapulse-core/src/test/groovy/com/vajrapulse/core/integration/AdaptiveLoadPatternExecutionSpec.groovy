@@ -187,7 +187,6 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
             .until {
                 def currentPhase = pattern.getCurrentPhase()
                 currentPhase == AdaptiveLoadPattern.Phase.RAMP_DOWN || 
-                currentPhase == AdaptiveLoadPattern.Phase.RECOVERY ||
                 currentPhase == AdaptiveLoadPattern.Phase.SUSTAIN
             }
         
@@ -195,11 +194,10 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         engine.stop()
         executionThread.join(5000)
         
-        then: "pattern should transition to RAMP_DOWN, RECOVERY, or SUSTAIN"
+        then: "pattern should transition to RAMP_DOWN or SUSTAIN"
         def phase = pattern.getCurrentPhase()
-        // May be in RAMP_DOWN, RECOVERY (if TPS reached minimum), or SUSTAIN (if stable point found)
+        // May be in RAMP_DOWN (including recovery behavior at minimum), or SUSTAIN (if stable point found)
         phase in [AdaptiveLoadPattern.Phase.RAMP_DOWN, 
-                  AdaptiveLoadPattern.Phase.RECOVERY,
                   AdaptiveLoadPattern.Phase.SUSTAIN]
         
         and: "some executions should have occurred"
@@ -244,8 +242,7 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
             .until {
                 def currentPhase = pattern.getCurrentPhase()
                 currentPhase == AdaptiveLoadPattern.Phase.SUSTAIN || 
-                currentPhase == AdaptiveLoadPattern.Phase.RAMP_DOWN ||
-                currentPhase == AdaptiveLoadPattern.Phase.RECOVERY
+                currentPhase == AdaptiveLoadPattern.Phase.RAMP_DOWN
             }
         
         // Stop the engine
@@ -254,9 +251,8 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         
         then: "pattern may have found stable point"
         def phase = pattern.getCurrentPhase()
-        // May be in SUSTAIN if stable point found, RAMP_DOWN if still searching, or RECOVERY if TPS reached minimum
+        // May be in SUSTAIN if stable point found, or RAMP_DOWN (including recovery behavior at minimum)
         phase in [AdaptiveLoadPattern.Phase.RAMP_DOWN, 
-                  AdaptiveLoadPattern.Phase.RECOVERY,
                   AdaptiveLoadPattern.Phase.SUSTAIN]
         
         and: "executions should have occurred"
@@ -372,7 +368,7 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
     }
     
     def "should not hang when pattern returns 0.0 TPS"() {
-        given: "an adaptive pattern that may enter RECOVERY phase"
+        given: "an adaptive pattern that may reach minimum TPS"
         def metrics = new MetricsCollector()
         def task = new FailingTask(50) // 50% failure rate - will trigger RAMP_DOWN
         def provider = new MetricsProviderAdapter(metrics)
@@ -388,7 +384,7 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
             .withMetricsCollector(metrics)
             .build()
         
-        when: "running engine until pattern may enter RECOVERY phase"
+        when: "running engine until pattern may reach minimum TPS"
         def startTime = System.currentTimeMillis()
         def executionThread = Thread.start {
             try {
@@ -398,15 +394,15 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
             }
         }
         
-        // Wait for pattern to potentially reach minimum TPS or enter RECOVERY
+        // Wait for pattern to potentially reach minimum TPS (recovery behavior in RAMP_DOWN)
         // This test verifies the pattern doesn't hang, so we wait for either:
-        // 1. RECOVERY phase (reached minimum TPS)
+        // 1. RAMP_DOWN phase at minimum TPS (recovery behavior)
         // 2. Or sufficient time has passed (pattern is still running)
         await().atMost(20, SECONDS)
             .pollInterval(1, SECONDS)
             .until {
                 def currentPhase = pattern.getCurrentPhase()
-                currentPhase == AdaptiveLoadPattern.Phase.RECOVERY || 
+                (currentPhase == AdaptiveLoadPattern.Phase.RAMP_DOWN && pattern.getCurrentTps() <= 0.0) || 
                 (System.currentTimeMillis() - startTime) > 12000 // At least 12s passed
             }
         

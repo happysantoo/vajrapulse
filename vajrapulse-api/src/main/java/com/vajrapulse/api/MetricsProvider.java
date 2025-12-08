@@ -49,5 +49,23 @@ public interface MetricsProvider {
      * @return total execution count
      */
     long getTotalExecutions();
+    
+    /**
+     * Gets the total number of failed executions.
+     * 
+     * <p>This method returns the absolute count of failures,
+     * which is useful for:
+     * <ul>
+     *   <li>Alerting on absolute failure thresholds (e.g., "alert if > 100 failures")</li>
+     *   <li>Tracking failure trends over time</li>
+     *   <li>Debugging and analysis</li>
+     * </ul>
+     * 
+     * @return total failure count
+     * @since 0.9.9
+     */
+    default long getFailureCount() {
+        return 0L;
+    }
 }
 

@@ -102,8 +102,8 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         pattern.getCurrentTps() == 10.0
     }
     
-    def "should complete full recovery cycle: RAMP_UP -> RAMP_DOWN -> RECOVERY -> RAMP_UP"() {
-        given: "an adaptive pattern that will enter RECOVERY and recover"
+    def "should complete full recovery cycle: RAMP_UP -> RAMP_DOWN (at minimum) -> RAMP_UP"() {
+        given: "an adaptive pattern that will reach minimum TPS and recover"
         def metrics = new MetricsCollector()
         // Task fails initially, then recovers
         def task = new AdaptiveRecoveryTask(50) // Fails for first 50 executions, then succeeds
@@ -149,14 +149,16 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
                 phases.add(phase)
                 tpsValues.add(tps)
                 
-                // Check if we've seen the full cycle: RAMP_UP -> RAMP_DOWN -> RECOVERY -> RAMP_UP
+                // Check if we've seen the full cycle: RAMP_UP -> RAMP_DOWN (at minimum) -> RAMP_UP
                 def uniquePhases = phases.unique()
-                def hasRecovery = uniquePhases.contains(AdaptiveLoadPattern.Phase.RECOVERY)
-                def hasRecoveryThenRampUp = hasRecovery && 
-                    phases.lastIndexOf(AdaptiveLoadPattern.Phase.RECOVERY) < 
-                    phases.lastIndexOf(AdaptiveLoadPattern.Phase.RAMP_UP)
+                // Recovery behavior happens in RAMP_DOWN when at minimum TPS
+                // Check if we've seen RAMP_DOWN followed by RAMP_UP (recovery happened)
+                def rampDownIndices = phases.findIndexValues { it == AdaptiveLoadPattern.Phase.RAMP_DOWN }
+                def rampUpIndices = phases.findIndexValues { it == AdaptiveLoadPattern.Phase.RAMP_UP }
+                def hasRecoveryThenRampUp = !rampDownIndices.isEmpty() && !rampUpIndices.isEmpty() &&
+                    rampUpIndices.last() > rampDownIndices.last()
                 
-                // Stop when we've seen recovery and then ramp up, or after 10 seconds (enough time to see transitions)
+                // Stop when we've seen recovery (RAMP_DOWN at minimum followed by RAMP_UP), or after 10 seconds
                 hasRecoveryThenRampUp || (System.currentTimeMillis() - startTime) >= 10000
             }
         
@@ -168,20 +170,19 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         def uniquePhasesList = phases.unique()
         uniquePhasesList.size() >= 2 // Should have seen multiple phases
         
-        and: "pattern should have entered RECOVERY phase or be able to recover"
-        def sawRecoveryPhase = phases.contains(AdaptiveLoadPattern.Phase.RECOVERY)
-        def recoveryIdx = phases.lastIndexOf(AdaptiveLoadPattern.Phase.RECOVERY)
+        and: "pattern should have reached minimum TPS in RAMP_DOWN and be able to recover"
+        // Recovery behavior happens in RAMP_DOWN when at minimum TPS
+        // Verify recovery capability: pattern should have been in RAMP_DOWN and able to recover
+        phases.contains(AdaptiveLoadPattern.Phase.RAMP_DOWN)
         
-        // Verify recovery capability: either we saw RECOVERY, or pattern is in a recoverable state
-        sawRecoveryPhase || phases.contains(AdaptiveLoadPattern.Phase.RAMP_DOWN)
-        
-        and: "pattern should not be permanently stuck in RECOVERY"
+        and: "pattern should not be permanently stuck at minimum TPS"
         def finalPhase = pattern.getCurrentPhase()
-        // If in RECOVERY, it should not be stuck there (should have transitioned recently)
-        if (finalPhase == AdaptiveLoadPattern.Phase.RECOVERY) {
-            recoveryIdx >= 0 && recoveryIdx < phases.size() - 3 // Not stuck in recovery
+        // Pattern should not be stuck in RAMP_DOWN at minimum (should have transitioned or be transitioning)
+        // If still in RAMP_DOWN, TPS should be above minimum or conditions should allow recovery
+        if (finalPhase == AdaptiveLoadPattern.Phase.RAMP_DOWN) {
+            pattern.getCurrentTps() > 0.0 || phases.contains(AdaptiveLoadPattern.Phase.RAMP_UP)
         } else {
-            true // Not in recovery, so not stuck
+            true // Not stuck at minimum
         }
         
         cleanup:
@@ -341,8 +342,10 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         
         and: "pattern should not be stuck at minimum TPS"
         def lastPhases = phaseTransitions.subList(Math.max(0, phaseTransitions.size() - 5), phaseTransitions.size())
-        def stuckInRecovery = lastPhases.every { it == AdaptiveLoadPattern.Phase.RECOVERY }
-        !stuckInRecovery // Should not be stuck in RECOVERY
+        // Recovery behavior happens in RAMP_DOWN, but pattern should not be permanently stuck
+        def stuckAtMinimum = lastPhases.every { it == AdaptiveLoadPattern.Phase.RAMP_DOWN } && 
+            pattern.getCurrentTps() <= 0.0
+        !stuckAtMinimum // Should not be stuck at minimum TPS in RAMP_DOWN
         
         and: "TPS should vary over time (not stuck)"
         def tpsRange = tpsHistory.max() - tpsHistory.min()
