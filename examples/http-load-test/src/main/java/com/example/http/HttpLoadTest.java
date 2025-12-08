@@ -1,6 +1,6 @@
 package com.example.http;
 
-import com.vajrapulse.api.Task;
+import com.vajrapulse.api.TaskLifecycle;
 import com.vajrapulse.api.TaskResult;
 import com.vajrapulse.api.VirtualThreads;
 
@@ -18,26 +18,26 @@ import java.util.concurrent.Executors;
  * It demonstrates:
  * <ul>
  *   <li>Using @VirtualThreads for I/O-bound operations</li>
- *   <li>Setup/cleanup lifecycle</li>
+ *   <li>Init/teardown lifecycle</li>
  *   <li>Proper error handling with TaskResult</li>
  * </ul>
  */
 @VirtualThreads
-public class HttpLoadTest implements Task {
+public class HttpLoadTest implements TaskLifecycle {
     
     /**
      * Default constructor for HttpLoadTest.
      * Initializes the task for use with VajraPulse execution engine.
      */
     public HttpLoadTest() {
-        // Default constructor - initialization happens in setup()
+        // Default constructor - initialization happens in init()
     }
     
     private HttpClient client;
     private HttpRequest request;
     
     @Override
-    public void setup() throws Exception {
+    public void init() throws Exception {
         // Create HTTP client with virtual thread executor
         client = HttpClient.newBuilder()
             .executor(Executors.newVirtualThreadPerTaskExecutor())
@@ -51,11 +51,11 @@ public class HttpLoadTest implements Task {
             .GET()
             .build();
         
-        System.out.println("HttpLoadTest setup completed");
+        System.out.println("HttpLoadTest init completed");
     }
     
     @Override
-    public TaskResult execute() throws Exception {
+    public TaskResult execute(long iteration) throws Exception {
         HttpResponse<String> response = client.send(
             request, 
             HttpResponse.BodyHandlers.ofString()
@@ -71,8 +71,8 @@ public class HttpLoadTest implements Task {
     }
     
     @Override
-    public void cleanup() throws Exception {
-        System.out.println("HttpLoadTest cleanup completed");
+    public void teardown() throws Exception {
+        System.out.println("HttpLoadTest teardown completed");
         // HttpClient doesn't need explicit cleanup
     }
     

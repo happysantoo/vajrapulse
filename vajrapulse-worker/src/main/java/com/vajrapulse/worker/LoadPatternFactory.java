@@ -143,16 +143,16 @@ public final class LoadPatternFactory {
                 
                 logger.debug("Creating adaptive load initialTps={} rampIncrement={} rampDecrement={} rampInterval={} maxTps={} sustainDuration={} errorThreshold={}",
                     adaptiveInitialTps, adaptiveRampIncrement, adaptiveRampDecrement, rampInterval, maxTps, sustainDuration, adaptiveErrorThreshold);
-                yield new AdaptiveLoadPattern(
-                    adaptiveInitialTps,
-                    adaptiveRampIncrement,
-                    adaptiveRampDecrement,
-                    rampInterval,
-                    maxTps,
-                    sustainDuration,
-                    adaptiveErrorThreshold,
-                    provider
-                );
+                yield AdaptiveLoadPattern.builder()
+                    .initialTps(adaptiveInitialTps)
+                    .rampIncrement(adaptiveRampIncrement)
+                    .rampDecrement(adaptiveRampDecrement)
+                    .rampInterval(rampInterval)
+                    .maxTps(maxTps)
+                    .sustainDuration(sustainDuration)
+                    .errorThreshold(adaptiveErrorThreshold)
+                    .metricsProvider(provider)
+                    .build();
             }
             default -> throw new IllegalArgumentException(
                 "Unknown mode: " + mode + ". Valid modes: static, ramp, ramp-sustain, step, sine, spike, adaptive"

@@ -8,7 +8,6 @@ import com.vajrapulse.api.StepLoad;
 import com.vajrapulse.api.SineWaveLoad;
 import com.vajrapulse.api.SpikeLoad;
 import com.vajrapulse.core.engine.MetricsProviderAdapter;
-import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
 import com.vajrapulse.exporter.report.HtmlReportExporter;
 import com.vajrapulse.exporter.report.JsonReportExporter;
@@ -68,16 +67,16 @@ public final class HttpLoadTestRunner {
         if ("adaptive".equals(patternType)) {
             metricsCollector = com.vajrapulse.core.metrics.MetricsCollector.createWith(new double[]{0.50, 0.95, 0.99});
             MetricsProvider metricsProvider = new MetricsProviderAdapter(metricsCollector);
-            loadPattern = new AdaptiveLoadPattern(
-                100.0,  // Start at 100 TPS
-                50.0,   // Increase 50 TPS per interval
-                100.0,  // Decrease 100 TPS per interval when errors occur
-                Duration.ofSeconds(5),  // Check/adjust every 5 seconds
-                500.0,  // Max 500 TPS
-                Duration.ofSeconds(10), // Sustain at stable point for 10 seconds
-                0.01,   // 1% error rate threshold
-                metricsProvider
-            );
+            loadPattern = AdaptiveLoadPattern.builder()
+                .initialTps(100.0)                      // Start at 100 TPS
+                .rampIncrement(50.0)                   // Increase 50 TPS per interval
+                .rampDecrement(100.0)                   // Decrease 100 TPS per interval when errors occur
+                .rampInterval(Duration.ofSeconds(5))   // Check/adjust every 5 seconds
+                .maxTps(500.0)                         // Max 500 TPS
+                .sustainDuration(Duration.ofSeconds(10)) // Sustain at stable point for 10 seconds
+                .errorThreshold(0.01)                   // 1% error rate threshold
+                .metricsProvider(metricsProvider)
+                .build();
         } else {
             loadPattern = switch (patternType) {
                 case "static" -> new StaticLoad(100.0, Duration.ofSeconds(30));

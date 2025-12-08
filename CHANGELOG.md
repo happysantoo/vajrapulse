@@ -13,6 +13,80 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - GraalVM native image validation
 - Scenario scripting DSL
 
+## [0.9.9] - 2025-12-XX
+### Added
+- **AdaptiveLoadPattern Architectural Refactoring**: Major simplification and maintainability improvements
+  - **State Simplification**: Split large `AdaptiveState` record into focused records (`CoreState`, `StabilityTracking`, `RecoveryTracking`)
+  - **Phase Machine Simplification**: Removed `RECOVERY` phase, merged recovery logic into `RAMP_DOWN` phase
+  - **Decision Logic Extraction**: Introduced `RampDecisionPolicy` interface with `DefaultRampDecisionPolicy` implementation
+  - **Configuration Consolidation**: Created `AdaptiveConfig` record to consolidate all configuration parameters
+  - **Builder Pattern**: Fluent API for constructing `AdaptiveLoadPattern` instances
+  - **Strategy Pattern**: Introduced `PhaseStrategy` interface with `RampUpStrategy`, `RampDownStrategy`, and `SustainStrategy` implementations
+  - **Event Notification**: Added `AdaptivePatternListener` interface for listening to phase transitions, TPS changes, stability detection, and recovery events
+  - **MetricsProvider Enhancement**: Added `getFailureCount()` method to track absolute failure count
+- **New APIs**:
+  - `AdaptiveConfig`: Configuration record with validation and defaults
+  - `RampDecisionPolicy`: Interface for making ramp decisions (ramp up, down, sustain, recover)
+  - `DefaultRampDecisionPolicy`: Default implementation with configurable thresholds
+  - `MetricsSnapshot`: Record for consistent metrics view for decision-making
+  - `PhaseStrategy`: Interface for phase-specific logic handling
+  - `RampUpStrategy`, `RampDownStrategy`, `SustainStrategy`: Strategy implementations for each phase
+  - `AdaptivePatternListener`: Interface for event notifications with event records (`PhaseTransitionEvent`, `TpsChangeEvent`, `StabilityDetectedEvent`, `RecoveryEvent`)
+
+### Changed
+- **AdaptiveLoadPattern**: Major architectural refactoring
+  - State is now composed of three focused records instead of one large record
+  - Phase machine simplified from 4 phases to 3 phases (RAMP_UP, RAMP_DOWN, SUSTAIN)
+  - Decision logic extracted to pluggable `RampDecisionPolicy` interface
+  - Configuration consolidated into `AdaptiveConfig` record
+  - Builder pattern provides fluent API for configuration
+  - Phase-specific logic moved to strategy classes
+  - Event notification system for external integration
+  - Deprecated constructors maintained for backward compatibility
+- **MetricsProvider**: Enhanced with failure count tracking
+  - Added `getFailureCount()` method with default implementation
+  - `MetricsProviderAdapter` implements failure count tracking
+- **Examples and Worker**: Updated to use new builder pattern
+  - All examples updated to use `AdaptiveLoadPattern.builder()`
+  - Worker `LoadPatternFactory` updated to use builder pattern
+  - `HttpLoadTest` migrated from deprecated `Task` to `TaskLifecycle` interface
+
+### Fixed
+- Fixed deprecation warnings in examples and worker code
+- Improved code maintainability and testability through architectural improvements
+- Enhanced extensibility through strategy and policy patterns
+
+### Migration Guide
+
+**Backward Compatibility**: All deprecated constructors remain available. Existing code continues to work without changes.
+
+**Recommended Migration**:
+- Use `AdaptiveLoadPattern.builder()` for new code
+- Migrate from deprecated `Task` interface to `TaskLifecycle` interface
+- Consider implementing `AdaptivePatternListener` for event-driven integrations
+- Custom `RampDecisionPolicy` implementations can be provided for advanced use cases
+
+**Example Migration**:
+```java
+// Old (deprecated but still works)
+AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
+    100.0, 50.0, 100.0, Duration.ofSeconds(5),
+    500.0, Duration.ofSeconds(10), 0.01, metricsProvider
+);
+
+// New (recommended)
+AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+    .initialTps(100.0)
+    .rampIncrement(50.0)
+    .rampDecrement(100.0)
+    .rampInterval(Duration.ofSeconds(5))
+    .maxTps(500.0)
+    .sustainDuration(Duration.ofSeconds(10))
+    .errorThreshold(0.01)
+    .metricsProvider(metricsProvider)
+    .build();
+```
+
 ## [0.9.8] - 2025-12-05
 ### Added
 - **AdaptiveLoadPattern Recovery Enhancements**: Automatic recovery from low TPS

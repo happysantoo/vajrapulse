@@ -23,9 +23,10 @@
 ### Key Benefits
 
 - ⚡ **Massive Concurrency**: Virtual threads enable millions of concurrent operations with minimal memory
-- 🎯 **Simple API**: Implement one interface (`Task`) and you're ready to test
+- 🎯 **Simple API**: Implement one interface (`TaskLifecycle`) and you're ready to test
 - 📊 **Rich Metrics**: Built-in latency percentiles, queue depth tracking, client-side metrics, and OpenTelemetry support
 - 🔄 **Flexible Patterns**: 7 load patterns (static, ramp, step, spike, sine, ramp-sustain, adaptive) with warm-up/cool-down support
+- 🧩 **Adaptive Intelligence**: Self-tuning adaptive pattern with event notifications and pluggable decision policies
 - ✅ **Assertion Framework**: Built-in assertions for latency, error rate, throughput, and success rate validation
 - 📦 **Minimal Dependencies**: ~1.6MB fat JAR, zero-dependency API module
 - 🚀 **Production Ready**: OpenTelemetry integration, comprehensive metrics, graceful shutdown
@@ -41,7 +42,7 @@
 **Gradle (Kotlin DSL)** - Using BOM (Recommended):
 ```kotlin
 dependencies {
-    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.7"))
+    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.9"))
     implementation("com.vajrapulse:vajrapulse-core")
     implementation("com.vajrapulse:vajrapulse-worker") // For CLI
 }
@@ -54,7 +55,7 @@ dependencies {
         <dependency>
             <groupId>com.vajrapulse</groupId>
             <artifactId>vajrapulse-bom</artifactId>
-            <version>0.9.7</version>
+            <version>0.9.9</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -80,16 +81,16 @@ import com.vajrapulse.api.*;
 import java.net.http.*;
 
 @VirtualThreads  // Use virtual threads for I/O-bound tasks
-public class ApiLoadTest implements Task {
+public class ApiLoadTest implements TaskLifecycle {
     private HttpClient client;
     
     @Override
-    public void setup() throws Exception {
+    public void init() throws Exception {
         client = HttpClient.newHttpClient();
     }
     
     @Override
-    public TaskResult execute() throws Exception {
+    public TaskResult execute(long iteration) throws Exception {
         var request = HttpRequest.newBuilder()
             .uri(URI.create("https://api.example.com/users"))
             .GET()
@@ -105,6 +106,11 @@ public class ApiLoadTest implements Task {
             );
         }
     }
+    
+    @Override
+    public void teardown() throws Exception {
+        // Cleanup if needed
+    }
 }
 ```
 
@@ -112,7 +118,7 @@ public class ApiLoadTest implements Task {
 
 **CLI (Recommended for quick tests):**
 ```bash
-java -jar vajrapulse-worker-0.9.7-all.jar \
+java -jar vajrapulse-worker-0.9.9-all.jar \
   com.example.ApiLoadTest \
   --mode static \
   --tps 100 \
@@ -125,7 +131,7 @@ import com.vajrapulse.core.engine.ExecutionEngine;
 import com.vajrapulse.core.metrics.MetricsCollector;
 import com.vajrapulse.api.*;
 
-Task task = new ApiLoadTest();
+TaskLifecycle task = new ApiLoadTest();
 LoadPattern pattern = new StaticLoad(100.0, Duration.ofMinutes(5));
 MetricsCollector collector = new MetricsCollector();
 
@@ -141,13 +147,15 @@ System.out.println("P95 Latency: " + metrics.successPercentiles().get(0.95) + " 
 
 ### 🎯 Simple Task API
 
-Implement the `Task` interface with three optional methods:
+Implement the `TaskLifecycle` interface with three methods:
 
-- **`setup()`** - Initialize resources (HTTP clients, DB connections, etc.)
-- **`execute()`** - Your test logic (called repeatedly)
-- **`cleanup()`** - Clean up resources
+- **`init()`** - Initialize resources (HTTP clients, DB connections, etc.) - called once before test
+- **`execute(long iteration)`** - Your test logic (called repeatedly for each iteration)
+- **`teardown()`** - Clean up resources - called once after test
 
 The framework handles timing, metrics, error handling, and thread management automatically.
+
+> **Note**: The legacy `Task` interface is still supported but deprecated. New code should use `TaskLifecycle`.
 
 ### ⚡ Virtual Threads by Default
 
@@ -155,10 +163,10 @@ VajraPulse uses Java 21 virtual threads for I/O-bound tasks, enabling massive co
 
 ```java
 @VirtualThreads  // For HTTP, DB, file I/O
-public class IoTask implements Task { }
+public class IoTask implements TaskLifecycle { }
 
 @PlatformThreads(poolSize = 8)  // For CPU-intensive work
-public class CpuTask implements Task { }
+public class CpuTask implements TaskLifecycle { }
 ```
 
 **Performance**: 10,000+ TPS on typical hardware, millions of concurrent requests with minimal memory.
@@ -175,7 +183,7 @@ Choose the pattern that matches your testing scenario:
 | **Step** | Phased testing | `--mode step --steps "50@30s,200@1m,500@2m"` |
 | **Spike** | Burst absorption testing | `--mode spike --base-rate 100 --spike-rate 800 --spike-interval 60s` |
 | **Sine** | Smooth oscillation | `--mode sine --mean-rate 300 --amplitude 150 --period 120s` |
-| **Adaptive** | Dynamic TPS adjustment based on error rates and backpressure | `new AdaptiveLoadPattern(...)` |
+| **Adaptive** | Dynamic TPS adjustment based on error rates and backpressure | See [Adaptive Pattern](#adaptive-load-pattern) section |
 
 **Warm-up/Cool-down Support**: All patterns can be wrapped with warm-up and cool-down phases:
 ```java
@@ -193,8 +201,9 @@ Built-in metrics collection with Micrometer:
 
 - **Latency Percentiles**: P50, P95, P99 for success and failure cases
 - **Queue Depth Tracking**: Monitor pending executions
-- **Client-Side Metrics**: Connection pool metrics, queue depth, timeouts (new in 0.9.7)
+- **Client-Side Metrics**: Connection pool metrics, queue depth, timeouts
 - **TPS Metrics**: Request TPS, Success TPS, Failure TPS
+- **Failure Count**: Absolute failure count tracking (new in 0.9.9)
 - **OpenTelemetry Export**: Full OTLP support for integration with observability platforms
 
 **Example Output:**
@@ -303,7 +312,7 @@ if (result.failed()) {
 **Gradle (Kotlin DSL):**
 ```kotlin
 dependencies {
-    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.7"))
+    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.9"))
     implementation("com.vajrapulse:vajrapulse-core")
     implementation("com.vajrapulse:vajrapulse-worker")
     // Optional exporters
@@ -315,7 +324,7 @@ dependencies {
 **Gradle (Groovy DSL):**
 ```groovy
 dependencies {
-    implementation platform('com.vajrapulse:vajrapulse-bom:0.9.7')
+    implementation platform('com.vajrapulse:vajrapulse-bom:0.9.9')
     implementation 'com.vajrapulse:vajrapulse-core'
     implementation 'com.vajrapulse:vajrapulse-worker'
 }
@@ -328,7 +337,7 @@ dependencies {
         <dependency>
             <groupId>com.vajrapulse</groupId>
             <artifactId>vajrapulse-bom</artifactId>
-            <version>0.9.7</version>
+            <version>0.9.9</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -350,8 +359,8 @@ dependencies {
 **Without BOM** - Specify versions individually:
 ```kotlin
 dependencies {
-    implementation("com.vajrapulse:vajrapulse-core:0.9.7")
-    implementation("com.vajrapulse:vajrapulse-worker:0.9.7")
+    implementation("com.vajrapulse:vajrapulse-core:0.9.9")
+    implementation("com.vajrapulse:vajrapulse-worker:0.9.9")
 }
 ```
 
@@ -368,18 +377,18 @@ dependencies {
 
 ```java
 @VirtualThreads
-public class RestApiTest implements Task {
+public class RestApiTest implements TaskLifecycle {
     private HttpClient client;
     
     @Override
-    public void setup() {
+    public void init() throws Exception {
         client = HttpClient.newBuilder()
             .executor(Executors.newVirtualThreadPerTaskExecutor())
             .build();
     }
     
     @Override
-    public TaskResult execute() throws Exception {
+    public TaskResult execute(long iteration) throws Exception {
         var request = HttpRequest.newBuilder()
             .uri(URI.create("https://api.example.com/data"))
             .header("Authorization", "Bearer " + getToken())
@@ -391,6 +400,11 @@ public class RestApiTest implements Task {
             ? TaskResult.success(response.body())
             : TaskResult.failure(new RuntimeException("HTTP " + response.statusCode()));
     }
+    
+    @Override
+    public void teardown() throws Exception {
+        // Cleanup if needed
+    }
 }
 ```
 
@@ -398,16 +412,16 @@ public class RestApiTest implements Task {
 
 ```java
 @VirtualThreads
-public class DatabaseTest implements Task {
+public class DatabaseTest implements TaskLifecycle {
     private Connection connection;
     
     @Override
-    public void setup() throws SQLException {
+    public void init() throws SQLException {
         connection = DriverManager.getConnection("jdbc:postgresql://localhost/db", "user", "pass");
     }
     
     @Override
-    public TaskResult execute() throws Exception {
+    public TaskResult execute(long iteration) throws Exception {
         try (var stmt = connection.prepareStatement("SELECT * FROM users WHERE id = ?")) {
             stmt.setInt(1, randomUserId());
             var rs = stmt.executeQuery();
@@ -418,7 +432,7 @@ public class DatabaseTest implements Task {
     }
     
     @Override
-    public void cleanup() throws SQLException {
+    public void teardown() throws SQLException {
         if (connection != null) connection.close();
     }
 }
@@ -428,11 +442,11 @@ public class DatabaseTest implements Task {
 
 ```java
 @VirtualThreads
-public class KafkaProducerTest implements Task {
+public class KafkaProducerTest implements TaskLifecycle {
     private KafkaProducer<String, String> producer;
     
     @Override
-    public void setup() {
+    public void init() {
         var props = new Properties();
         props.put("bootstrap.servers", "localhost:9092");
         props.put("key.serializer", StringSerializer.class.getName());
@@ -441,11 +455,16 @@ public class KafkaProducerTest implements Task {
     }
     
     @Override
-    public TaskResult execute() throws Exception {
+    public TaskResult execute(long iteration) throws Exception {
         var record = new ProducerRecord<>("test-topic", "key", "value");
         var future = producer.send(record);
         var metadata = future.get(5, TimeUnit.SECONDS);
         return TaskResult.success(metadata.topic());
+    }
+    
+    @Override
+    public void teardown() {
+        if (producer != null) producer.close();
     }
 }
 ```
@@ -507,41 +526,144 @@ Smooth oscillation around a mean. Reveals latency drift and GC sensitivity.
 
 ### Adaptive Load Pattern
 
-The adaptive load pattern automatically finds the maximum sustainable TPS by:
-1. **Ramping up** until errors occur
-2. **Ramping down** to find a stable point
-3. **Sustaining** at the stable TPS
-4. **Recovering** automatically when conditions improve (new in 0.9.8)
+The adaptive load pattern automatically finds the maximum sustainable TPS by dynamically adjusting based on error rates, backpressure, and system conditions.
 
 **Key Features:**
-- **Automatic Recovery**: Pattern automatically recovers from low TPS when conditions improve
-- **Recent Window Metrics**: Uses recent failure rate (last 10 seconds) for recovery decisions, not all-time average
-- **Intermediate Stability**: Detects and sustains at optimal TPS levels (not just MAX_TPS)
+- **Automatic Ramp-Up**: Increases TPS until errors occur
+- **Intelligent Ramp-Down**: Decreases TPS to find stable operating point
+- **Stability Detection**: Detects and sustains at optimal TPS levels (not just MAX_TPS)
+- **Automatic Recovery**: Recovers from low TPS when conditions improve
+- **Event Notifications**: Listen to phase transitions, TPS changes, and stability events
+- **Pluggable Policies**: Custom decision logic via `RampDecisionPolicy`
 - **Continuous Operation**: Never gets stuck - continuously adapts to changing conditions
 
-**Example:**
+**Using the Builder Pattern (Recommended):**
 
 ```java
 MetricsCollector metrics = new MetricsCollector();
 MetricsProvider provider = new MetricsProviderAdapter(metrics);
 
-LoadPattern pattern = new AdaptiveLoadPattern(
-    100.0,                    // Initial TPS
-    50.0,                     // Ramp increment
-    100.0,                    // Ramp decrement
-    Duration.ofSeconds(10),   // Ramp interval
-    1000.0,                   // Max TPS
-    Duration.ofSeconds(30),   // Sustain duration
-    0.01,                     // Error threshold (1% as ratio)
-    provider                  // Metrics provider
-);
+AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+    .initialTps(100.0)                      // Start at 100 TPS
+    .rampIncrement(50.0)                    // Increase 50 TPS per interval
+    .rampDecrement(100.0)                    // Decrease 100 TPS per interval when errors occur
+    .rampInterval(Duration.ofSeconds(10))   // Check/adjust every 10 seconds
+    .maxTps(1000.0)                          // Max 1000 TPS
+    .minTps(10.0)                            // Min 10 TPS
+    .sustainDuration(Duration.ofSeconds(30)) // Sustain at stable point for 30 seconds
+    .errorThreshold(0.01)                     // 1% error rate threshold
+    .backpressureRampUpThreshold(0.3)        // Ramp up if backpressure < 30%
+    .backpressureRampDownThreshold(0.7)      // Ramp down if backpressure > 70%
+    .stableIntervalsRequired(3)              // Require 3 stable intervals
+    .tpsTolerance(50.0)                      // TPS tolerance for stability
+    .recoveryTpsRatio(0.5)                   // Recovery at 50% of last known good TPS
+    .metricsProvider(provider)                // Metrics provider for feedback
+    .listener(new AdaptivePatternListener() { // Optional: event notifications
+        @Override
+        public void onPhaseTransition(PhaseTransitionEvent event) {
+            System.out.println("Phase: " + event.from() + " -> " + event.to());
+        }
+        
+        @Override
+        public void onTpsChange(TpsChangeEvent event) {
+            System.out.println("TPS: " + event.previousTps() + " -> " + event.newTps());
+        }
+        
+        @Override
+        public void onStabilityDetected(StabilityDetectedEvent event) {
+            System.out.println("Stable TPS detected: " + event.stableTps());
+        }
+    })
+    .build();
 ```
 
-**Features:**
-- **Continuous Operation**: No terminal states - pattern runs indefinitely
-- **Recovery Phase**: Automatically recovers from low TPS when conditions improve
-- **Intermediate Stability Detection**: Finds and sustains at optimal TPS levels (not just MAX_TPS)
-- **Backpressure Support**: Incorporates system backpressure in ramp decisions
+**Using Configuration Object:**
+
+```java
+AdaptiveConfig config = new AdaptiveConfig(
+    100.0,                      // initialTps
+    50.0,                       // rampIncrement
+    100.0,                      // rampDecrement
+    Duration.ofSeconds(10),     // rampInterval
+    1000.0,                     // maxTps
+    10.0,                       // minTps
+    Duration.ofSeconds(30),     // sustainDuration
+    0.01,                       // errorThreshold
+    0.3,                        // backpressureRampUpThreshold
+    0.7,                        // backpressureRampDownThreshold
+    3,                          // stableIntervalsRequired
+    50.0,                       // tpsTolerance
+    0.5                         // recoveryTpsRatio
+);
+
+AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(config, metricsProvider);
+```
+
+**Using Defaults:**
+
+```java
+AdaptiveConfig config = AdaptiveConfig.defaults(); // Sensible defaults
+AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+    .config(config)
+    .metricsProvider(metricsProvider)
+    .build();
+```
+
+**Custom Decision Policy:**
+
+```java
+RampDecisionPolicy customPolicy = new RampDecisionPolicy() {
+    @Override
+    public boolean shouldRampUp(MetricsSnapshot metrics) {
+        // Custom logic for ramping up
+        return metrics.failureRate() < 0.005 && metrics.backpressure() < 0.2;
+    }
+    
+    @Override
+    public boolean shouldRampDown(MetricsSnapshot metrics) {
+        // Custom logic for ramping down
+        return metrics.failureRate() > 0.01 || metrics.backpressure() > 0.8;
+    }
+    
+    // ... implement other methods
+};
+
+AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+    .metricsProvider(metricsProvider)
+    .decisionPolicy(customPolicy) // Use custom policy
+    .build();
+```
+
+**How It Works:**
+1. **RAMP_UP**: Increases TPS by `rampIncrement` at each `rampInterval` until errors occur or max TPS is reached
+2. **RAMP_DOWN**: Decreases TPS by `rampDecrement` when error rate exceeds threshold or backpressure is high
+3. **SUSTAIN**: Maintains stable TPS after detecting stability (3 consecutive intervals with good conditions)
+4. **Recovery**: When at minimum TPS, automatically recovers when conditions improve (uses recent window failure rate)
+
+**Event Notifications:**
+```java
+pattern.listener(new AdaptivePatternListener() {
+    @Override
+    public void onPhaseTransition(PhaseTransitionEvent event) {
+        // Log phase changes
+    }
+    
+    @Override
+    public void onTpsChange(TpsChangeEvent event) {
+        // Track TPS changes
+    }
+    
+    @Override
+    public void onStabilityDetected(StabilityDetectedEvent event) {
+        // Alert when stability is found
+    }
+    
+    @Override
+    public void onRecovery(RecoveryEvent event) {
+        // Monitor recovery events
+    }
+});
+```
 
 ### Warm-up/Cool-down Phases
 Add warm-up and cool-down phases to any load pattern for accurate baseline measurements.
@@ -593,7 +715,7 @@ LoadPattern pattern = new WarmupCooldownLoadPattern(
 
 ### Modules
 
-- **`vajrapulse-api`** - Zero-dependency public API (Task, LoadPattern, annotations)
+- **`vajrapulse-api`** - Zero-dependency public API (TaskLifecycle, LoadPattern, annotations)
 - **`vajrapulse-core`** - Execution engine, metrics collection, rate control
 - **`vajrapulse-worker`** - CLI application with fat JAR
 - **`vajrapulse-exporter-console`** - Human-readable console output
@@ -657,6 +779,7 @@ All metrics are tagged with `run_id` for test correlation.
 See the `examples/` directory for complete working examples:
 
 - **`http-load-test`** - HTTP API load testing with OpenTelemetry export
+- **`adaptive-load-test`** - Adaptive load pattern demonstration
 - More examples coming soon
 
 ---

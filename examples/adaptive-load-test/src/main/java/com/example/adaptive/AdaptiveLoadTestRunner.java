@@ -242,16 +242,16 @@ public class AdaptiveLoadTestRunner {
                 // - Max 200 TPS
                 // - Sustain at stable point for 30 seconds
                 // - 10% error threshold
-                AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
-                    5.0,                           // Initial TPS (low to ensure RAMP_UP is visible)
-                    15.0,                          // Ramp increment (increase by 15 TPS per interval - shows RAMP_UP clearly)
-                    15.0,                          // Ramp decrement (decrease by 15 TPS per interval - balanced)
-                    Duration.ofSeconds(5),         // Ramp interval (check/adjust every 5 seconds)
-                    200.0,                         // Max TPS
-                    Duration.ofSeconds(30),       // Sustain duration (sustain at stable point for 30 seconds)
-                    0.10,                          // Error threshold (10% - allows more tolerance before ramp-down)
-                    metricsProvider                // Metrics provider for feedback
-                );
+                AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+                    .initialTps(5.0)                           // Initial TPS (low to ensure RAMP_UP is visible)
+                    .rampIncrement(15.0)                       // Ramp increment (increase by 15 TPS per interval - shows RAMP_UP clearly)
+                    .rampDecrement(15.0)                       // Ramp decrement (decrease by 15 TPS per interval - balanced)
+                    .rampInterval(Duration.ofSeconds(5))       // Ramp interval (check/adjust every 5 seconds)
+                    .maxTps(200.0)                             // Max TPS
+                    .sustainDuration(Duration.ofSeconds(30))   // Sustain duration (sustain at stable point for 30 seconds)
+                    .errorThreshold(0.10)                      // Error threshold (10% - allows more tolerance before ramp-down)
+                    .metricsProvider(metricsProvider)           // Metrics provider for feedback
+                    .build();
                 
                 // Create task
                 AdaptiveTestTask task = new AdaptiveTestTask();
