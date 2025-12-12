@@ -1,7 +1,7 @@
 package com.vajrapulse.core.metrics
 
 import com.vajrapulse.core.engine.ExecutionMetrics
-import com.vajrapulse.api.TaskResult
+import com.vajrapulse.api.task.TaskResult
 import spock.lang.Specification
 import spock.lang.Timeout
 

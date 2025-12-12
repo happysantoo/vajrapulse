@@ -1,6 +1,11 @@
 package com.vajrapulse.core.integration
 
-import com.vajrapulse.api.*
+import com.vajrapulse.api.task.Task
+import com.vajrapulse.api.task.TaskResult
+import com.vajrapulse.api.task.VirtualThreads
+import com.vajrapulse.api.task.PlatformThreads
+import com.vajrapulse.api.pattern.LoadPattern
+import com.vajrapulse.api.pattern.StepLoad
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.metrics.MetricsCollector
 import spock.lang.Specification

@@ -1,6 +1,9 @@
 package com.vajrapulse.worker.integration
 
-import com.vajrapulse.api.*
+import com.vajrapulse.api.task.Task
+import com.vajrapulse.api.task.TaskResult
+import com.vajrapulse.api.task.VirtualThreads
+import com.vajrapulse.api.pattern.LoadPattern
 import com.vajrapulse.core.metrics.AggregatedMetrics
 import com.vajrapulse.core.metrics.MetricsExporter
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter

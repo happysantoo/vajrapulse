@@ -1,6 +1,6 @@
 package com.vajrapulse.core.metrics
 
-import com.vajrapulse.api.TaskResult
+import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.core.engine.ExecutionMetrics
 import spock.lang.Specification
 

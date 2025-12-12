@@ -1,6 +1,17 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import com.vajrapulse.api.pattern.adaptive.AdaptiveConfig
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern
+import com.vajrapulse.api.pattern.adaptive.AdaptiveState
+import com.vajrapulse.api.pattern.adaptive.AdaptiveCoreState
+import com.vajrapulse.api.pattern.adaptive.AdaptiveStabilityTracking
+import com.vajrapulse.api.pattern.adaptive.AdaptiveRecoveryTracking
+import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
+import com.vajrapulse.api.pattern.adaptive.PhaseStrategy
+import com.vajrapulse.api.pattern.adaptive.PhaseContext
+import com.vajrapulse.api.pattern.adaptive.MetricsSnapshot
+import com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy
 import java.time.Duration
 
 /**
@@ -9,7 +20,7 @@ import java.time.Duration
 class PhaseStrategySpec extends Specification {
     
     // Mock MetricsProvider for testing
-    static class MockMetricsProvider implements MetricsProvider {
+    static class MockMetricsProvider implements com.vajrapulse.api.metrics.MetricsProvider {
         private volatile double failureRate = 0.0
         private volatile long totalExecutions = 0
         private volatile long failureCount = 0
@@ -46,20 +57,20 @@ class PhaseStrategySpec extends Specification {
         
         when:
         // Create a minimal state for testing
-        def coreState = new AdaptiveLoadPattern.CoreState(
-            AdaptiveLoadPattern.Phase.RAMP_UP,
+        def coreState = new AdaptiveCoreState(
+            AdaptivePhase.RAMP_UP,
             100.0,
             0L,
             0L,
             0,
             0L
         )
-        def adaptiveState = new AdaptiveLoadPattern.AdaptiveState(
+        def adaptiveState = new AdaptiveState(
             coreState,
-            AdaptiveLoadPattern.StabilityTracking.empty(),
-            new AdaptiveLoadPattern.RecoveryTracking(100.0, -1)
+            AdaptiveStabilityTracking.empty(),
+            new AdaptiveRecoveryTracking(100.0, -1)
         )
-        def context = new PhaseStrategy.PhaseContext(adaptiveState, config, metrics, policy, pattern)
+        def context = new PhaseContext(adaptiveState, config, metrics, policy, pattern)
         
         then:
         context.current() == adaptiveState
@@ -78,7 +89,7 @@ class PhaseStrategySpec extends Specification {
         def pattern = new AdaptiveLoadPattern(config, provider)
         
         when:
-        new PhaseStrategy.PhaseContext(null, config, metrics, policy, pattern)
+        new PhaseContext(null, config, metrics, policy, pattern)
         
         then:
         def e = thrown(IllegalArgumentException)
@@ -92,22 +103,22 @@ class PhaseStrategySpec extends Specification {
         def policy = new DefaultRampDecisionPolicy(0.01)
         def provider = new MockMetricsProvider()
         def pattern = new AdaptiveLoadPattern(config, provider)
-        def coreState = new AdaptiveLoadPattern.CoreState(
-            AdaptiveLoadPattern.Phase.RAMP_UP,
+        def coreState = new AdaptiveCoreState(
+            AdaptivePhase.RAMP_UP,
             100.0,
             0L,
             0L,
             0,
             0L
         )
-        def state = new AdaptiveLoadPattern.AdaptiveState(
+        def state = new AdaptiveState(
             coreState,
-            AdaptiveLoadPattern.StabilityTracking.empty(),
-            new AdaptiveLoadPattern.RecoveryTracking(100.0, -1)
+            AdaptiveStabilityTracking.empty(),
+            new AdaptiveRecoveryTracking(100.0, -1)
         )
         
         when:
-        new PhaseStrategy.PhaseContext(state, null, metrics, policy, pattern)
+        new PhaseContext(state, null, metrics, policy, pattern)
         
         then:
         def e = thrown(IllegalArgumentException)
@@ -120,22 +131,22 @@ class PhaseStrategySpec extends Specification {
         def policy = new DefaultRampDecisionPolicy(0.01)
         def provider = new MockMetricsProvider()
         def pattern = new AdaptiveLoadPattern(config, provider)
-        def coreState = new AdaptiveLoadPattern.CoreState(
-            AdaptiveLoadPattern.Phase.RAMP_UP,
+        def coreState = new AdaptiveCoreState(
+            AdaptivePhase.RAMP_UP,
             100.0,
             0L,
             0L,
             0,
             0L
         )
-        def state = new AdaptiveLoadPattern.AdaptiveState(
+        def state = new AdaptiveState(
             coreState,
-            AdaptiveLoadPattern.StabilityTracking.empty(),
-            new AdaptiveLoadPattern.RecoveryTracking(100.0, -1)
+            AdaptiveStabilityTracking.empty(),
+            new AdaptiveRecoveryTracking(100.0, -1)
         )
         
         when:
-        new PhaseStrategy.PhaseContext(state, config, null, policy, pattern)
+        new PhaseContext(state, config, null, policy, pattern)
         
         then:
         def e = thrown(IllegalArgumentException)
@@ -148,22 +159,22 @@ class PhaseStrategySpec extends Specification {
         def metrics = new MetricsSnapshot(0.01, 0.005, 0.3, 1000L)
         def provider = new MockMetricsProvider()
         def pattern = new AdaptiveLoadPattern(config, provider)
-        def coreState = new AdaptiveLoadPattern.CoreState(
-            AdaptiveLoadPattern.Phase.RAMP_UP,
+        def coreState = new AdaptiveCoreState(
+            AdaptivePhase.RAMP_UP,
             100.0,
             0L,
             0L,
             0,
             0L
         )
-        def state = new AdaptiveLoadPattern.AdaptiveState(
+        def state = new AdaptiveState(
             coreState,
-            AdaptiveLoadPattern.StabilityTracking.empty(),
-            new AdaptiveLoadPattern.RecoveryTracking(100.0, -1)
+            AdaptiveStabilityTracking.empty(),
+            new AdaptiveRecoveryTracking(100.0, -1)
         )
         
         when:
-        new PhaseStrategy.PhaseContext(state, config, metrics, null, pattern)
+        new PhaseContext(state, config, metrics, null, pattern)
         
         then:
         def e = thrown(IllegalArgumentException)
@@ -175,22 +186,22 @@ class PhaseStrategySpec extends Specification {
         def config = AdaptiveConfig.defaults()
         def metrics = new MetricsSnapshot(0.01, 0.005, 0.3, 1000L)
         def policy = new DefaultRampDecisionPolicy(0.01)
-        def coreState = new AdaptiveLoadPattern.CoreState(
-            AdaptiveLoadPattern.Phase.RAMP_UP,
+        def coreState = new AdaptiveCoreState(
+            AdaptivePhase.RAMP_UP,
             100.0,
             0L,
             0L,
             0,
             0L
         )
-        def state = new AdaptiveLoadPattern.AdaptiveState(
+        def state = new AdaptiveState(
             coreState,
-            AdaptiveLoadPattern.StabilityTracking.empty(),
-            new AdaptiveLoadPattern.RecoveryTracking(100.0, -1)
+            AdaptiveStabilityTracking.empty(),
+            new AdaptiveRecoveryTracking(100.0, -1)
         )
         
         when:
-        new PhaseStrategy.PhaseContext(state, config, metrics, policy, null)
+        new PhaseContext(state, config, metrics, policy, null)
         
         then:
         def e = thrown(IllegalArgumentException)

@@ -1,6 +1,10 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import com.vajrapulse.api.pattern.adaptive.AdaptivePatternListener
+import com.vajrapulse.api.pattern.adaptive.PhaseTransitionEvent
+import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
+import com.vajrapulse.api.pattern.adaptive.AdaptiveConfig
 import java.time.Duration
 
 /**
@@ -9,7 +13,7 @@ import java.time.Duration
 class AdaptiveLoadPatternBuilderSpec extends Specification {
     
     // Mock MetricsProvider for testing
-    static class MockMetricsProvider implements MetricsProvider {
+    static class MockMetricsProvider implements com.vajrapulse.api.metrics.MetricsProvider {
         private volatile double failureRate = 0.0
         private volatile long totalExecutions = 0
         private volatile long failureCount = 0
@@ -38,13 +42,13 @@ class AdaptiveLoadPatternBuilderSpec extends Specification {
         def provider = new MockMetricsProvider()
         
         when:
-        def pattern = AdaptiveLoadPattern.builder()
+        def pattern = com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern.builder()
             .metricsProvider(provider)
             .build()
         
         then:
         pattern != null
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_UP
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_UP
         pattern.getCurrentTps() == 100.0 // Default initial TPS
     }
     
@@ -54,7 +58,7 @@ class AdaptiveLoadPatternBuilderSpec extends Specification {
         def config = AdaptiveConfig.defaults()
         
         when:
-        def pattern = AdaptiveLoadPattern.builder()
+        def pattern = com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern.builder()
             .config(config)
             .metricsProvider(provider)
             .build()
@@ -69,7 +73,7 @@ class AdaptiveLoadPatternBuilderSpec extends Specification {
         def provider = new MockMetricsProvider()
         
         when:
-        def pattern = AdaptiveLoadPattern.builder()
+        def pattern = com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern.builder()
             .initialTps(200.0)
             .rampIncrement(75.0)
             .rampDecrement(150.0)
@@ -97,7 +101,7 @@ class AdaptiveLoadPatternBuilderSpec extends Specification {
         def backpressureProvider = new AdaptiveLoadPatternSpec.MockBackpressureProvider()
         
         when:
-        def pattern = AdaptiveLoadPattern.builder()
+        def pattern = com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern.builder()
             .metricsProvider(provider)
             .backpressureProvider(backpressureProvider)
             .build()
@@ -112,13 +116,13 @@ class AdaptiveLoadPatternBuilderSpec extends Specification {
         def provider = new MockMetricsProvider()
         def listener = new AdaptivePatternListener() {
             @Override
-            void onPhaseTransition(AdaptivePatternListener.PhaseTransitionEvent event) {
+            void onPhaseTransition(PhaseTransitionEvent event) {
                 // Test listener
             }
         }
         
         when:
-        def pattern = AdaptiveLoadPattern.builder()
+        def pattern = com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern.builder()
             .metricsProvider(provider)
             .listener(listener)
             .build()
@@ -134,7 +138,7 @@ class AdaptiveLoadPatternBuilderSpec extends Specification {
         def listener2 = new AdaptivePatternListener() {}
         
         when:
-        def pattern = AdaptiveLoadPattern.builder()
+        def pattern = com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern.builder()
             .metricsProvider(provider)
             .listener(listener1)
             .listener(listener2)
@@ -146,7 +150,7 @@ class AdaptiveLoadPatternBuilderSpec extends Specification {
     
     def "should reject build without metrics provider"() {
         when:
-        AdaptiveLoadPattern.builder()
+        com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern.builder()
             .initialTps(100.0)
             .build()
         
@@ -160,7 +164,7 @@ class AdaptiveLoadPatternBuilderSpec extends Specification {
         def provider = new MockMetricsProvider()
         
         when:
-        AdaptiveLoadPattern.builder()
+        com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern.builder()
             .metricsProvider(provider)
             .listener(null)
             .build()
@@ -175,7 +179,7 @@ class AdaptiveLoadPatternBuilderSpec extends Specification {
         def provider = new MockMetricsProvider()
         
         when:
-        AdaptiveLoadPattern.builder()
+        com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern.builder()
             .initialTps(0.0) // Invalid
             .metricsProvider(provider)
             .build()

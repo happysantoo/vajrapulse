@@ -1,14 +1,14 @@
 package com.vajrapulse.worker;
 
-import com.vajrapulse.api.AdaptiveLoadPattern;
-import com.vajrapulse.api.LoadPattern;
-import com.vajrapulse.api.MetricsProvider;
-import com.vajrapulse.api.RampUpLoad;
-import com.vajrapulse.api.RampUpToMaxLoad;
-import com.vajrapulse.api.SineWaveLoad;
-import com.vajrapulse.api.SpikeLoad;
-import com.vajrapulse.api.StaticLoad;
-import com.vajrapulse.api.StepLoad;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.metrics.MetricsProvider;
+import com.vajrapulse.api.pattern.RampUpLoad;
+import com.vajrapulse.api.pattern.RampUpToMaxLoad;
+import com.vajrapulse.api.pattern.SineWaveLoad;
+import com.vajrapulse.api.pattern.SpikeLoad;
+import com.vajrapulse.api.pattern.StaticLoad;
+import com.vajrapulse.api.pattern.StepLoad;
 import com.vajrapulse.core.engine.MetricsProviderAdapter;
 import com.vajrapulse.core.metrics.MetricsCollector;
 import org.slf4j.Logger;

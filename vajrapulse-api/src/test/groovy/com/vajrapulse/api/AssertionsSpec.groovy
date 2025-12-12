@@ -1,6 +1,9 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import com.vajrapulse.api.metrics.Metrics
+import com.vajrapulse.api.assertion.Assertion
+import com.vajrapulse.api.assertion.Assertions
 import java.time.Duration
 
 class AssertionsSpec extends Specification {
@@ -317,7 +320,7 @@ class AssertionsSpec extends Specification {
 
     def "should reject null assertions array"() {
         when:
-        Assertions.all((Assertion[]) null)
+        Assertions.all(null as Assertion[])
 
         then:
         thrown(IllegalArgumentException)

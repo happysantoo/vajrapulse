@@ -1,9 +1,9 @@
 package com.vajrapulse.core.engine
 
-import com.vajrapulse.api.LoadPattern
-import com.vajrapulse.api.Task
-import com.vajrapulse.api.TaskLifecycle
-import com.vajrapulse.api.TaskResult
+import com.vajrapulse.api.pattern.LoadPattern
+import com.vajrapulse.api.task.Task
+import com.vajrapulse.api.task.TaskLifecycle
+import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.core.config.VajraPulseConfig
 import com.vajrapulse.core.metrics.MetricsCollector
 import spock.lang.Specification
@@ -275,7 +275,7 @@ class ExecutionEngineSpec extends Specification {
         given: "a task that throws in init"
         TaskLifecycle task = new TaskLifecycle() {
             @Override void init() { throw new RuntimeException("init failed") }
-            @Override com.vajrapulse.api.TaskResult execute(long iteration) { return com.vajrapulse.api.TaskResult.success() }
+            @Override com.vajrapulse.api.task.TaskResult execute(long iteration) { return com.vajrapulse.api.task.TaskResult.success() }
             @Override void teardown() {}
         }
         def load = new ShortStaticLoad(10.0, Duration.ofMillis(100))
@@ -303,7 +303,7 @@ class ExecutionEngineSpec extends Specification {
         }
         def load = new ShortStaticLoad(10.0, Duration.ofMillis(100))
         def collector = new MetricsCollector()
-        def handler = com.vajrapulse.core.backpressure.BackpressureHandlers.DROP
+        def handler = com.vajrapulse.core.metrics.BackpressureHandlers.DROP
         
         when: "building engine with backpressure handler"
         def engine = ExecutionEngine.builder()
@@ -358,7 +358,7 @@ class ExecutionEngineSpec extends Specification {
         }
         def load = new ShortStaticLoad(50.0, Duration.ofMillis(200))
         def collector = new MetricsCollector()
-        def handler = Mock(com.vajrapulse.api.BackpressureHandler)
+        def handler = Mock(com.vajrapulse.api.metrics.BackpressureHandler)
         
         when: "running engine with backpressure handler but low backpressure"
         def engine = ExecutionEngine.builder()

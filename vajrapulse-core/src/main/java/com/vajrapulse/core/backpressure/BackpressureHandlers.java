@@ -1,8 +1,8 @@
 package com.vajrapulse.core.backpressure;
 
-import com.vajrapulse.api.BackpressureHandler;
-import com.vajrapulse.api.BackpressureHandler.HandlingResult;
-import com.vajrapulse.api.BackpressureHandler.BackpressureContext;
+import com.vajrapulse.api.metrics.BackpressureHandler;
+import com.vajrapulse.api.metrics.BackpressureHandlingResult;
+import com.vajrapulse.api.metrics.BackpressureContext;
 
 import java.time.Duration;
 
@@ -14,8 +14,6 @@ import java.time.Duration;
  *   <li>{@link #DROP} - Skip requests silently</li>
  *   <li>{@link #QUEUE} - Buffer requests (default)</li>
  *   <li>{@link #REJECT} - Fail fast with error</li>
- *   <li>{@link #retry(Duration, int)} - Retry after delay</li>
- *   <li>{@link #DEGRADE} - Reduce request quality</li>
  *   <li>{@link #threshold(double, double, double)} - Multi-level strategy</li>
  * </ul>
  * 
@@ -39,8 +37,8 @@ public final class BackpressureHandlers {
      */
     public static final BackpressureHandler DROP = new BackpressureHandler() {
         @Override
-        public HandlingResult handle(long iteration, double backpressureLevel, BackpressureContext context) {
-            return HandlingResult.DROPPED;
+        public BackpressureHandlingResult handle(double backpressureLevel, BackpressureContext context) {
+            return BackpressureHandlingResult.DROPPED;
         }
     };
     
@@ -56,8 +54,8 @@ public final class BackpressureHandlers {
      */
     public static final BackpressureHandler QUEUE = new BackpressureHandler() {
         @Override
-        public HandlingResult handle(long iteration, double backpressureLevel, BackpressureContext context) {
-            return HandlingResult.QUEUED;
+        public BackpressureHandlingResult handle(double backpressureLevel, BackpressureContext context) {
+            return BackpressureHandlingResult.QUEUED;
         }
     };
     
@@ -73,58 +71,10 @@ public final class BackpressureHandlers {
      */
     public static final BackpressureHandler REJECT = new BackpressureHandler() {
         @Override
-        public HandlingResult handle(long iteration, double backpressureLevel, BackpressureContext context) {
-            return HandlingResult.REJECTED;
+        public BackpressureHandlingResult handle(double backpressureLevel, BackpressureContext context) {
+            return BackpressureHandlingResult.REJECTED;
         }
     };
-    
-    /**
-     * DEGRADE handler: Reduces request quality when backpressure is detected.
-     * 
-     * <p>Use when:
-     * <ul>
-     *   <li>You want to test graceful degradation</li>
-     *   <li>You want to maintain throughput at reduced quality</li>
-     *   <li>You want to test adaptive quality mechanisms</li>
-     * </ul>
-     * 
-     * <p><strong>Note:</strong> Degradation logic must be implemented in the task itself.
-     * This handler only marks requests for degraded processing.
-     */
-    public static final BackpressureHandler DEGRADE = new BackpressureHandler() {
-        @Override
-        public HandlingResult handle(long iteration, double backpressureLevel, BackpressureContext context) {
-            return HandlingResult.DEGRADED;
-        }
-    };
-    
-    /**
-     * Creates a retry handler that retries requests after a delay when backpressure is detected.
-     * 
-     * <p>Use when:
-     * <ul>
-     *   <li>You want to test retry logic</li>
-     *   <li>Transient backpressure is expected</li>
-     *   <li>You want to maximize request completion</li>
-     * </ul>
-     * 
-     * <p><strong>Note:</strong> Retry logic is currently not fully implemented.
-     * This handler returns RETRY result, but actual retry must be handled by the caller.
-     * 
-     * @param retryDelay delay before retry
-     * @param maxRetries maximum number of retries
-     * @return retry handler
-     * @throws IllegalArgumentException if retryDelay is null or negative, or maxRetries &lt; 0
-     */
-    public static BackpressureHandler retry(Duration retryDelay, int maxRetries) {
-        if (retryDelay == null || retryDelay.isNegative()) {
-            throw new IllegalArgumentException("Retry delay must not be null or negative");
-        }
-        if (maxRetries < 0) {
-            throw new IllegalArgumentException("Max retries must not be negative");
-        }
-        return new RetryBackpressureHandler(retryDelay, maxRetries);
-    }
     
     /**
      * Creates a threshold-based handler that uses different strategies at different backpressure levels.
@@ -168,26 +118,6 @@ public final class BackpressureHandlers {
     }
     
     /**
-     * Retry backpressure handler implementation.
-     */
-    private static final class RetryBackpressureHandler implements BackpressureHandler {
-        private final Duration retryDelay;
-        private final int maxRetries;
-        
-        RetryBackpressureHandler(Duration retryDelay, int maxRetries) {
-            this.retryDelay = retryDelay;
-            this.maxRetries = maxRetries;
-        }
-        
-        @Override
-        public HandlingResult handle(long iteration, double backpressureLevel, BackpressureContext context) {
-            // TODO: Implement retry tracking per iteration
-            // For now, return RETRY result
-            return HandlingResult.RETRY;
-        }
-    }
-    
-    /**
      * Threshold-based backpressure handler implementation.
      */
     private static final class ThresholdBackpressureHandler implements BackpressureHandler {
@@ -202,15 +132,15 @@ public final class BackpressureHandlers {
         }
         
         @Override
-        public HandlingResult handle(long iteration, double backpressureLevel, BackpressureContext context) {
+        public BackpressureHandlingResult handle(double backpressureLevel, BackpressureContext context) {
             if (backpressureLevel < queueThreshold) {
-                return HandlingResult.ACCEPTED;
+                return BackpressureHandlingResult.ACCEPTED;
             } else if (backpressureLevel < rejectThreshold) {
-                return HandlingResult.QUEUED;
+                return BackpressureHandlingResult.QUEUED;
             } else if (backpressureLevel < dropThreshold) {
-                return HandlingResult.REJECTED;
+                return BackpressureHandlingResult.REJECTED;
             } else {
-                return HandlingResult.DROPPED;
+                return BackpressureHandlingResult.DROPPED;
             }
         }
     }

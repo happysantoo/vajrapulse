@@ -1,6 +1,12 @@
 package com.vajrapulse.core.integration
 
 import com.vajrapulse.api.*
+import com.vajrapulse.api.task.Task
+import com.vajrapulse.api.task.TaskResult
+import com.vajrapulse.api.task.VirtualThreads
+import com.vajrapulse.api.pattern.StaticLoad
+import com.vajrapulse.api.pattern.WarmupCooldownLoadPattern
+import com.vajrapulse.api.assertion.Assertions
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.engine.MetricsProviderAdapter
 import com.vajrapulse.core.metrics.AggregatedMetrics

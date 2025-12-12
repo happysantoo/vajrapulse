@@ -1,7 +1,7 @@
 package com.vajrapulse.core.engine;
 
-import com.vajrapulse.api.TaskLifecycle;
-import com.vajrapulse.api.TaskResult;
+import com.vajrapulse.api.task.TaskLifecycle;
+import com.vajrapulse.api.task.TaskResult;
 import com.vajrapulse.core.tracing.Tracing;
 import io.opentelemetry.api.trace.Span;
 import org.slf4j.Logger;
@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
  * <p>This class handles:
  * <ul>
  *   <li>Timing each execution</li>
- *   <li>Catching exceptions and wrapping in TaskResult.Failure</li>
+ *   <li>Catching exceptions and wrapping in TaskResultFailure</li>
  *   <li>Creating ExecutionMetrics for each iteration</li>
  *   <li>Logging detailed execution traces for debugging</li>
  * </ul>

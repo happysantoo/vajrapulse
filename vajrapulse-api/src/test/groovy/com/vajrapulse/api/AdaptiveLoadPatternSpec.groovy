@@ -1,5 +1,10 @@
 package com.vajrapulse.api
 
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern
+import com.vajrapulse.api.pattern.adaptive.AdaptiveConfig
+import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
+import com.vajrapulse.api.metrics.MetricsProvider
+import com.vajrapulse.api.metrics.BackpressureProvider
 import spock.lang.Specification
 import spock.lang.Timeout
 import java.time.Duration
@@ -29,7 +34,7 @@ import static java.util.concurrent.TimeUnit.*
 class AdaptiveLoadPatternSpec extends Specification {
     
     // Mock MetricsProvider for testing
-    static class MockMetricsProvider implements MetricsProvider {
+    static class MockMetricsProvider implements com.vajrapulse.api.metrics.MetricsProvider {
         private volatile double failureRate = 0.0
         private volatile long totalExecutions = 0
         private volatile long failureCount = 0
@@ -74,7 +79,7 @@ class AdaptiveLoadPatternSpec extends Specification {
     }
     
     // Mock BackpressureProvider for testing
-    static class MockBackpressureProvider implements BackpressureProvider {
+    static class MockBackpressureProvider implements com.vajrapulse.api.metrics.BackpressureProvider {
         private volatile double backpressure = 0.0
         
         void setBackpressure(double level) {
@@ -102,7 +107,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         def transitions = pattern.getPhaseTransitionCount()
         
         then: "state should be correct"
-        phase == AdaptiveLoadPattern.Phase.RAMP_UP
+        phase == AdaptivePhase.RAMP_UP
         currentTps == 100.0
         stableTps == -1.0
         transitions == 0
@@ -121,7 +126,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         
         then: "should return initial TPS"
         tps == 100.0
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_UP
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_UP
     }
     
     def "should not adjust TPS before ramp interval"() {
@@ -160,7 +165,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         then: "TPS should increase by ramp increment"
         tps == 150.0 // 100 + 50
         pattern.getCurrentTps() == 150.0
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_UP
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_UP
     }
     
     def "should transition to RAMP_DOWN when error threshold exceeded"() {
@@ -179,7 +184,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         then: "should transition to RAMP_DOWN and decrease TPS (recovery behavior when at minimum)"
         // When TPS reaches 0 (minimum), pattern stays in RAMP_DOWN with recovery behavior
         def phase = pattern.getCurrentPhase()
-        phase == AdaptiveLoadPattern.Phase.RAMP_DOWN
+        phase == AdaptivePhase.RAMP_DOWN
         tps >= 0.0 // TPS should be at least 0 (minimum)
     }
     
@@ -205,7 +210,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         def tps = pattern.calculateTps(4001) // Third stable interval - should transition to SUSTAIN
         
         then: "should transition to SUSTAIN phase"
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.SUSTAIN
+        pattern.getCurrentPhase() == AdaptivePhase.SUSTAIN
         pattern.getStableTps() >= 0.0
         tps == pattern.getStableTps()
         tps == 150.0 // Should sustain at 150 TPS
@@ -228,7 +233,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         then: "should transition to SUSTAIN at max TPS"
         tps1 == 150.0
         tps2 == 150.0
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.SUSTAIN
+        pattern.getCurrentPhase() == AdaptivePhase.SUSTAIN
         pattern.getStableTps() == 150.0
     }
     
@@ -252,7 +257,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         def tps = pattern.calculateTps(2001)
         
         then: "should stay in RAMP_DOWN at minimum TPS (recovery behavior)"
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_DOWN
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_DOWN
         tps == 0.0 // minimumTps is 0.0 by default
     }
     
@@ -277,7 +282,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         def tps = pattern.calculateTps(2001) // Should transition to RAMP_UP
         
         then: "should transition to RAMP_UP with recovery TPS"
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_UP
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_UP
         tps >= 0.0 // Recovery TPS should be at least minimum (50% of initial = 50.0)
         tps == 50.0 // Recovery TPS is initialTps * 0.5 = 100 * 0.5 = 50.0
     }
@@ -305,7 +310,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         def tps = pattern.calculateTps(2001) // Should transition to RAMP_UP
         
         then: "should transition to RAMP_UP when backpressure is low"
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_UP
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_UP
         tps == 50.0 // Recovery TPS is 50% of initial
     }
     
@@ -332,7 +337,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         def tps = pattern.calculateTps(2001) // Should stay in RAMP_DOWN at minimum
         
         then: "should stay in RAMP_DOWN at minimum TPS"
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_DOWN
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_DOWN
         tps == 0.0 // Minimum TPS
     }
     
@@ -372,7 +377,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         def recoveryTps = pattern.calculateTps(14001) // Should recover at 50% of 500 = 250
         
         then: "recovery TPS should be 50% of last known good (500)"
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_UP
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_UP
         recoveryTps == 250.0 // 50% of 500
     }
     
@@ -402,7 +407,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         then: "should remain at intermediate TPS and check for stability"
         // The pattern should be in RAMP_DOWN and checking for stability
         // handleRampDown() now calls isStableAtCurrentTps() to check for intermediate stability
-        phase1 == AdaptiveLoadPattern.Phase.RAMP_DOWN
+        phase1 == AdaptivePhase.RAMP_DOWN
         tps1 == 50.0 // Should be at 50 TPS
         tps2 == 50.0 // Should remain at 50 TPS
         // Note: Full stability detection requires 3 intervals, which is tested in integration tests
@@ -437,7 +442,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         then: "pattern should continue ramping up or detect stability"
         // Pattern should either continue ramping or detect stability
         def phase = pattern.getCurrentPhase()
-        (phase == AdaptiveLoadPattern.Phase.RAMP_UP || phase == AdaptiveLoadPattern.Phase.SUSTAIN)
+        (phase == AdaptivePhase.RAMP_UP || phase == AdaptivePhase.SUSTAIN)
         tps >= 100.0
     }
     
@@ -461,8 +466,8 @@ class AdaptiveLoadPatternSpec extends Specification {
         def phase2 = pattern.getCurrentPhase()
         
         then: "should be in SUSTAIN phase at max TPS"
-        phase1 == AdaptiveLoadPattern.Phase.SUSTAIN
-        phase2 == AdaptiveLoadPattern.Phase.SUSTAIN
+        phase1 == AdaptivePhase.SUSTAIN
+        phase2 == AdaptivePhase.SUSTAIN
         pattern.getCurrentTps() == 150.0
         pattern.getStableTps() == 150.0
     }
@@ -486,8 +491,8 @@ class AdaptiveLoadPatternSpec extends Specification {
         def tps = pattern.calculateTps(2001) // Should transition to RAMP_DOWN
         
         then: "should transition to RAMP_DOWN"
-        phase1 == AdaptiveLoadPattern.Phase.SUSTAIN
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_DOWN
+        phase1 == AdaptivePhase.SUSTAIN
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_DOWN
         tps == 50.0 // 150 - 100 = 50
     }
     
@@ -598,14 +603,14 @@ class AdaptiveLoadPatternSpec extends Specification {
         
         then: "transition count should increase and phase should change"
         transitions1 == 0
-        phase1 == AdaptiveLoadPattern.Phase.RAMP_UP
+        phase1 == AdaptivePhase.RAMP_UP
         
         // After first ramp interval, TPS is 150 (max), so handleRampUp transitions to SUSTAIN
         transitions2 == 1 // Transitioned to SUSTAIN when max reached
-        phase2 == AdaptiveLoadPattern.Phase.SUSTAIN
+        phase2 == AdaptivePhase.SUSTAIN
         
         transitions3 == 1 // Still in SUSTAIN, no new transition
-        phase3 == AdaptiveLoadPattern.Phase.SUSTAIN
+        phase3 == AdaptivePhase.SUSTAIN
     }
     
     def "should use backpressure provider when provided"() {

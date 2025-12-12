@@ -1,8 +1,8 @@
 package com.vajrapulse.worker.pipeline;
 
-import com.vajrapulse.api.LoadPattern;
-import com.vajrapulse.api.MetricsProvider;
-import com.vajrapulse.api.TaskLifecycle;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.metrics.MetricsProvider;
+import com.vajrapulse.api.task.TaskLifecycle;
 import com.vajrapulse.core.engine.ExecutionEngine;
 import com.vajrapulse.core.engine.MetricsProviderAdapter;
 import com.vajrapulse.core.metrics.AggregatedMetrics;

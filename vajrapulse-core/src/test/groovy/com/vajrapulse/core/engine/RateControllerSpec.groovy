@@ -1,7 +1,7 @@
 package com.vajrapulse.core.engine
 
-import com.vajrapulse.api.LoadPattern
-import com.vajrapulse.api.StaticLoad
+import com.vajrapulse.api.pattern.LoadPattern
+import com.vajrapulse.api.pattern.StaticLoad
 import spock.lang.Specification
 
 import java.time.Duration

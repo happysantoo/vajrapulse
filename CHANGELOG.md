@@ -13,8 +13,20 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - GraalVM native image validation
 - Scenario scripting DSL
 
-## [0.9.9] - 2025-12-XX
+## [0.9.9] - 2025-12-12
+### Removed
+- **BackpressureHandlingResult.RETRY**: Removed incomplete retry handling result
+- **BackpressureHandlingResult.DEGRADED**: Removed incomplete degradation handling result
+- **BackpressureHandlers.retry()**: Removed incomplete retry handler factory method
+- **BackpressureHandlers.DEGRADE**: Removed incomplete degradation handler constant
+- **BackpressureHandler.handle() iteration parameter**: Removed unused iteration parameter from handler interface
+- **com.vajrapulse.core.backpressure package**: Removed package, classes moved to metrics package
+
 ### Added
+- **Vortex 0.0.9 Integration**: Added vortex micro-batching library as dependency
+  - Integrated vortex 0.0.9 into BOM and core module
+  - Prepared foundation for potential future batching optimizations
+  - Documentation added in `documents/integrations/VORTEX_0.0.9_INTEGRATION.md`
 - **AdaptiveLoadPattern Architectural Refactoring**: Major simplification and maintainability improvements
   - **State Simplification**: Split large `AdaptiveState` record into focused records (`CoreState`, `StabilityTracking`, `RecoveryTracking`)
   - **Phase Machine Simplification**: Removed `RECOVERY` phase, merged recovery logic into `RAMP_DOWN` phase
@@ -34,6 +46,21 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
   - `AdaptivePatternListener`: Interface for event notifications with event records (`PhaseTransitionEvent`, `TpsChangeEvent`, `StabilityDetectedEvent`, `RecoveryEvent`)
 
 ### Changed
+- **BackpressureHandler interface**: Simplified `handle()` method signature
+  - Before: `handle(long iteration, double backpressureLevel, BackpressureContext context)`
+  - After: `handle(double backpressureLevel, BackpressureContext context)`
+- **ExecutionEngine**: Simplified backpressure handling
+  - Removed RETRY and DEGRADED cases (were incomplete with TODO comments)
+  - Now only handles: DROPPED, REJECTED, QUEUED, ACCEPTED
+  - Extracted backpressure handling logic into separate methods for better readability
+- **Package reorganization**: Moved backpressure classes to metrics package
+  - `com.vajrapulse.core.backpressure.BackpressureHandlers` → `com.vajrapulse.core.metrics.BackpressureHandlers`
+  - `com.vajrapulse.core.backpressure.CompositeBackpressureProvider` → `com.vajrapulse.core.metrics.CompositeBackpressureProvider`
+  - `com.vajrapulse.core.backpressure.QueueBackpressureProvider` → `com.vajrapulse.core.metrics.QueueBackpressureProvider`
+- **StepLoad**: Enhanced immutability
+  - Compact constructor now creates immutable list copy using `List.copyOf()`
+  - Prevents external modification of steps after construction
+  - Removed SpotBugs exclusion (issue fixed in code)
 - **AdaptiveLoadPattern**: Major architectural refactoring
   - State is now composed of three focused records instead of one large record
   - Phase machine simplified from 4 phases to 3 phases (RAMP_UP, RAMP_DOWN, SUSTAIN)
@@ -55,6 +82,10 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - Fixed deprecation warnings in examples and worker code
 - Improved code maintainability and testability through architectural improvements
 - Enhanced extensibility through strategy and policy patterns
+- **StepLoad immutability**: Fixed SpotBugs warning by creating immutable list copy in compact constructor
+- **SpotBugs exclusions**: Updated exclusion file with correct package names after reorganization
+- **Duplicate test files**: Removed duplicate test files after package reorganization
+- **SpotBugs build failures**: Fixed package name mismatches in exclusion file
 
 ### Migration Guide
 
@@ -65,6 +96,12 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - Migrate from deprecated `Task` interface to `TaskLifecycle` interface
 - Consider implementing `AdaptivePatternListener` for event-driven integrations
 - Custom `RampDecisionPolicy` implementations can be provided for advanced use cases
+
+**Backpressure Simplification Migration**:
+- **If using RETRY/DEGRADED**: Remove or replace with QUEUE/REJECT strategies
+- **If using retry()**: Implement retry logic in task code or use QUEUE handler
+- **If implementing custom BackpressureHandler**: Update `handle()` method signature to remove `iteration` parameter
+- **If importing backpressure package**: Update imports from `com.vajrapulse.core.backpressure.*` to `com.vajrapulse.core.metrics.*`
 
 **Example Migration**:
 ```java

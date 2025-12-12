@@ -1,9 +1,9 @@
 package com.vajrapulse.core.perf
 
-import com.vajrapulse.api.StaticLoad
-import com.vajrapulse.api.TaskLifecycle
-import com.vajrapulse.api.TaskResult
-import com.vajrapulse.api.VirtualThreads
+import com.vajrapulse.api.pattern.StaticLoad
+import com.vajrapulse.api.task.TaskLifecycle
+import com.vajrapulse.api.task.TaskResult
+import com.vajrapulse.api.task.VirtualThreads
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.metrics.MetricsCollector
 import spock.lang.Specification

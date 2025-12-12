@@ -1,6 +1,12 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import com.vajrapulse.api.pattern.adaptive.AdaptivePatternListener
+import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
+import com.vajrapulse.api.pattern.adaptive.PhaseTransitionEvent
+import com.vajrapulse.api.pattern.adaptive.TpsChangeEvent
+import com.vajrapulse.api.pattern.adaptive.StabilityDetectedEvent
+import com.vajrapulse.api.pattern.adaptive.RecoveryEvent
 
 /**
  * Tests for AdaptivePatternListener and event records.
@@ -9,25 +15,25 @@ class AdaptivePatternListenerSpec extends Specification {
     
     def "should create valid PhaseTransitionEvent"() {
         when:
-        def event = new AdaptivePatternListener.PhaseTransitionEvent(
-            AdaptiveLoadPattern.Phase.RAMP_UP,
-            AdaptiveLoadPattern.Phase.RAMP_DOWN,
+        def event = new PhaseTransitionEvent(
+            AdaptivePhase.RAMP_UP,
+            AdaptivePhase.RAMP_DOWN,
             100.0,
             1000L
         )
         
         then:
-        event.from() == AdaptiveLoadPattern.Phase.RAMP_UP
-        event.to() == AdaptiveLoadPattern.Phase.RAMP_DOWN
+        event.from() == AdaptivePhase.RAMP_UP
+        event.to() == AdaptivePhase.RAMP_DOWN
         event.tps() == 100.0
         event.timestamp() == 1000L
     }
     
     def "should reject null phase in PhaseTransitionEvent"() {
         when:
-        new AdaptivePatternListener.PhaseTransitionEvent(
+        new PhaseTransitionEvent(
             null,
-            AdaptiveLoadPattern.Phase.RAMP_DOWN,
+            AdaptivePhase.RAMP_DOWN,
             100.0,
             1000L
         )
@@ -39,9 +45,9 @@ class AdaptivePatternListenerSpec extends Specification {
     
     def "should reject negative TPS in PhaseTransitionEvent"() {
         when:
-        new AdaptivePatternListener.PhaseTransitionEvent(
-            AdaptiveLoadPattern.Phase.RAMP_UP,
-            AdaptiveLoadPattern.Phase.RAMP_DOWN,
+        new PhaseTransitionEvent(
+            AdaptivePhase.RAMP_UP,
+            AdaptivePhase.RAMP_DOWN,
             -1.0,
             1000L
         )
@@ -53,7 +59,7 @@ class AdaptivePatternListenerSpec extends Specification {
     
     def "should create valid TpsChangeEvent"() {
         when:
-        def event = new AdaptivePatternListener.TpsChangeEvent(100.0, 150.0, 1000L)
+        def event = new TpsChangeEvent(100.0, 150.0, 1000L)
         
         then:
         event.previousTps() == 100.0
@@ -63,7 +69,7 @@ class AdaptivePatternListenerSpec extends Specification {
     
     def "should reject negative TPS in TpsChangeEvent"() {
         when:
-        new AdaptivePatternListener.TpsChangeEvent(-1.0, 150.0, 1000L)
+        new TpsChangeEvent(-1.0, 150.0, 1000L)
         
         then:
         def e = thrown(IllegalArgumentException)
@@ -72,7 +78,7 @@ class AdaptivePatternListenerSpec extends Specification {
     
     def "should create valid StabilityDetectedEvent"() {
         when:
-        def event = new AdaptivePatternListener.StabilityDetectedEvent(200.0, 1000L)
+        def event = new StabilityDetectedEvent(200.0, 1000L)
         
         then:
         event.stableTps() == 200.0
@@ -81,7 +87,7 @@ class AdaptivePatternListenerSpec extends Specification {
     
     def "should reject negative stableTps in StabilityDetectedEvent"() {
         when:
-        new AdaptivePatternListener.StabilityDetectedEvent(-1.0, 1000L)
+        new StabilityDetectedEvent(-1.0, 1000L)
         
         then:
         def e = thrown(IllegalArgumentException)
@@ -90,7 +96,7 @@ class AdaptivePatternListenerSpec extends Specification {
     
     def "should create valid RecoveryEvent"() {
         when:
-        def event = new AdaptivePatternListener.RecoveryEvent(300.0, 150.0, 1000L)
+        def event = new RecoveryEvent(300.0, 150.0, 1000L)
         
         then:
         event.lastKnownGoodTps() == 300.0
@@ -100,7 +106,7 @@ class AdaptivePatternListenerSpec extends Specification {
     
     def "should reject negative TPS in RecoveryEvent"() {
         when:
-        new AdaptivePatternListener.RecoveryEvent(-1.0, 150.0, 1000L)
+        new RecoveryEvent(-1.0, 150.0, 1000L)
         
         then:
         def e = thrown(IllegalArgumentException)
@@ -110,15 +116,15 @@ class AdaptivePatternListenerSpec extends Specification {
     def "should have default implementations in listener"() {
         given:
         def listener = new AdaptivePatternListener() {}
-        def event1 = new AdaptivePatternListener.PhaseTransitionEvent(
-            AdaptiveLoadPattern.Phase.RAMP_UP,
-            AdaptiveLoadPattern.Phase.RAMP_DOWN,
+        def event1 = new PhaseTransitionEvent(
+            AdaptivePhase.RAMP_UP,
+            AdaptivePhase.RAMP_DOWN,
             100.0,
             1000L
         )
-        def event2 = new AdaptivePatternListener.TpsChangeEvent(100.0, 150.0, 1000L)
-        def event3 = new AdaptivePatternListener.StabilityDetectedEvent(200.0, 1000L)
-        def event4 = new AdaptivePatternListener.RecoveryEvent(300.0, 150.0, 1000L)
+        def event2 = new TpsChangeEvent(100.0, 150.0, 1000L)
+        def event3 = new StabilityDetectedEvent(200.0, 1000L)
+        def event4 = new RecoveryEvent(300.0, 150.0, 1000L)
         
         when:
         listener.onPhaseTransition(event1)

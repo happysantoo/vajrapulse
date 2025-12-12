@@ -1,15 +1,17 @@
 package com.vajrapulse.api
 
+import com.vajrapulse.api.task.Task
+import com.vajrapulse.api.task.TaskResult
 import spock.lang.Specification
 
 class TaskSpec extends Specification {
 
     def "should execute default setup successfully"() {
         given:
-        Task task = new Task() {
+        Task task = new com.vajrapulse.api.task.Task() {
             @Override
-            TaskResult execute() throws Exception {
-                return TaskResult.success()
+            com.vajrapulse.api.task.TaskResult execute() throws Exception {
+                return com.vajrapulse.api.task.TaskResult.success()
             }
         }
 
@@ -22,10 +24,10 @@ class TaskSpec extends Specification {
 
     def "should execute default cleanup successfully"() {
         given:
-        Task task = new Task() {
+        Task task = new com.vajrapulse.api.task.Task() {
             @Override
-            TaskResult execute() throws Exception {
-                return TaskResult.success()
+            com.vajrapulse.api.task.TaskResult execute() throws Exception {
+                return com.vajrapulse.api.task.TaskResult.success()
             }
         }
 
@@ -39,16 +41,16 @@ class TaskSpec extends Specification {
     def "should call setup, execute, cleanup lifecycle"() {
         given:
         def lifecycle = []
-        Task task = new Task() {
+        Task task = new com.vajrapulse.api.task.Task() {
             @Override
             void setup() {
                 lifecycle << "setup"
             }
 
             @Override
-            TaskResult execute() throws Exception {
+            com.vajrapulse.api.task.TaskResult execute() throws Exception {
                 lifecycle << "execute"
-                return TaskResult.success("data")
+                return com.vajrapulse.api.task.TaskResult.success("data")
             }
 
             @Override
@@ -64,6 +66,6 @@ class TaskSpec extends Specification {
 
         then:
         lifecycle == ["setup", "execute", "cleanup"]
-        result instanceof TaskResult.Success
+        result instanceof com.vajrapulse.api.task.TaskResultSuccess
     }
 }

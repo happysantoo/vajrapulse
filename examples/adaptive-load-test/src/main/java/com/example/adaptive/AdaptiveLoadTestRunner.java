@@ -1,6 +1,12 @@
 package com.example.adaptive;
 
-import com.vajrapulse.api.*;
+import com.vajrapulse.api.task.TaskLifecycle;
+import com.vajrapulse.api.task.TaskResult;
+import com.vajrapulse.api.task.VirtualThreads;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.adaptive.AdaptivePhase;
+import com.vajrapulse.api.metrics.MetricsProvider;
 import com.vajrapulse.core.engine.ExecutionEngine;
 import com.vajrapulse.core.engine.MetricsProviderAdapter;
 import com.vajrapulse.core.metrics.MetricsCollector;
@@ -321,7 +327,7 @@ public class AdaptiveLoadTestRunner {
         logger.info("========================================");
         
         // Pattern state
-        AdaptiveLoadPattern.Phase finalPhase = pattern.getCurrentPhase();
+        AdaptivePhase finalPhase = pattern.getCurrentPhase();
         double finalTps = pattern.getCurrentTps();
         double stableTps = pattern.getStableTps();
         long transitions = pattern.getPhaseTransitionCount();

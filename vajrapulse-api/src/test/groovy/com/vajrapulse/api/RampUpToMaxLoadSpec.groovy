@@ -1,7 +1,7 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
-
+import com.vajrapulse.api.pattern.RampUpToMaxLoad
 import java.time.Duration
 
 class RampUpToMaxLoadSpec extends Specification {

@@ -1,9 +1,9 @@
 package com.vajrapulse.worker.pipeline
 
-import com.vajrapulse.api.LoadPattern
-import com.vajrapulse.api.Task
-import com.vajrapulse.api.TaskResult
-import com.vajrapulse.api.VirtualThreads
+import com.vajrapulse.api.pattern.LoadPattern
+import com.vajrapulse.api.task.Task
+import com.vajrapulse.api.task.TaskResult
+import com.vajrapulse.api.task.VirtualThreads
 import com.vajrapulse.core.metrics.AggregatedMetrics
 import com.vajrapulse.core.metrics.MetricsExporter
 import spock.lang.Specification

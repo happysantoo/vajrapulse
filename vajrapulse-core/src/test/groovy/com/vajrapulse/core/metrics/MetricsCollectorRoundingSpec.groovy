@@ -10,7 +10,7 @@ class MetricsCollectorRoundingSpec extends Specification {
         def collector = new MetricsCollector(0.9750001d, 0.9749999d, 0.95d)
 
         and: "a single successful execution to produce a snapshot"
-        def metrics = new ExecutionMetrics(System.nanoTime(), System.nanoTime() + 1_000_000, com.vajrapulse.api.TaskResult.success(null), 0)
+        def metrics = new ExecutionMetrics(System.nanoTime(), System.nanoTime() + 1_000_000, com.vajrapulse.api.task.TaskResult.success(null), 0)
         collector.record(metrics)
 
         when:

@@ -1,9 +1,11 @@
 package com.vajrapulse.worker.pipeline
 
-import com.vajrapulse.api.MetricsProvider
-import com.vajrapulse.api.Task
-import com.vajrapulse.api.TaskResult
-import com.vajrapulse.api.VirtualThreads
+import com.vajrapulse.api.metrics.MetricsProvider
+import com.vajrapulse.api.task.Task
+import com.vajrapulse.api.task.TaskResult
+import com.vajrapulse.api.task.VirtualThreads
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern
+import com.vajrapulse.api.pattern.StaticLoad
 import com.vajrapulse.core.metrics.MetricsCollector
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter
 import spock.lang.Specification
@@ -61,7 +63,7 @@ class MetricsPipelineMetricsProviderSpec extends Specification {
         provider.getFailureRate() == 0.0
 
         when: "executing task with static load pattern"
-        def loadPattern = new com.vajrapulse.api.StaticLoad(10.0, Duration.ofMillis(100))
+        def loadPattern = new StaticLoad(10.0, Duration.ofMillis(100))
         pipeline.run(task, loadPattern)
 
         then: "metrics provider should reflect executed tasks"
@@ -107,7 +109,7 @@ class MetricsPipelineMetricsProviderSpec extends Specification {
 
         when: "getting metrics provider and creating adaptive pattern"
         def provider = pipeline.getMetricsProvider()
-        def adaptivePattern = new com.vajrapulse.api.AdaptiveLoadPattern(
+        def adaptivePattern = new AdaptiveLoadPattern(
             5.0,                          // initialTps
             5.0,                          // rampIncrement
             5.0,                          // rampDecrement
@@ -171,7 +173,7 @@ class MetricsPipelineMetricsProviderSpec extends Specification {
         provider.getTotalExecutions() == 0L
 
         when: "running a short test"
-        def loadPattern = new com.vajrapulse.api.StaticLoad(20.0, Duration.ofMillis(200))
+        def loadPattern = new StaticLoad(20.0, Duration.ofMillis(200))
         def executionThread = Thread.start {
             try {
                 pipeline.run(task, loadPattern)

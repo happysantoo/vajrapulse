@@ -1,7 +1,7 @@
 package com.vajrapulse.core.metrics;
 
-import com.vajrapulse.api.LoadPattern;
-import com.vajrapulse.api.VirtualThreads;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.task.VirtualThreads;
 import com.vajrapulse.core.engine.RateController;
 import com.vajrapulse.core.util.TpsCalculator;
 import io.micrometer.core.instrument.Counter;

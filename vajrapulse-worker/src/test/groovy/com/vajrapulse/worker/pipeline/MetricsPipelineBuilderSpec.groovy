@@ -1,8 +1,8 @@
 package com.vajrapulse.worker.pipeline
 
-import com.vajrapulse.api.StaticLoad
-import com.vajrapulse.api.Task
-import com.vajrapulse.api.TaskResult
+import com.vajrapulse.api.pattern.StaticLoad
+import com.vajrapulse.api.task.Task
+import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.core.metrics.MetricsCollector
 import com.vajrapulse.core.metrics.MetricsExporter
 import spock.lang.Specification

@@ -1,6 +1,6 @@
 package com.vajrapulse.core.engine;
 
-import com.vajrapulse.api.MetricsProvider;
+import com.vajrapulse.api.metrics.MetricsProvider;
 import com.vajrapulse.core.metrics.MetricsCollector;
 
 import java.time.Duration;

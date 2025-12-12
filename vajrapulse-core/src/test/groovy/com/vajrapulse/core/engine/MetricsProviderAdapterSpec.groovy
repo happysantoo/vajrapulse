@@ -14,7 +14,7 @@ class MetricsProviderAdapterSpec extends Specification {
         def metrics = new com.vajrapulse.core.engine.ExecutionMetrics(
             System.nanoTime(),
             System.nanoTime() + 1_000_000,
-            com.vajrapulse.api.TaskResult.success("ok"),
+            com.vajrapulse.api.task.TaskResult.success("ok"),
             0
         )
         collector.record(metrics)
@@ -48,7 +48,7 @@ class MetricsProviderAdapterSpec extends Specification {
         def metrics = new com.vajrapulse.core.engine.ExecutionMetrics(
             System.nanoTime(),
             System.nanoTime() + 1_000_000,
-            com.vajrapulse.api.TaskResult.failure(new RuntimeException("error")),
+            com.vajrapulse.api.task.TaskResult.failure(new RuntimeException("error")),
             0
         )
         collector.record(metrics)
@@ -70,7 +70,7 @@ class MetricsProviderAdapterSpec extends Specification {
             def successMetrics = new com.vajrapulse.core.engine.ExecutionMetrics(
                 System.nanoTime(),
                 System.nanoTime() + 1_000_000,
-                com.vajrapulse.api.TaskResult.success("ok"),
+                com.vajrapulse.api.task.TaskResult.success("ok"),
                 0
             )
             collector.record(successMetrics)
@@ -84,7 +84,7 @@ class MetricsProviderAdapterSpec extends Specification {
             def failureMetrics = new com.vajrapulse.core.engine.ExecutionMetrics(
                 System.nanoTime(),
                 System.nanoTime() + 1_000_000,
-                com.vajrapulse.api.TaskResult.failure(new RuntimeException("error")),
+                com.vajrapulse.api.task.TaskResult.failure(new RuntimeException("error")),
                 0
             )
             collector.record(failureMetrics)
@@ -109,7 +109,7 @@ class MetricsProviderAdapterSpec extends Specification {
         def metrics = new com.vajrapulse.core.engine.ExecutionMetrics(
             System.nanoTime(),
             System.nanoTime() + 1_000_000,
-            com.vajrapulse.api.TaskResult.failure(new RuntimeException("error")),
+            com.vajrapulse.api.task.TaskResult.failure(new RuntimeException("error")),
             0
         )
         collector.record(metrics)
@@ -146,7 +146,7 @@ class MetricsProviderAdapterSpec extends Specification {
         def successMetrics = new com.vajrapulse.core.engine.ExecutionMetrics(
             System.nanoTime(),
             System.nanoTime() + 1_000_000,
-            com.vajrapulse.api.TaskResult.success("ok"),
+            com.vajrapulse.api.task.TaskResult.success("ok"),
             0
         )
         collector.record(successMetrics)
@@ -154,7 +154,7 @@ class MetricsProviderAdapterSpec extends Specification {
         def failureMetrics1 = new com.vajrapulse.core.engine.ExecutionMetrics(
             System.nanoTime(),
             System.nanoTime() + 1_000_000,
-            com.vajrapulse.api.TaskResult.failure(new RuntimeException("error1")),
+            com.vajrapulse.api.task.TaskResult.failure(new RuntimeException("error1")),
             0
         )
         collector.record(failureMetrics1)
@@ -162,7 +162,7 @@ class MetricsProviderAdapterSpec extends Specification {
         def failureMetrics2 = new com.vajrapulse.core.engine.ExecutionMetrics(
             System.nanoTime(),
             System.nanoTime() + 1_000_000,
-            com.vajrapulse.api.TaskResult.failure(new RuntimeException("error2")),
+            com.vajrapulse.api.task.TaskResult.failure(new RuntimeException("error2")),
             0
         )
         collector.record(failureMetrics2)
@@ -184,7 +184,7 @@ class MetricsProviderAdapterSpec extends Specification {
             def successMetrics = new com.vajrapulse.core.engine.ExecutionMetrics(
                 System.nanoTime(),
                 System.nanoTime() + 1_000_000,
-                com.vajrapulse.api.TaskResult.success("ok"),
+                com.vajrapulse.api.task.TaskResult.success("ok"),
                 0
             )
             collector.record(successMetrics)

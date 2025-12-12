@@ -1,8 +1,8 @@
 package com.example.http;
 
-import com.vajrapulse.api.TaskLifecycle;
-import com.vajrapulse.api.TaskResult;
-import com.vajrapulse.api.VirtualThreads;
+import com.vajrapulse.api.task.TaskLifecycle;
+import com.vajrapulse.api.task.TaskResult;
+import com.vajrapulse.api.task.VirtualThreads;
 
 import java.net.URI;
 import java.net.http.HttpClient;

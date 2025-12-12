@@ -1,6 +1,9 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy
+import com.vajrapulse.api.pattern.adaptive.MetricsSnapshot
+import com.vajrapulse.api.pattern.adaptive.AdaptiveStabilityTracking
 
 /**
  * Tests for DefaultRampDecisionPolicy.
@@ -83,7 +86,7 @@ class DefaultRampDecisionPolicySpec extends Specification {
         given:
         def policy = new DefaultRampDecisionPolicy(0.01, 0.3, 0.7, 3)
         def metrics = new MetricsSnapshot(0.005, 0.005, 0.2, 1000L)
-        def stability = new AdaptiveLoadPattern.StabilityTracking(-1, 100.0, 1000L, 3)
+        def stability = new AdaptiveStabilityTracking(-1, 100.0, 1000L, 3)
         
         when:
         def shouldSustain = policy.shouldSustain(metrics, stability)
@@ -96,7 +99,7 @@ class DefaultRampDecisionPolicySpec extends Specification {
         given:
         def policy = new DefaultRampDecisionPolicy(0.01, 0.3, 0.7, 3)
         def metrics = new MetricsSnapshot(0.005, 0.005, 0.2, 1000L)
-        def stability = new AdaptiveLoadPattern.StabilityTracking(-1, 100.0, 1000L, 2)
+        def stability = new AdaptiveStabilityTracking(-1, 100.0, 1000L, 2)
         
         when:
         def shouldSustain = policy.shouldSustain(metrics, stability)

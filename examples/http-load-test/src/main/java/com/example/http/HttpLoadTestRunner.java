@@ -1,12 +1,12 @@
 package com.example.http;
 
-import com.vajrapulse.api.AdaptiveLoadPattern;
-import com.vajrapulse.api.LoadPattern;
-import com.vajrapulse.api.MetricsProvider;
-import com.vajrapulse.api.StaticLoad;
-import com.vajrapulse.api.StepLoad;
-import com.vajrapulse.api.SineWaveLoad;
-import com.vajrapulse.api.SpikeLoad;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.metrics.MetricsProvider;
+import com.vajrapulse.api.pattern.StaticLoad;
+import com.vajrapulse.api.pattern.StepLoad;
+import com.vajrapulse.api.pattern.SineWaveLoad;
+import com.vajrapulse.api.pattern.SpikeLoad;
 import com.vajrapulse.core.engine.MetricsProviderAdapter;
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
 import com.vajrapulse.exporter.report.HtmlReportExporter;

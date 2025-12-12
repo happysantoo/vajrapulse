@@ -1,6 +1,12 @@
 package com.vajrapulse.core.integration
 
 import com.vajrapulse.api.*
+import com.vajrapulse.api.task.Task
+import com.vajrapulse.api.task.TaskResult
+import com.vajrapulse.api.task.VirtualThreads
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern
+import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
+import com.vajrapulse.api.task.Task
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.engine.MetricsProviderAdapter
 import com.vajrapulse.core.metrics.MetricsCollector
@@ -48,16 +54,16 @@ class AdaptiveLoadPatternHangingDiagnosticSpec extends Specification {
         def task = new SimpleTask()
         def provider = new MetricsProviderAdapter(metrics)
         
-        def pattern = new AdaptiveLoadPattern(
-            10.0,  // Initial TPS
-            5.0,   // Ramp increment
-            10.0,  // Ramp decrement
-            Duration.ofSeconds(1),  // Ramp interval
-            100.0, // Max TPS
-            Duration.ofSeconds(5), // Sustain duration
-            0.01,  // Error threshold (1%)
-            provider
-        )
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(10.0)
+            .rampIncrement(5.0)
+            .rampDecrement(10.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(100.0)
+            .sustainDuration(Duration.ofSeconds(5))
+            .errorThreshold(0.01)
+            .metricsProvider(provider)
+            .build()
         
         def engine = ExecutionEngine.builder()
             .withTask(task)
@@ -98,9 +104,9 @@ class AdaptiveLoadPatternHangingDiagnosticSpec extends Specification {
         
         and: "pattern should be in a valid phase"
         phaseBeforeStop != null
-        phaseBeforeStop in [AdaptiveLoadPattern.Phase.RAMP_UP, 
-                            AdaptiveLoadPattern.Phase.RAMP_DOWN,
-                            AdaptiveLoadPattern.Phase.SUSTAIN]
+        phaseBeforeStop in [AdaptivePhase.RAMP_UP, 
+                            AdaptivePhase.RAMP_DOWN,
+                            AdaptivePhase.SUSTAIN]
         
         and: "TPS should be valid"
         tpsBeforeStop >= 0.0
@@ -126,10 +132,16 @@ class AdaptiveLoadPatternHangingDiagnosticSpec extends Specification {
         def task = new SimpleTask()
         def provider = new MetricsProviderAdapter(metrics)
         
-        def pattern = new AdaptiveLoadPattern(
-            10.0, 5.0, 10.0, Duration.ofSeconds(1),
-            50.0, Duration.ofSeconds(2), 0.01, provider
-        )
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(10.0)
+            .rampIncrement(5.0)
+            .rampDecrement(10.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(50.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .errorThreshold(0.01)
+            .metricsProvider(provider)
+            .build()
         
         def engine = ExecutionEngine.builder()
             .withTask(task)
@@ -182,10 +194,16 @@ class AdaptiveLoadPatternHangingDiagnosticSpec extends Specification {
         def metrics = new MetricsCollector()
         def provider = new MetricsProviderAdapter(metrics)
         
-        def pattern = new AdaptiveLoadPattern(
-            10.0, 5.0, 10.0, Duration.ofSeconds(1),
-            50.0, Duration.ofSeconds(2), 0.01, provider
-        )
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(10.0)
+            .rampIncrement(5.0)
+            .rampDecrement(10.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(50.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .errorThreshold(0.01)
+            .metricsProvider(provider)
+            .build()
         
         def rateController = new com.vajrapulse.core.engine.RateController(pattern)
         

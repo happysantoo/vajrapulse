@@ -1,6 +1,7 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import com.vajrapulse.api.pattern.StepLoad
 
 import java.time.Duration
 

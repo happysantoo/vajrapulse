@@ -1,6 +1,6 @@
 package com.vajrapulse.core.metrics;
 
-import com.vajrapulse.api.Metrics;
+import com.vajrapulse.api.metrics.Metrics;
 import java.util.Collections;
 
 /**

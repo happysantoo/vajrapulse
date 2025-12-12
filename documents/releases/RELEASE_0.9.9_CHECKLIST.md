@@ -1,8 +1,8 @@
 # Release 0.9.9 Checklist
 
-**Date**: 2025-12-XX  
+**Date**: 2025-12-12  
 **Version**: 0.9.9  
-**Branch**: `0.9.9`  
+**Branch**: `0.9.9` or `main`  
 **Target**: `main`
 
 ## Pre-Release Validation

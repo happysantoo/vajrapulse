@@ -1,6 +1,6 @@
 package com.vajrapulse.core.engine;
 
-import com.vajrapulse.api.LoadPattern;
+import com.vajrapulse.api.pattern.LoadPattern;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;

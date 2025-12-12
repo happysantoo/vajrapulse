@@ -1,6 +1,11 @@
 package com.vajrapulse.core.integration
 
 import com.vajrapulse.api.*
+import com.vajrapulse.api.task.Task
+import com.vajrapulse.api.task.TaskResult
+import com.vajrapulse.api.task.VirtualThreads
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern
+import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.engine.MetricsProviderAdapter
 import com.vajrapulse.core.metrics.MetricsCollector
@@ -77,10 +82,16 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         def task = new SuccessTask()
         def provider = new MetricsProviderAdapter(metrics)
         
-        def pattern = new AdaptiveLoadPattern(
-            10.0, 5.0, 10.0, Duration.ofSeconds(1),
-            50.0, Duration.ofSeconds(2), 0.01, provider
-        )
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(10.0)
+            .rampIncrement(5.0)
+            .rampDecrement(10.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(50.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .errorThreshold(0.01)
+            .metricsProvider(provider)
+            .build()
         
         when: "creating ExecutionEngine with adaptive pattern"
         def engine = new ExecutionEngine(task, pattern, metrics)
@@ -98,7 +109,7 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         transitionsGauge != null
         
         and: "pattern should be initialized in RAMP_UP phase"
-        pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.RAMP_UP
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_UP
         pattern.getCurrentTps() == 10.0
     }
     
@@ -109,16 +120,16 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         def task = new AdaptiveRecoveryTask(50) // Fails for first 50 executions, then succeeds
         def provider = new MetricsProviderAdapter(metrics)
         
-        def pattern = new AdaptiveLoadPattern(
-            10.0,  // Initial TPS
-            5.0,   // Ramp increment
-            10.0,  // Ramp decrement
-            Duration.ofSeconds(1),  // Ramp interval
-            50.0,  // Max TPS
-            Duration.ofSeconds(2),  // Sustain duration
-            0.01,  // Error threshold (1%)
-            provider
-        )
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(10.0)
+            .rampIncrement(5.0)
+            .rampDecrement(10.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(50.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .errorThreshold(0.01)
+            .metricsProvider(provider)
+            .build()
         
         def engine = ExecutionEngine.builder()
             .withTask(task)
@@ -153,8 +164,8 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
                 def uniquePhases = phases.unique()
                 // Recovery behavior happens in RAMP_DOWN when at minimum TPS
                 // Check if we've seen RAMP_DOWN followed by RAMP_UP (recovery happened)
-                def rampDownIndices = phases.findIndexValues { it == AdaptiveLoadPattern.Phase.RAMP_DOWN }
-                def rampUpIndices = phases.findIndexValues { it == AdaptiveLoadPattern.Phase.RAMP_UP }
+                def rampDownIndices = phases.findIndexValues { it == AdaptivePhase.RAMP_DOWN }
+                def rampUpIndices = phases.findIndexValues { it == AdaptivePhase.RAMP_UP }
                 def hasRecoveryThenRampUp = !rampDownIndices.isEmpty() && !rampUpIndices.isEmpty() &&
                     rampUpIndices.last() > rampDownIndices.last()
                 
@@ -173,14 +184,14 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         and: "pattern should have reached minimum TPS in RAMP_DOWN and be able to recover"
         // Recovery behavior happens in RAMP_DOWN when at minimum TPS
         // Verify recovery capability: pattern should have been in RAMP_DOWN and able to recover
-        phases.contains(AdaptiveLoadPattern.Phase.RAMP_DOWN)
+        phases.contains(AdaptivePhase.RAMP_DOWN)
         
         and: "pattern should not be permanently stuck at minimum TPS"
         def finalPhase = pattern.getCurrentPhase()
         // Pattern should not be stuck in RAMP_DOWN at minimum (should have transitioned or be transitioning)
         // If still in RAMP_DOWN, TPS should be above minimum or conditions should allow recovery
-        if (finalPhase == AdaptiveLoadPattern.Phase.RAMP_DOWN) {
-            pattern.getCurrentTps() > 0.0 || phases.contains(AdaptiveLoadPattern.Phase.RAMP_UP)
+        if (finalPhase == AdaptivePhase.RAMP_DOWN) {
+            pattern.getCurrentTps() > 0.0 || phases.contains(AdaptivePhase.RAMP_UP)
         } else {
             true // Not stuck at minimum
         }
@@ -205,16 +216,16 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         def task = new OptimalTpsTask(20.0) // Optimal TPS is 20.0
         def provider = new MetricsProviderAdapter(metrics)
         
-        def pattern = new AdaptiveLoadPattern(
-            10.0,  // Initial TPS
-            5.0,   // Ramp increment
-            5.0,   // Ramp decrement
-            Duration.ofSeconds(1),  // Ramp interval
-            50.0,  // Max TPS
-            Duration.ofSeconds(2),  // Sustain duration
-            0.01,  // Error threshold (1%)
-            provider
-        )
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(10.0)
+            .rampIncrement(5.0)
+            .rampDecrement(5.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(50.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .errorThreshold(0.01)
+            .metricsProvider(provider)
+            .build()
         
         def engine = ExecutionEngine.builder()
             .withTask(task)
@@ -246,7 +257,7 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
                 tpsValues.add(tps)
                 
                 // Stop when we reach SUSTAIN phase at intermediate TPS (not max), or after 8 seconds
-                (phase == AdaptiveLoadPattern.Phase.SUSTAIN && tps < 50.0) ||
+                (phase == AdaptivePhase.SUSTAIN && tps < 50.0) ||
                 (System.currentTimeMillis() - startTime) >= 8000
             }
         
@@ -259,11 +270,11 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         def finalTps = pattern.getCurrentTps()
         
         // Should be in SUSTAIN at intermediate TPS (not max TPS)
-        (finalPhase == AdaptiveLoadPattern.Phase.SUSTAIN && finalTps < 50.0) ||
-        phases.contains(AdaptiveLoadPattern.Phase.SUSTAIN)
+        (finalPhase == AdaptivePhase.SUSTAIN && finalTps < 50.0) ||
+        phases.contains(AdaptivePhase.SUSTAIN)
         
         and: "sustained TPS should be at intermediate level (not max)"
-        if (finalPhase == AdaptiveLoadPattern.Phase.SUSTAIN) {
+        if (finalPhase == AdaptivePhase.SUSTAIN) {
             finalTps < 50.0 // Not at max TPS
             finalTps >= 10.0 // At least initial TPS
         }
@@ -288,16 +299,16 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         def task = new VaryingFailureTask()
         def provider = new MetricsProviderAdapter(metrics)
         
-        def pattern = new AdaptiveLoadPattern(
-            10.0,  // Initial TPS
-            5.0,   // Ramp increment
-            10.0,  // Ramp decrement
-            Duration.ofSeconds(1),  // Ramp interval
-            50.0,  // Max TPS
-            Duration.ofSeconds(2),  // Sustain duration
-            0.01,  // Error threshold (1%)
-            provider
-        )
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(10.0)
+            .rampIncrement(5.0)
+            .rampDecrement(10.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(50.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .errorThreshold(0.01)
+            .metricsProvider(provider)
+            .build()
         
         def engine = ExecutionEngine.builder()
             .withTask(task)
@@ -343,7 +354,7 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         and: "pattern should not be stuck at minimum TPS"
         def lastPhases = phaseTransitions.subList(Math.max(0, phaseTransitions.size() - 5), phaseTransitions.size())
         // Recovery behavior happens in RAMP_DOWN, but pattern should not be permanently stuck
-        def stuckAtMinimum = lastPhases.every { it == AdaptiveLoadPattern.Phase.RAMP_DOWN } && 
+        def stuckAtMinimum = lastPhases.every { it == AdaptivePhase.RAMP_DOWN } && 
             pattern.getCurrentTps() <= 0.0
         !stuckAtMinimum // Should not be stuck at minimum TPS in RAMP_DOWN
         
@@ -448,10 +459,16 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         def metrics = new MetricsCollector()
         def provider = new MetricsProviderAdapter(metrics)
         
-        def pattern = new AdaptiveLoadPattern(
-            10.0, 5.0, 10.0, Duration.ofSeconds(1),
-            50.0, Duration.ofSeconds(1), 0.01, provider
-        )
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(10.0)
+            .rampIncrement(5.0)
+            .rampDecrement(10.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(50.0)
+            .sustainDuration(Duration.ofSeconds(1))
+            .errorThreshold(0.01)
+            .metricsProvider(provider)
+            .build()
         
         when: "checking pattern duration"
         def duration = pattern.getDuration()
@@ -465,10 +482,16 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         def metrics = new MetricsCollector()
         def provider = new MetricsProviderAdapter(metrics)
         
-        def pattern = new AdaptiveLoadPattern(
-            10.0, 5.0, 10.0, Duration.ofSeconds(1),
-            50.0, Duration.ofSeconds(1), 0.01, provider
-        )
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(10.0)
+            .rampIncrement(5.0)
+            .rampDecrement(10.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(50.0)
+            .sustainDuration(Duration.ofSeconds(1))
+            .errorThreshold(0.01)
+            .metricsProvider(provider)
+            .build()
         
         when: "querying pattern state"
         def phase = pattern.getCurrentPhase()

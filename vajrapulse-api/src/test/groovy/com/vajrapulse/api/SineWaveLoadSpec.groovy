@@ -1,6 +1,7 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import com.vajrapulse.api.pattern.SineWaveLoad
 
 import java.time.Duration
 

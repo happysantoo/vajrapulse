@@ -1,6 +1,7 @@
 package com.vajrapulse.core.engine;
 
-import com.vajrapulse.api.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.adaptive.AdaptivePhase;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -37,7 +38,7 @@ public final class AdaptivePatternMetrics {
     
     // Track previous state to detect transitions and TPS changes
     private static final class PatternStateTracker {
-        private final AtomicReference<AdaptiveLoadPattern.Phase> lastPhase = new AtomicReference<>();
+        private final AtomicReference<AdaptivePhase> lastPhase = new AtomicReference<>();
         private final AtomicReference<Double> lastTps = new AtomicReference<>();
         private final AtomicLong lastPhaseStartTime = new AtomicLong(0);
         
@@ -121,10 +122,10 @@ public final class AdaptivePatternMetrics {
         }
         
         void update(AdaptiveLoadPattern pattern) {
-            AdaptiveLoadPattern.Phase currentPhase = pattern.getCurrentPhase();
+            AdaptivePhase currentPhase = pattern.getCurrentPhase();
             double currentTps = pattern.getCurrentTps();
             
-            AdaptiveLoadPattern.Phase previousPhase = lastPhase.getAndSet(currentPhase);
+            AdaptivePhase previousPhase = lastPhase.getAndSet(currentPhase);
             Double previousTps = lastTps.getAndSet(currentTps);
             
             // Detect phase transitions and record reasons
@@ -140,20 +141,20 @@ public final class AdaptivePatternMetrics {
             }
         }
         
-        private void recordPhaseTransition(AdaptiveLoadPattern.Phase from, AdaptiveLoadPattern.Phase to) {
-            if (from == AdaptiveLoadPattern.Phase.RAMP_UP && to == AdaptiveLoadPattern.Phase.RAMP_DOWN) {
+        private void recordPhaseTransition(AdaptivePhase from, AdaptivePhase to) {
+            if (from == AdaptivePhase.RAMP_UP && to == AdaptivePhase.RAMP_DOWN) {
                 rampUpToRampDownCounter.increment();
-            } else if (from == AdaptiveLoadPattern.Phase.RAMP_DOWN && to == AdaptiveLoadPattern.Phase.SUSTAIN) {
+            } else if (from == AdaptivePhase.RAMP_DOWN && to == AdaptivePhase.SUSTAIN) {
                 rampDownToSustainCounter.increment();
-            } else if (from == AdaptiveLoadPattern.Phase.RAMP_DOWN && to == AdaptiveLoadPattern.Phase.RAMP_UP) {
+            } else if (from == AdaptivePhase.RAMP_DOWN && to == AdaptivePhase.RAMP_UP) {
                 // This includes recovery transitions (RAMP_DOWN at minimum -> RAMP_UP)
                 rampDownToRampUpCounter.increment();
-            } else if (from == AdaptiveLoadPattern.Phase.RAMP_UP && to == AdaptiveLoadPattern.Phase.SUSTAIN) {
+            } else if (from == AdaptivePhase.RAMP_UP && to == AdaptivePhase.SUSTAIN) {
                 rampUpToSustainCounter.increment();
             }
         }
         
-        private void recordPhaseDuration(AdaptiveLoadPattern.Phase phase) {
+        private void recordPhaseDuration(AdaptivePhase phase) {
             long currentTime = System.currentTimeMillis();
             long phaseStart = lastPhaseStartTime.getAndSet(currentTime);
             if (phaseStart > 0) {

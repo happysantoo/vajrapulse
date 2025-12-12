@@ -1,10 +1,10 @@
 package com.vajrapulse.core.engine;
 
-import com.vajrapulse.api.LoadPattern;
-import com.vajrapulse.api.PlatformThreads;
-import com.vajrapulse.api.TaskLifecycle;
-import com.vajrapulse.api.VirtualThreads;
-import com.vajrapulse.api.WarmupCooldownLoadPattern;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.task.PlatformThreads;
+import com.vajrapulse.api.task.TaskLifecycle;
+import com.vajrapulse.api.task.VirtualThreads;
+import com.vajrapulse.api.pattern.WarmupCooldownLoadPattern;
 import com.vajrapulse.core.config.ConfigLoader;
 import com.vajrapulse.core.config.VajraPulseConfig;
 import com.vajrapulse.core.metrics.MetricsCollector;
@@ -75,7 +75,7 @@ public final class ExecutionEngine implements AutoCloseable {
     private final ShutdownManager shutdownManager;
     private final java.util.concurrent.atomic.AtomicBoolean stopRequested = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final Cleaner.Cleanable cleanable; // Safety net for executor cleanup
-    private final com.vajrapulse.api.BackpressureHandler backpressureHandler; // Optional
+    private final com.vajrapulse.api.metrics.BackpressureHandler backpressureHandler; // Optional
     private final double backpressureThreshold; // Default: 0.7
     
     // Queue depth tracking
@@ -153,7 +153,7 @@ public final class ExecutionEngine implements AutoCloseable {
         this.cleanable = CLEANER.register(this, new ExecutorCleanup(executor, runId));
         
         // Register adaptive pattern metrics if applicable
-        if (loadPattern instanceof com.vajrapulse.api.AdaptiveLoadPattern adaptivePattern) {
+        if (loadPattern instanceof com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern adaptivePattern) {
             AdaptivePatternMetrics.register(adaptivePattern, metricsCollector.getRegistry(), runId);
         }
         
@@ -252,7 +252,7 @@ public final class ExecutionEngine implements AutoCloseable {
         private MetricsCollector metricsCollector;
         private String runId;
         private VajraPulseConfig config;
-        private com.vajrapulse.api.BackpressureHandler backpressureHandler;
+        private com.vajrapulse.api.metrics.BackpressureHandler backpressureHandler;
         private double backpressureThreshold = 0.7; // Default threshold
         
         private Builder() {
@@ -341,7 +341,7 @@ public final class ExecutionEngine implements AutoCloseable {
          * @return this builder
          * @since 0.9.6
          */
-        public Builder withBackpressureHandler(com.vajrapulse.api.BackpressureHandler backpressureHandler) {
+        public Builder withBackpressureHandler(com.vajrapulse.api.metrics.BackpressureHandler backpressureHandler) {
             this.backpressureHandler = backpressureHandler;
             return this;
         }
@@ -528,55 +528,15 @@ public final class ExecutionEngine implements AutoCloseable {
                 if (backpressureHandler != null) {
                     double backpressure = getBackpressureLevel();
                     if (backpressure >= backpressureThreshold) {
-                        com.vajrapulse.api.BackpressureHandler.BackpressureContext context = 
+                        com.vajrapulse.api.metrics.BackpressureContext context = 
                             createBackpressureContext(backpressure);
-                        com.vajrapulse.api.BackpressureHandler.HandlingResult result = 
-                            backpressureHandler.handle(currentIteration, backpressure, context);
+                        com.vajrapulse.api.metrics.BackpressureHandlingResult result = 
+                            backpressureHandler.handle(backpressure, context);
                         
-                        switch (result) {
-                            case DROPPED:
-                                // Skip this request - don't submit
-                                pendingExecutions.decrementAndGet();
-                                metricsCollector.updateQueueSize(pendingExecutions.get());
-                                metricsCollector.recordDroppedRequest();
-                                logger.debug("Request {} dropped due to backpressure {} runId={}", 
-                                    currentIteration, String.format("%.2f", backpressure), runId);
-                                continue; // Skip to next iteration
-                                
-                            case REJECTED:
-                                // Fail immediately - record as failure
-                                pendingExecutions.decrementAndGet();
-                                metricsCollector.updateQueueSize(pendingExecutions.get());
-                                if (shouldRecordMetrics) {
-                                    metricsCollector.recordRejectedRequest();
-                                    metricsCollector.record(new ExecutionMetrics(
-                                        System.nanoTime(),
-                                        System.nanoTime(),
-                                        com.vajrapulse.api.TaskResult.failure(
-                                            new RuntimeException("Request rejected due to backpressure: " + String.format("%.2f", backpressure))),
-                                        currentIteration
-                                    ));
-                                }
-                                logger.debug("Request {} rejected due to backpressure {} runId={}", 
-                                    currentIteration, String.format("%.2f", backpressure), runId);
-                                continue; // Skip to next iteration
-                                
-                            case RETRY:
-                                // TODO: Implement retry mechanism
-                                // For now, queue it
-                                break;
-                                
-                            case DEGRADED:
-                                // TODO: Implement degradation mechanism
-                                // For now, queue it
-                                break;
-                                
-                            case QUEUED:
-                            case ACCEPTED:
-                            default:
-                                // Normal processing - submit to executor
-                                break;
+                        if (handleBackpressureResult(result, currentIteration, backpressure, shouldRecordMetrics)) {
+                            continue; // Request was handled (dropped/rejected)
                         }
+                        // Otherwise, proceed with normal submission
                     }
                 }
                 
@@ -681,7 +641,7 @@ public final class ExecutionEngine implements AutoCloseable {
      * @return backpressure level (0.0 to 1.0)
      */
     private double getBackpressureLevel() {
-        if (loadPattern instanceof com.vajrapulse.api.AdaptiveLoadPattern adaptivePattern) {
+        if (loadPattern instanceof com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern adaptivePattern) {
             return adaptivePattern.getBackpressureLevel();
         }
         return 0.0;
@@ -693,10 +653,10 @@ public final class ExecutionEngine implements AutoCloseable {
      * @param backpressureLevel current backpressure level
      * @return backpressure context
      */
-    private com.vajrapulse.api.BackpressureHandler.BackpressureContext createBackpressureContext(double backpressureLevel) {
+    private com.vajrapulse.api.metrics.BackpressureContext createBackpressureContext(double backpressureLevel) {
         long queueDepth = pendingExecutions.get();
         var snapshot = metricsCollector.snapshot();
-        return new com.vajrapulse.api.BackpressureHandler.BackpressureContext(
+        return new com.vajrapulse.api.metrics.BackpressureContext(
             queueDepth,
             0L, // Max queue depth (unbounded for virtual threads)
             0L, // Active connections (not tracked here)
@@ -704,6 +664,72 @@ public final class ExecutionEngine implements AutoCloseable {
             snapshot.failureRate(),
             java.util.Map.of() // Custom metrics
         );
+    }
+    
+    /**
+     * Handles backpressure result and returns true if request should be skipped.
+     * 
+     * @param result the backpressure handling result
+     * @param iteration the current iteration number
+     * @param backpressure the backpressure level
+     * @param shouldRecordMetrics whether metrics should be recorded
+     * @return true if request should be skipped, false to proceed normally
+     */
+    private boolean handleBackpressureResult(
+        com.vajrapulse.api.metrics.BackpressureHandlingResult result,
+        long iteration,
+        double backpressure,
+        boolean shouldRecordMetrics
+    ) {
+        return switch (result) {
+            case DROPPED -> {
+                handleDropped(iteration, backpressure);
+                yield true;
+            }
+            case REJECTED -> {
+                handleRejected(iteration, backpressure, shouldRecordMetrics);
+                yield true;
+            }
+            case QUEUED, ACCEPTED -> false;
+        };
+    }
+    
+    /**
+     * Handles a dropped request.
+     * 
+     * @param iteration the current iteration number
+     * @param backpressure the backpressure level
+     */
+    private void handleDropped(long iteration, double backpressure) {
+        pendingExecutions.decrementAndGet();
+        metricsCollector.updateQueueSize(pendingExecutions.get());
+        metricsCollector.recordDroppedRequest();
+        logger.debug("Request {} dropped due to backpressure {} runId={}", 
+            iteration, String.format("%.2f", backpressure), runId);
+    }
+    
+    /**
+     * Handles a rejected request.
+     * 
+     * @param iteration the current iteration number
+     * @param backpressure the backpressure level
+     * @param shouldRecordMetrics whether metrics should be recorded
+     */
+    private void handleRejected(long iteration, double backpressure, boolean shouldRecordMetrics) {
+        pendingExecutions.decrementAndGet();
+        metricsCollector.updateQueueSize(pendingExecutions.get());
+        if (shouldRecordMetrics) {
+            metricsCollector.recordRejectedRequest();
+            metricsCollector.record(new ExecutionMetrics(
+                System.nanoTime(),
+                System.nanoTime(),
+                com.vajrapulse.api.task.TaskResult.failure(
+                    new RuntimeException("Request rejected due to backpressure: " + String.format("%.2f", backpressure))),
+                iteration
+            ));
+        }
+        logger.debug("Request {} rejected due to backpressure {} runId={}", 
+            iteration, String.format("%.2f", backpressure), runId);
     }
     
     /**

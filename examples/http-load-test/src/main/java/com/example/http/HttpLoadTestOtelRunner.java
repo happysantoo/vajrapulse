@@ -1,10 +1,10 @@
 package com.example.http;
 
-import com.vajrapulse.api.LoadPattern;
-import com.vajrapulse.api.StaticLoad;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.pattern.StaticLoad;
 import com.vajrapulse.exporter.otel.OpenTelemetryExporter;
 import com.vajrapulse.exporter.otel.OpenTelemetryExporter.Protocol;
-import com.vajrapulse.api.TaskIdentity;
+import com.vajrapulse.api.task.TaskIdentity;
 import com.vajrapulse.worker.pipeline.MetricsPipeline;
 
 import java.time.Duration;

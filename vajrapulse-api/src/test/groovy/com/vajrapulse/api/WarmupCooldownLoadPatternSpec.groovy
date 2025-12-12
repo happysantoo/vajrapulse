@@ -1,6 +1,10 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import com.vajrapulse.api.pattern.StaticLoad
+import com.vajrapulse.api.pattern.WarmupCooldownLoadPattern
+import com.vajrapulse.api.pattern.RampUpLoad
+import com.vajrapulse.api.pattern.RampUpToMaxLoad
 import java.time.Duration
 
 class WarmupCooldownLoadPatternSpec extends Specification {

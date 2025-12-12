@@ -1,6 +1,11 @@
 package com.vajrapulse.core.integration
 
-import com.vajrapulse.api.*
+import com.vajrapulse.api.task.Task
+import com.vajrapulse.api.task.TaskResult
+import com.vajrapulse.api.task.VirtualThreads
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern
+import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
+import com.vajrapulse.api.pattern.adaptive.AdaptiveConfig
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.engine.MetricsProviderAdapter
 import com.vajrapulse.core.metrics.MetricsCollector
@@ -68,16 +73,16 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         def task = new AdaptiveTestTask(100)
         def provider = new MetricsProviderAdapter(metrics)
         
-        def pattern = new AdaptiveLoadPattern(
-            10.0,  // Initial TPS
-            5.0,   // Ramp increment
-            10.0,  // Ramp decrement
-            Duration.ofSeconds(1),  // Ramp interval (1 second)
-            50.0,  // Max TPS
-            Duration.ofSeconds(2),  // Sustain duration
-            0.01,  // Error threshold (1%)
-            provider
-        )
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(10.0)
+            .rampIncrement(5.0)
+            .rampDecrement(10.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(50.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .errorThreshold(0.01)
+            .metricsProvider(provider)
+            .build()
         
         def engine = ExecutionEngine.builder()
             .withTask(task)
@@ -108,7 +113,7 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
                 states.add(phase)
                 tpsValues.add(pattern.getCurrentTps())
                 // Continue until SUSTAIN phase or 10 seconds elapsed (to collect history)
-                phase == AdaptiveLoadPattern.Phase.SUSTAIN || 
+                phase == AdaptivePhase.SUSTAIN || 
                 (System.currentTimeMillis() - startTime) >= 10000
             }
         
@@ -118,9 +123,9 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         
         then: "pattern should progress through phases"
         def finalPhase = pattern.getCurrentPhase()
-        finalPhase in [AdaptiveLoadPattern.Phase.RAMP_UP, 
-                       AdaptiveLoadPattern.Phase.RAMP_DOWN,
-                       AdaptiveLoadPattern.Phase.SUSTAIN]
+        finalPhase in [AdaptivePhase.RAMP_UP, 
+                       AdaptivePhase.RAMP_DOWN,
+                       AdaptivePhase.SUSTAIN]
         
         and: "should have seen phase transitions"
         def uniquePhases = states.unique()
@@ -159,10 +164,16 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         def task = new AdaptiveTestTask(Integer.MAX_VALUE) // Never fails
         def provider = new MetricsProviderAdapter(metrics)
         
-        def pattern = new AdaptiveLoadPattern(
-            10.0, 5.0, 10.0, Duration.ofSeconds(1),
-            50.0, Duration.ofSeconds(2), 0.01, provider
-        )
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(10.0)
+            .rampIncrement(5.0)
+            .rampDecrement(10.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(50.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .errorThreshold(0.01)
+            .metricsProvider(provider)
+            .build()
         
         def engine = ExecutionEngine.builder()
             .withTask(task)
@@ -204,9 +215,9 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         
         and: "pattern should be in valid phase"
         // Pattern may be in any phase depending on execution state
-        phaseBeforeStop in [AdaptiveLoadPattern.Phase.RAMP_UP,
-                            AdaptiveLoadPattern.Phase.RAMP_DOWN,
-                            AdaptiveLoadPattern.Phase.SUSTAIN]
+        phaseBeforeStop in [AdaptivePhase.RAMP_UP,
+                            AdaptivePhase.RAMP_DOWN,
+                            AdaptivePhase.SUSTAIN]
         
         and: "TPS should be valid"
         tpsBeforeStop >= 0.0 // May be 0 if pattern just started
@@ -231,11 +242,16 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         def task = new AdaptiveTestTask(50) // Fails for first 50, then succeeds
         def provider = new MetricsProviderAdapter(metrics)
         
-        def pattern = new AdaptiveLoadPattern(
-            5.0,  // Lower initial TPS for faster testing
-            5.0, 10.0, Duration.ofSeconds(1),
-            30.0, Duration.ofSeconds(2), 0.01, provider
-        )
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(5.0)
+            .rampIncrement(5.0)
+            .rampDecrement(10.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(30.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .errorThreshold(0.01)
+            .metricsProvider(provider)
+            .build()
         
         def engine = ExecutionEngine.builder()
             .withTask(task)
@@ -263,7 +279,7 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
                 phaseHistory.add(pattern.getCurrentPhase())
                 tpsHistory.add(pattern.getCurrentTps())
                 // Continue until SUSTAIN phase or 8 seconds elapsed
-                pattern.getCurrentPhase() == AdaptiveLoadPattern.Phase.SUSTAIN ||
+                pattern.getCurrentPhase() == AdaptivePhase.SUSTAIN ||
                 (System.currentTimeMillis() - startTime) >= 8000
             }
         
@@ -286,9 +302,9 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         
         // Pattern should end in a valid phase
         def finalPhase = pattern.getCurrentPhase()
-        finalPhase in [AdaptiveLoadPattern.Phase.RAMP_UP,
-                       AdaptiveLoadPattern.Phase.RAMP_DOWN,
-                       AdaptiveLoadPattern.Phase.SUSTAIN]
+        finalPhase in [AdaptivePhase.RAMP_UP,
+                       AdaptivePhase.RAMP_DOWN,
+                       AdaptivePhase.SUSTAIN]
         
         cleanup:
         try {

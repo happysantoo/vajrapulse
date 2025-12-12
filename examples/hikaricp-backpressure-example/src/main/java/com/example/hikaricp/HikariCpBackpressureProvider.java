@@ -1,6 +1,6 @@
 package com.example.hikaricp;
 
-import com.vajrapulse.api.BackpressureProvider;
+import com.vajrapulse.api.metrics.BackpressureProvider;
 
 /**
  * Example backpressure provider based on HikariCP connection pool metrics.
