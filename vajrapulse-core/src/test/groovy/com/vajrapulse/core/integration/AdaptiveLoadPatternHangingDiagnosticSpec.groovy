@@ -71,8 +71,9 @@ class AdaptiveLoadPatternHangingDiagnosticSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metrics)
-            .build()
+                .withMetricsCollector(metrics)
+                .withShutdownHook(false)
+                .build()
         
         when: "running engine for a very short time"
         def executionThread = Thread.start {
@@ -152,8 +153,9 @@ class AdaptiveLoadPatternHangingDiagnosticSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metrics)
-            .build()
+                .withMetricsCollector(metrics)
+                .withShutdownHook(false)
+                .build()
         
         when: "checking behavior when TPS reaches minimum"
         // Recovery behavior happens in RAMP_DOWN when TPS reaches minimum

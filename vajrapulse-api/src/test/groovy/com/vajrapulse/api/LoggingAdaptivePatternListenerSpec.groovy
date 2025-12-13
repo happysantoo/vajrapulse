@@ -224,3 +224,4 @@ class LoggingAdaptivePatternListenerSpec extends Specification {
     }
 }
 
+

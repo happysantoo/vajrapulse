@@ -52,8 +52,9 @@ class FeatureCombinationSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(wrappedPattern)
-            .withMetricsCollector(metricsCollector)
-            .build()
+                .withMetricsCollector(metricsCollector)
+                .withShutdownHook(false)
+                .build()
         
         engine.run()
         
@@ -66,6 +67,9 @@ class FeatureCombinationSpec extends Specification {
         and: "pattern should complete"
         def totalDuration = wrappedPattern.getDuration().toMillis()
         wrappedPattern.getCurrentPhase(totalDuration) == WarmupCooldownLoadPattern.Phase.COMPLETE
+        
+        cleanup:
+        engine?.close()
     }
     
     def "should use Assertion Framework with execution metrics"() {
@@ -82,8 +86,9 @@ class FeatureCombinationSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metricsCollector)
-            .build()
+                .withMetricsCollector(metricsCollector)
+                .withShutdownHook(false)
+                .build()
         
         engine.run()
         
@@ -101,6 +106,9 @@ class FeatureCombinationSpec extends Specification {
         
         // Assertions should pass (task is simple and fast)
         result.passed()
+        
+        cleanup:
+        engine?.close()
     }
     
     def "should handle full end-to-end scenario with all features"() {
@@ -122,8 +130,9 @@ class FeatureCombinationSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(wrappedPattern)
-            .withMetricsCollector(metricsCollector)
-            .build()
+                .withMetricsCollector(metricsCollector)
+                .withShutdownHook(false)
+                .build()
         
         engine.run()
         
@@ -142,6 +151,9 @@ class FeatureCombinationSpec extends Specification {
         def result = assertions.evaluate(metrics)
         // Result may pass or fail depending on actual metrics, but evaluation should work
         result != null
+        
+        cleanup:
+        engine?.close()
     }
     
     /**

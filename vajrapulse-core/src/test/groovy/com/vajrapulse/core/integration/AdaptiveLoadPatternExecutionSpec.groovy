@@ -129,8 +129,9 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metrics)
-            .build()
+                .withMetricsCollector(metrics)
+                .withShutdownHook(false)
+                .build()
         
         when: "running engine for short duration"
         def executionThread = Thread.start {
@@ -192,8 +193,9 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metrics)
-            .build()
+                .withMetricsCollector(metrics)
+                .withShutdownHook(false)
+                .build()
         
         when: "running engine until errors trigger RAMP_DOWN"
         def executionThread = Thread.start {
@@ -251,7 +253,7 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         given: "an adaptive pattern with controlled failure task"
         def metrics = new MetricsCollector()
         // Task fails initially, then succeeds (simulates finding stable point)
-        def task = new ControlledFailureTask(1, 50) // Fails for first 50 executions
+        def task = new ControlledFailureTask(1, 15) // Fails for first 15 executions
         def provider = new MetricsProviderAdapter(metrics)
         
         def pattern = AdaptiveLoadPattern.builder()
@@ -271,8 +273,9 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metrics)
-            .build()
+                .withMetricsCollector(metrics)
+                .withShutdownHook(false)
+                .build()
         
         when: "running engine until stable point is found"
         def executionThread = Thread.start {
@@ -284,12 +287,11 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         }
         
         // Wait for pattern to potentially find stable point and transition to SUSTAIN
-        await().atMost(10, SECONDS)
+        await().atMost(20, SECONDS)
             .pollInterval(500, MILLISECONDS)
             .until {
                 def currentPhase = pattern.getCurrentPhase()
-                currentPhase == AdaptivePhase.SUSTAIN || 
-                currentPhase == AdaptivePhase.RAMP_DOWN
+                currentPhase == AdaptivePhase.SUSTAIN
             }
         
         // Stop the engine
@@ -298,9 +300,8 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         
         then: "pattern may have found stable point"
         def phase = pattern.getCurrentPhase()
-        // May be in SUSTAIN if stable point found, or RAMP_DOWN (including recovery behavior at minimum)
-        phase in [AdaptivePhase.RAMP_DOWN, 
-                  AdaptivePhase.SUSTAIN]
+        // Should be in SUSTAIN if stable point found
+        phase == AdaptivePhase.SUSTAIN
         
         and: "executions should have occurred"
         def snapshot = metrics.snapshot()
@@ -334,8 +335,9 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metrics)
-            .build()
+                .withMetricsCollector(metrics)
+                .withShutdownHook(false)
+                .build()
         
         when: "running engine for short duration"
         def executionThread = Thread.start {
@@ -396,8 +398,9 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metrics)
-            .build()
+                .withMetricsCollector(metrics)
+                .withShutdownHook(false)
+                .build()
         
         when: "running engine with rapid adjustments"
         def executionThread = Thread.start {
@@ -455,8 +458,9 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metrics)
-            .build()
+                .withMetricsCollector(metrics)
+                .withShutdownHook(false)
+                .build()
         
         when: "running engine until pattern may reach minimum TPS"
         def startTime = System.currentTimeMillis()
@@ -521,8 +525,9 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metrics)
-            .build()
+                .withMetricsCollector(metrics)
+                .withShutdownHook(false)
+                .build()
         
         when: "calling calculateTps before any executions"
         def tps = pattern.calculateTps(0)

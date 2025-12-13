@@ -42,6 +42,7 @@ class ExecutionEngineSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -52,6 +53,9 @@ class ExecutionEngineSpec extends Specification {
         snapshot.failureCount() == 0
         engine.runId != null
         engine.runId == collector.runId
+        
+        cleanup:
+        engine?.close()
     }
 
     def "should generate runId when collector has none"() {
@@ -69,12 +73,16 @@ class ExecutionEngineSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
 
         then:
         engine.runId != null
         collector.runId == null
+        
+        cleanup:
+        engine?.close()
     }
 
     def "should stop early when stop invoked"() {
@@ -90,6 +98,7 @@ class ExecutionEngineSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
 
         when: "invoke stop after brief delay"
@@ -100,6 +109,9 @@ class ExecutionEngineSpec extends Specification {
         then: "fewer executions than theoretical max and some recorded"
         snapshot.totalExecutions() > 0
         snapshot.totalExecutions() < 100 // would be >100 if full second ran at 100 TPS
+        
+        cleanup:
+        engine?.close()
     }
 
     def "should use configured drain timeout from config"() {
@@ -128,11 +140,15 @@ class ExecutionEngineSpec extends Specification {
                 .withMetricsCollector(collector)
                 .withRunId("cfg-test")
                 .withConfig(customConfig)
+                .withShutdownHook(false)
                 .build()
 
         then: "engine created successfully with config applied"
         engine.runId == "cfg-test"
         engine.config.execution().drainTimeout() == Duration.ofSeconds(2)
+        
+        cleanup:
+        engine?.close()
     }
 
     def "should use configured force timeout from config"() {
@@ -161,10 +177,14 @@ class ExecutionEngineSpec extends Specification {
                 .withMetricsCollector(collector)
                 .withRunId("force-test")
                 .withConfig(customConfig)
+                .withShutdownHook(false)
                 .build()
 
         then: "engine created with config applied"
         engine.config.execution().forceTimeout() == Duration.ofSeconds(15)
+        
+        cleanup:
+        engine?.close()
     }
 
     def "should respect VIRTUAL thread pool strategy from config"() {
@@ -193,6 +213,7 @@ class ExecutionEngineSpec extends Specification {
                 .withMetricsCollector(collector)
                 .withRunId("virtual-test")
                 .withConfig(customConfig)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -200,6 +221,9 @@ class ExecutionEngineSpec extends Specification {
         then: "engine runs successfully with virtual threads"
         snapshot.totalExecutions() > 0
         engine.config.execution().defaultThreadPool() == VajraPulseConfig.ThreadPoolStrategy.VIRTUAL
+        
+        cleanup:
+        engine?.close()
     }
 
     def "should respect PLATFORM thread pool strategy from config"() {
@@ -228,6 +252,7 @@ class ExecutionEngineSpec extends Specification {
                 .withMetricsCollector(collector)
                 .withRunId("platform-test")
                 .withConfig(customConfig)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -236,6 +261,9 @@ class ExecutionEngineSpec extends Specification {
         snapshot.totalExecutions() > 0
         engine.config.execution().defaultThreadPool() == VajraPulseConfig.ThreadPoolStrategy.PLATFORM
         engine.config.execution().platformThreadPoolSize() == 4
+        
+        cleanup:
+        engine?.close()
     }
 
     def "should use AUTO strategy which defaults to virtual threads"() {
@@ -264,6 +292,7 @@ class ExecutionEngineSpec extends Specification {
                 .withMetricsCollector(collector)
                 .withRunId("auto-test")
                 .withConfig(customConfig)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -271,6 +300,9 @@ class ExecutionEngineSpec extends Specification {
         then: "engine runs successfully with AUTO strategy"
         snapshot.totalExecutions() > 0
         engine.config.execution().defaultThreadPool() == VajraPulseConfig.ThreadPoolStrategy.AUTO
+        
+        cleanup:
+        engine?.close()
     }
     
     def "should register executor metrics for platform threads"() {
@@ -285,6 +317,7 @@ class ExecutionEngineSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()
@@ -311,6 +344,7 @@ class ExecutionEngineSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()
@@ -336,6 +370,7 @@ class ExecutionEngineSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         try {
             engine.run()

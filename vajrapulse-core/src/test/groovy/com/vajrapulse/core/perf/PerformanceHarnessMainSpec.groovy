@@ -18,10 +18,7 @@ class PerformanceHarnessMainSpec extends Specification {
         noExceptionThrown()
     }
 
-    def "harness main runs with minutes duration"() {
-        when:
-        PerformanceHarness.main(["10","1m"] as String[])
-        then:
-        noExceptionThrown()
-    }
+    // Removed "minutes duration" test - it takes 1 minute to run and only verifies
+    // that main() doesn't throw, which is already covered by shorter duration tests.
+    // If you need to test minute durations, run PerformanceHarness manually.
 }

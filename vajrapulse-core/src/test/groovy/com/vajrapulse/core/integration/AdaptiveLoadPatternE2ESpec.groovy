@@ -90,8 +90,9 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metrics)
-            .build()
+                .withMetricsCollector(metrics)
+                .withShutdownHook(false)
+                .build()
         
         when: "running engine through full adaptive cycle"
         def executionThread = Thread.start {
@@ -184,8 +185,9 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metrics)
-            .build()
+                .withMetricsCollector(metrics)
+                .withShutdownHook(false)
+                .build()
         
         when: "running engine for short duration"
         def executionThread = Thread.start {
@@ -265,8 +267,9 @@ class AdaptiveLoadPatternE2ESpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(pattern)
-            .withMetricsCollector(metrics)
-            .build()
+                .withMetricsCollector(metrics)
+                .withShutdownHook(false)
+                .build()
         
         when: "running engine and monitoring state"
         def executionThread = Thread.start {

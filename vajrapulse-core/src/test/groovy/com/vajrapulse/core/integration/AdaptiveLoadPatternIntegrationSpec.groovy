@@ -101,6 +101,7 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(pattern)
                 .withMetricsCollector(metrics)
+                .withShutdownHook(false)
                 .build()
         
         then: "adaptive pattern metrics should be registered"
@@ -118,6 +119,9 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
         and: "pattern should be initialized in RAMP_UP phase"
         pattern.getCurrentPhase() == AdaptivePhase.RAMP_UP
         pattern.getCurrentTps() == 10.0
+        
+        cleanup:
+        engine?.close()
     }
     
     def "should complete full recovery cycle: RAMP_UP -> RAMP_DOWN (at minimum) -> RAMP_UP"() {
@@ -145,6 +149,7 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
             .withTask(task)
             .withLoadPattern(pattern)
             .withMetricsCollector(metrics)
+            .withShutdownHook(false)
             .build()
         
         when: "running engine through recovery cycle"
@@ -244,6 +249,7 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
             .withTask(task)
             .withLoadPattern(pattern)
             .withMetricsCollector(metrics)
+            .withShutdownHook(false)
             .build()
         
         when: "running engine until pattern finds optimal TPS"
@@ -330,6 +336,7 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
             .withTask(task)
             .withLoadPattern(pattern)
             .withMetricsCollector(metrics)
+            .withShutdownHook(false)
             .build()
         
         when: "running engine for extended period"

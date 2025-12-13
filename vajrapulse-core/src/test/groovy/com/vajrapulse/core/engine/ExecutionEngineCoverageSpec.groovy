@@ -34,6 +34,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()
@@ -67,6 +68,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         Thread.startVirtualThread {
             Thread.sleep(50)
@@ -94,6 +96,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()
@@ -117,6 +120,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
 
@@ -143,6 +147,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()) {
             engine.run()
             metrics = collector.snapshot()
@@ -167,6 +172,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.close()
         engine.close() // Second close should be safe
@@ -188,6 +194,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         def interrupted = new java.util.concurrent.atomic.AtomicBoolean(false)
 
@@ -221,6 +228,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         def depth = engine.getQueueDepth()
 
@@ -249,6 +257,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()
@@ -272,6 +281,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         Thread.startVirtualThread {
             Thread.sleep(50)
@@ -302,6 +312,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()
@@ -338,8 +349,9 @@ class ExecutionEngineCoverageSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(load)
-            .withMetricsCollector(collector)
-            .build()
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
         engine.close()
@@ -363,8 +375,9 @@ class ExecutionEngineCoverageSpec extends Specification {
         ExecutionEngine.builder()
             .withTask(null)
             .withLoadPattern(load)
-            .withMetricsCollector(collector)
-            .build()
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
 
         then: "NullPointerException is thrown"
         thrown(NullPointerException)
@@ -373,8 +386,9 @@ class ExecutionEngineCoverageSpec extends Specification {
         ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(null)
-            .withMetricsCollector(collector)
-            .build()
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
 
         then: "NullPointerException is thrown"
         thrown(NullPointerException)
@@ -384,6 +398,7 @@ class ExecutionEngineCoverageSpec extends Specification {
             .withTask(task)
             .withLoadPattern(load)
             .withMetricsCollector(null)
+            .withShutdownHook(false)
             .build()
 
         then: "NullPointerException is thrown"
@@ -406,6 +421,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         def stateBeforeRun = registry.find("vajrapulse.engine.state").gauge()?.value() ?: 0.0
 
@@ -440,6 +456,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         def uptimeBefore = registry.find("vajrapulse.engine.uptime.ms").gauge()?.value() ?: 0.0
         engine.run()
@@ -466,6 +483,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         
@@ -504,6 +522,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         try {
             engine.run()
@@ -532,6 +551,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()
@@ -556,6 +576,7 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()

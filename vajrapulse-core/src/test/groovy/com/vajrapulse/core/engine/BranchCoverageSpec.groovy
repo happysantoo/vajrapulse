@@ -47,6 +47,7 @@ class BranchCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run(); engine.close()
 
@@ -65,6 +66,7 @@ class BranchCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run(); engine.close()
 

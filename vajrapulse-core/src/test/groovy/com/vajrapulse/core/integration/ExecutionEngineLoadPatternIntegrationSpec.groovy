@@ -274,6 +274,7 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -285,6 +286,9 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         snapshot.queueSize() == 0 // Queue should be empty after completion
         snapshot.successPercentiles().size() == 3
         snapshot.queueWaitPercentiles().size() == 3
+        
+        cleanup:
+        engine?.close()
         
         where:
         threadStrategy | taskInstance
@@ -306,6 +310,7 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -314,6 +319,9 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         snapshot.totalExecutions() > 0
         snapshot.successCount() == snapshot.totalExecutions()
         snapshot.elapsedMillis() >= rampDuration.toMillis()
+        
+        cleanup:
+        engine?.close()
         
         where:
         patternName | maxTps | rampDuration
@@ -335,6 +343,7 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -343,6 +352,9 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         snapshot.totalExecutions() > 0
         snapshot.successCount() == snapshot.totalExecutions()
         snapshot.elapsedMillis() >= 200 // Should be at least ramp + sustain
+        
+        cleanup:
+        engine?.close()
     }
     
     @Unroll
@@ -358,6 +370,7 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -365,6 +378,9 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         then: "metrics show step behavior"
         snapshot.totalExecutions() > 0
         snapshot.successCount() == snapshot.totalExecutions()
+        
+        cleanup:
+        engine?.close()
         
         where:
         stepCount | stepList
@@ -383,6 +399,7 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -391,6 +408,9 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         snapshot.totalExecutions() > 0
         snapshot.successCount() == snapshot.totalExecutions()
         snapshot.elapsedMillis() >= 200
+        
+        cleanup:
+        engine?.close()
     }
     
     def "should execute SpikeLoad pattern"() {
@@ -404,6 +424,7 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -412,6 +433,9 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         snapshot.totalExecutions() > 0
         snapshot.successCount() == snapshot.totalExecutions()
         snapshot.elapsedMillis() >= 200
+        
+        cleanup:
+        engine?.close()
     }
     
     def "should track queue depth correctly"() {
@@ -437,6 +461,7 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
                 .withTask(slowTask)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -446,6 +471,9 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         snapshot.totalExecutions() > 0
         // Queue wait time should be recorded
         snapshot.queueWaitPercentiles().size() > 0
+        
+        cleanup:
+        engine?.close()
     }
     
     def "should handle mixed success/failure results"() {
@@ -459,6 +487,7 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -472,6 +501,9 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         snapshot.failurePercentiles().size() > 0
         snapshot.successRate() > 0
         snapshot.failureRate() > 0
+        
+        cleanup:
+        engine?.close()
     }
     
     def "should handle graceful shutdown"() {
@@ -483,6 +515,7 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         
         when: "stopping the engine early"
@@ -496,6 +529,9 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         then: "execution stops gracefully"
         snapshot.totalExecutions() > 0
         snapshot.totalExecutions() < 50 // Should be less than full duration would produce
+        
+        cleanup:
+        engine?.close()
     }
     
     def "should calculate TPS metrics correctly"() {
@@ -509,6 +545,7 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -520,6 +557,9 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         snapshot.successTps() <= snapshot.responseTps()
         // Response TPS should be close to target (allowing for overhead)
         snapshot.responseTps() > 0 && snapshot.responseTps() < 100
+        
+        cleanup:
+        engine?.close()
     }
 }
 

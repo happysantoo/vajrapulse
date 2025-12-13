@@ -30,6 +30,7 @@ class PerformanceHarnessSpec extends Specification {
                 .withTask(new NoOpTask())
                 .withLoadPattern(pattern)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()) {
             engine.run()
         }

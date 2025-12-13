@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 
-import java.lang.ref.Cleaner;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -59,7 +58,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class ExecutionEngine implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(ExecutionEngine.class);
-    private static final Cleaner CLEANER = Cleaner.create();
     
     /**
      * Timeout for executor termination in close() method (seconds).
@@ -73,8 +71,9 @@ public final class ExecutionEngine implements AutoCloseable {
     private final String runId; // Correlates metrics/traces/logs
     private final VajraPulseConfig config;
     private final ShutdownManager shutdownManager;
+    private final boolean shutdownHookEnabled;
     private final java.util.concurrent.atomic.AtomicBoolean stopRequested = new java.util.concurrent.atomic.AtomicBoolean(false);
-    private final Cleaner.Cleanable cleanable; // Safety net for executor cleanup
+    private final java.util.concurrent.atomic.AtomicBoolean executorShutdown = new java.util.concurrent.atomic.AtomicBoolean(false);
     
     // Queue depth tracking
     private final java.util.concurrent.atomic.AtomicLong pendingExecutions = new java.util.concurrent.atomic.AtomicLong(0);
@@ -133,6 +132,7 @@ public final class ExecutionEngine implements AutoCloseable {
         this.metricsCollector = builder.metricsCollector;
         this.runId = builder.runId != null ? builder.runId : deriveRunId(builder.metricsCollector);
         this.config = builder.config != null ? builder.config : ConfigLoader.load();
+        this.shutdownHookEnabled = builder.shutdownHookEnabled;
 
         // Determine thread strategy from annotations
         Class<?> taskClass = taskLifecycle.getClass();
@@ -143,10 +143,11 @@ public final class ExecutionEngine implements AutoCloseable {
             executor, taskClass, metricsCollector.getRegistry(), runId);
         
         this.shutdownManager = createShutdownManager(runId, metricsCollector);
-        shutdownManager.registerShutdownHook();
         
-        // Register Cleaner as safety net for executor cleanup
-        this.cleanable = CLEANER.register(this, new ExecutorCleanup(executor, runId));
+        // Only register shutdown hook if enabled (default: true for production, false for tests)
+        if (shutdownHookEnabled) {
+            shutdownManager.registerShutdownHook();
+        }
         
         // Register adaptive pattern metrics if applicable
         if (loadPattern instanceof com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern adaptivePattern) {
@@ -212,6 +213,7 @@ public final class ExecutionEngine implements AutoCloseable {
         private MetricsCollector metricsCollector;
         private String runId;
         private VajraPulseConfig config;
+        private boolean shutdownHookEnabled = true; // Default: enabled for production use
         
         private Builder() {
             // Private constructor - use ExecutionEngine.builder()
@@ -276,6 +278,42 @@ public final class ExecutionEngine implements AutoCloseable {
          */
         public Builder withConfig(VajraPulseConfig config) {
             this.config = config;
+            return this;
+        }
+        
+        /**
+         * Enables or disables JVM shutdown hook registration.
+         * 
+         * <p>Shutdown hooks are used to handle SIGINT/SIGTERM signals (Ctrl+C, kill, etc.)
+         * for graceful shutdown in production environments. In test environments, shutdown
+         * hooks are typically not needed and can cause issues with test cleanup.
+         * 
+         * <p>Default: {@code true} (enabled for production use)
+         * 
+         * <p>Example:
+         * <pre>{@code
+         * // Production: hooks enabled (default)
+         * ExecutionEngine engine = ExecutionEngine.builder()
+         *     .withTask(task)
+         *     .withLoadPattern(pattern)
+         *     .withMetricsCollector(metrics)
+         *     .build(); // Hooks enabled by default
+         * 
+         * // Tests: hooks disabled
+         * ExecutionEngine engine = ExecutionEngine.builder()
+         *     .withTask(task)
+         *     .withLoadPattern(pattern)
+         *     .withMetricsCollector(metrics)
+         *     .withShutdownHook(false) // Disable hooks for tests
+         *     .build();
+         * }</pre>
+         * 
+         * @param enabled true to enable shutdown hooks, false to disable
+         * @return this builder
+         * @since 0.9.9
+         */
+        public Builder withShutdownHook(boolean enabled) {
+            this.shutdownHookEnabled = enabled;
             return this;
         }
         
@@ -390,8 +428,21 @@ public final class ExecutionEngine implements AutoCloseable {
             logger.info("Task initialization completed for runId={}", runId);
         } catch (Exception e) {
             logger.error("Task initialization failed for runId={}: {}", runId, e.getMessage(), e);
-            // Don't call teardown if init failed
-            shutdownManager.removeShutdownHook();
+            // Don't call teardown if init failed, but ensure executor is shut down
+            executorShutdown.set(true);
+            if (shutdownHookEnabled) {
+                shutdownManager.signalShutdownComplete();
+                shutdownManager.removeShutdownHook();
+            }
+            // Shutdown executor since run() won't complete normally
+            if (!executor.isShutdown()) {
+                executor.shutdown();
+                try {
+                    executor.shutdownNow(); // Force shutdown since no tasks were submitted
+                } catch (Exception ex) {
+                    logger.warn("Error during executor shutdown after init failure: {}", ex.getMessage());
+                }
+            }
             throw e;
         }
         
@@ -461,6 +512,7 @@ public final class ExecutionEngine implements AutoCloseable {
             }
             
             // Graceful shutdown sequence
+            executorShutdown.set(true);
             boolean graceful = shutdownManager.awaitShutdown(executor);
             if (!graceful) {
                 logger.warn("Shutdown was not graceful for runId={}", runId);
@@ -482,11 +534,15 @@ public final class ExecutionEngine implements AutoCloseable {
     
     @Override
     public void close() {
-        shutdownManager.removeShutdownHook();
-        // Clean up the Cleaner registration
-        cleanable.clean();
+        // Signal shutdown completion and remove hook only if hooks were enabled
+        if (shutdownHookEnabled) {
+            shutdownManager.signalShutdownComplete();
+            shutdownManager.removeShutdownHook();
+        }
         
-        if (!executor.isShutdown()) {
+        // Shutdown executor only if run() didn't already shut it down
+        // This prevents redundant shutdown and infinite waits
+        if (!executorShutdown.get() && !executor.isShutdown()) {
             executor.shutdown();
             try {
                 if (!executor.awaitTermination(EXECUTOR_TERMINATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
@@ -581,54 +637,4 @@ public final class ExecutionEngine implements AutoCloseable {
         }
     }
 
-    /**
-     * Cleanup action for executor service.
-     * 
-     * <p>This is called by the {@link Cleaner} API if the {@code ExecutionEngine} is not
-     * properly closed via {@link #close()}. The Cleaner API provides a safety net to ensure
-     * that resources are cleaned up even if the caller forgets to call {@code close()} or if
-     * an exception prevents the normal cleanup path.
-     * 
-     * <p><strong>When Cleaner Runs:</strong>
-     * <ul>
-     *   <li>The Cleaner runs when the {@code ExecutionEngine} instance becomes unreachable
-     *       and is eligible for garbage collection</li>
-     *   <li>The cleanup action runs in a separate thread managed by the Cleaner</li>
-     *   <li>There is no guarantee about when cleanup will occur - it depends on GC timing</li>
-     * </ul>
-     * 
-     * <p><strong>Best Practice:</strong> Always use try-with-resources or explicitly call
-     * {@link #close()} to ensure timely cleanup. Do not rely on the Cleaner as the primary
-     * cleanup mechanism.
-     * 
-     * <p><strong>Example:</strong>
-     * <pre>{@code
-     * try (ExecutionEngine engine = ExecutionEngine.builder()
-     *         .withTask(task)
-     *         .withLoadPattern(load)
-     *         .withMetricsCollector(collector)
-     *         .build()) {
-     *     engine.run();
-     * } // Engine automatically closed, Cleaner not invoked
-     * }</pre>
-     * 
-     * @since 0.9.0
-     */
-    private static final class ExecutorCleanup implements Runnable {
-        private final ExecutorService executor;
-        private final String runId;
-        
-        ExecutorCleanup(ExecutorService executor, String runId) {
-            this.executor = executor;
-            this.runId = runId;
-        }
-        
-        @Override
-        public void run() {
-            if (!executor.isShutdown()) {
-                logger.warn("Executor not closed via close() for runId={}, forcing shutdown via Cleaner", runId);
-                executor.shutdownNow();
-            }
-        }
-    }
 }

@@ -38,6 +38,7 @@ class AdditionalCoreCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         def snapshot = collector.snapshot()
@@ -62,6 +63,7 @@ class AdditionalCoreCoverageSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.close() // exercise close path
 

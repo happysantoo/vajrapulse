@@ -51,6 +51,7 @@ class TaskLifecycleSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()
@@ -84,6 +85,7 @@ class TaskLifecycleSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()
@@ -123,12 +125,16 @@ class TaskLifecycleSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
 
         then: "init exception is propagated and teardown not called"
         thrown(RuntimeException)
         !teardownCalled
+        
+        cleanup:
+        engine?.close()
     }
 
     def "should call teardown even if execute throws exceptions"() {
@@ -155,6 +161,7 @@ class TaskLifecycleSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()
@@ -193,6 +200,7 @@ class TaskLifecycleSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()
@@ -234,6 +242,7 @@ class TaskLifecycleSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()
@@ -266,6 +275,7 @@ class TaskLifecycleSpec extends Specification {
                 .withTask(task)
                 .withLoadPattern(load)
                 .withMetricsCollector(collector)
+                .withShutdownHook(false)
                 .build()
         engine.run()
         engine.close()

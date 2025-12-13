@@ -155,13 +155,23 @@ public final class ShutdownManager {
      * <p><strong>Warning:</strong> The shutdown hook does NOT wait for executor
      * draining. You must call {@link #awaitShutdown(ExecutorService)} explicitly
      * in your main thread.
+     * 
+     * <p><strong>Note:</strong> The shutdown hook will wait for shutdown completion
+     * with a timeout. If shutdown was already completed, the wait will return immediately.
      */
     public void registerShutdownHook() {
         shutdownHookThread = new Thread(() -> {
+            // Check if shutdown is already completed (latch is at 0)
+            if (shutdownComplete.getCount() == 0) {
+                logger.debug("Shutdown already completed for runId={}, hook exiting immediately", runId);
+                return;
+            }
+            
             if (initiateShutdown()) {
                 logger.info("Shutdown hook triggered for runId={} - waiting for graceful completion", runId);
                 try {
                     // Wait for main thread to complete shutdown sequence
+                    // If shutdown was already completed (countDown already called), this returns immediately
                     boolean completed = shutdownComplete.await(
                         forceTimeout.toMillis(), 
                         TimeUnit.MILLISECONDS
@@ -169,9 +179,27 @@ public final class ShutdownManager {
                     if (!completed) {
                         logger.warn("Shutdown did not complete within force timeout {}ms for runId={}", 
                             forceTimeout.toMillis(), runId);
+                        // Signal completion anyway to prevent hanging
+                        signalShutdownComplete();
                     }
                 } catch (InterruptedException e) {
                     logger.warn("Shutdown hook interrupted for runId={}", runId);
+                    Thread.currentThread().interrupt();
+                    // Signal completion to prevent hanging
+                    signalShutdownComplete();
+                }
+            } else {
+                // Shutdown was already initiated (e.g., by close()), check if already completed
+                if (shutdownComplete.getCount() == 0) {
+                    logger.debug("Shutdown already completed for runId={}, hook exiting", runId);
+                    return;
+                }
+                // Shutdown initiated but not completed yet, wait briefly
+                logger.debug("Shutdown already initiated for runId={}, waiting briefly for completion", runId);
+                try {
+                    // If already completed, this returns immediately
+                    shutdownComplete.await(100, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
             }
@@ -202,6 +230,24 @@ public final class ShutdownManager {
             }
         }
         return false;
+    }
+    
+    /**
+     * Signals that shutdown is complete, unblocking any waiting shutdown hooks.
+     * 
+     * <p>This method is idempotent - calling it multiple times has no additional effect.
+     * Once the latch is counted down, subsequent calls have no effect, and any waiting
+     * threads are immediately unblocked.
+     * 
+     * <p>It should be called when the engine is closed to prevent shutdown hooks from
+     * waiting indefinitely if {@link #awaitShutdown(ExecutorService)} was never called.
+     * 
+     * <p>This is particularly important in test scenarios where the engine may be
+     * closed before {@code run()} completes.
+     */
+    public void signalShutdownComplete() {
+        shutdownComplete.countDown();
+        logger.debug("Shutdown completion signaled for runId={}", runId);
     }
     
     /**

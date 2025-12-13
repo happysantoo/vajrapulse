@@ -92,6 +92,7 @@ public final class LoadTestRunner implements AutoCloseable {
                     .withTask(task)
                     .withLoadPattern(loadPattern)
                     .withMetricsCollector(collector)
+                    .withShutdownHook(false)  // LoadTestRunner manages lifecycle, no hooks needed
                     .build()) {
                 engine.run();
                 finalSnapshot = collector.snapshot();
