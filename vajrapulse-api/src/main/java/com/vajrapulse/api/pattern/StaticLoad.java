@@ -17,12 +17,8 @@ import java.time.Duration;
 public record StaticLoad(double tps, Duration duration) implements LoadPattern {
     
     public StaticLoad {
-        if (tps <= 0) {
-            throw new IllegalArgumentException("TPS must be positive: " + tps);
-        }
-        if (duration.isNegative() || duration.isZero()) {
-            throw new IllegalArgumentException("Duration must be positive: " + duration);
-        }
+        LoadPatternValidator.validateTps("TPS", tps);
+        LoadPatternValidator.validateDuration("Duration", duration);
     }
     
     @Override

@@ -8,19 +8,15 @@
  * <p>Key components:
  * <ul>
  *   <li>{@link com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern} - Main adaptive pattern</li>
+ *   <li>{@link com.vajrapulse.api.pattern.adaptive.AdaptiveState} - Unified state record</li>
  *   <li>{@link com.vajrapulse.api.pattern.adaptive.AdaptiveConfig} - Configuration record</li>
  *   <li>{@link com.vajrapulse.api.pattern.adaptive.AdaptivePatternListener} - Event notifications</li>
  *   <li>{@link com.vajrapulse.api.pattern.adaptive.RampDecisionPolicy} - Decision logic interface</li>
  *   <li>{@link com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy} - Default implementation</li>
  *   <li>{@link com.vajrapulse.api.pattern.adaptive.MetricsSnapshot} - Metrics snapshot for decisions</li>
- *   <li>{@link com.vajrapulse.api.pattern.adaptive.PhaseStrategy} - Phase-specific strategy interface</li>
- *   <li>{@link com.vajrapulse.api.pattern.adaptive.RampUpStrategy} - RAMP_UP phase strategy</li>
- *   <li>{@link com.vajrapulse.api.pattern.adaptive.RampDownStrategy} - RAMP_DOWN phase strategy</li>
- *   <li>{@link com.vajrapulse.api.pattern.adaptive.SustainStrategy} - SUSTAIN phase strategy</li>
  * </ul>
  * 
  * <p><strong>This module has ZERO external dependencies</strong> to ensure
  * minimal overhead for user applications.
  */
 package com.vajrapulse.api.pattern.adaptive;
-

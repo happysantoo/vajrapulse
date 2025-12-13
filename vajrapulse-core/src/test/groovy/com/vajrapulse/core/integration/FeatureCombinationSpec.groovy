@@ -10,7 +10,6 @@ import com.vajrapulse.api.assertion.Assertions
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.engine.MetricsProviderAdapter
 import com.vajrapulse.core.metrics.AggregatedMetrics
-import com.vajrapulse.core.metrics.ClientMetrics
 import com.vajrapulse.core.metrics.MetricsCollector
 import spock.lang.Specification
 import spock.lang.Timeout
@@ -24,7 +23,7 @@ import java.util.concurrent.atomic.AtomicLong
  * <p>These tests verify that multiple features work together correctly:
  * <ul>
  *   <li>AdaptiveLoadPattern + WarmupCooldownLoadPattern</li>
- *   <li>ClientMetrics + Assertion Framework</li>
+ *   <li>Assertion Framework</li>
  *   <li>Full end-to-end scenarios</li>
  * </ul>
  * 
@@ -69,12 +68,12 @@ class FeatureCombinationSpec extends Specification {
         wrappedPattern.getCurrentPhase(totalDuration) == WarmupCooldownLoadPattern.Phase.COMPLETE
     }
     
-    def "should use ClientMetrics with Assertion Framework"() {
-        given: "a metrics collector with client metrics"
+    def "should use Assertion Framework with execution metrics"() {
+        given: "a metrics collector"
         def metricsCollector = new MetricsCollector()
         
-        and: "a task that records client metrics"
-        def task = new ClientMetricsTask(metricsCollector)
+        and: "a simple task"
+        def task = new SimpleTask()
         
         and: "a simple load pattern"
         def pattern = new StaticLoad(10.0, Duration.ofSeconds(3))
@@ -90,11 +89,7 @@ class FeatureCombinationSpec extends Specification {
         
         def metrics = metricsCollector.snapshot()
         
-        then: "client metrics should be available"
-        metrics.clientMetrics() != null
-        metrics.clientMetrics().activeConnections() >= 0
-        
-        and: "assertions should work with client metrics"
+        then: "assertions should work with execution metrics"
         // Use more lenient assertions that don't require percentiles
         // errorRate expects ratio (0.0-1.0), so 1.0 = 100%
         def errorRateAssertion = Assertions.errorRate(1.0) // 100% max (very generous for test)
@@ -120,8 +115,8 @@ class FeatureCombinationSpec extends Specification {
             Duration.ofMillis(500)   // Cool-down
         )
         
-        and: "a task that records client metrics"
-        def task = new ClientMetricsTask(metricsCollector)
+        and: "a simple task"
+        def task = new SimpleTask()
         
         when: "executing the full scenario"
         def engine = ExecutionEngine.builder()
@@ -136,7 +131,6 @@ class FeatureCombinationSpec extends Specification {
         
         then: "all metrics should be available"
         metrics.totalExecutions() >= 0
-        metrics.clientMetrics() != null
         
         and: "assertions should validate the results"
         // errorRate expects ratio (0.0-1.0), so 1.0 = 100%
@@ -148,10 +142,6 @@ class FeatureCombinationSpec extends Specification {
         def result = assertions.evaluate(metrics)
         // Result may pass or fail depending on actual metrics, but evaluation should work
         result != null
-        
-        and: "client metrics should show activity"
-        metrics.clientMetrics().activeConnections() >= 0
-        metrics.clientMetrics().totalConnections() >= 0
     }
     
     /**
@@ -161,43 +151,6 @@ class FeatureCombinationSpec extends Specification {
     private static class SimpleTask implements Task {
         @Override
         TaskResult execute() throws Exception {
-            Thread.sleep(10) // Simulate work
-            return TaskResult.success()
-        }
-    }
-    
-    /**
-     * Task that records client metrics.
-     */
-    @VirtualThreads
-    private static class ClientMetricsTask implements Task {
-        private final MetricsCollector metricsCollector
-        private final AtomicLong connectionCounter = new AtomicLong(0)
-        
-        ClientMetricsTask(MetricsCollector metricsCollector) {
-            this.metricsCollector = metricsCollector
-        }
-        
-        @Override
-        TaskResult execute() throws Exception {
-            // Simulate connection pool activity
-            long active = connectionCounter.incrementAndGet() % 10
-            long idle = 10 - active
-            
-            def clientMetrics = ClientMetrics.builder()
-                .activeConnections(active)
-                .idleConnections(idle)
-                .waitingConnections(0)
-                .queueDepth(0)
-                .queueWaitTimeNanos(0)
-                .queueOperationCount(0)
-                .connectionTimeouts(0)
-                .requestTimeouts(0)
-                .connectionRefused(0)
-                .build()
-            
-            metricsCollector.recordClientMetrics(clientMetrics)
-            
             Thread.sleep(10) // Simulate work
             return TaskResult.success()
         }

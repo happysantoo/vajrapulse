@@ -5,7 +5,7 @@ import com.vajrapulse.api.pattern.StaticLoad;
 import com.vajrapulse.exporter.otel.OpenTelemetryExporter;
 import com.vajrapulse.exporter.otel.OpenTelemetryExporter.Protocol;
 import com.vajrapulse.api.task.TaskIdentity;
-import com.vajrapulse.worker.pipeline.MetricsPipeline;
+import com.vajrapulse.worker.pipeline.LoadTestRunner;
 
 import java.time.Duration;
 import java.util.Map;
@@ -95,7 +95,7 @@ public final class HttpLoadTestOtelRunner {
         System.out.println("Starting load test with OpenTelemetry export...\n");
 
         // Pipeline automatically closes exporter after final metrics are exported
-        try (MetricsPipeline pipeline = MetricsPipeline.builder()
+        try (LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(otelExporter) // OTLP export
             .withRunId(otelExporter.getRunId()) // Use the same run ID from exporter
             .withPeriodic(Duration.ofSeconds(5)) // Still allows periodic aggregation, exporter flush handles send

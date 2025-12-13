@@ -34,7 +34,11 @@ class AdditionalCoreCoverageSpec extends Specification {
         def collector = MetricsCollector.createWithRunId('rid-static', [0.50d] as double[])
 
         when:
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
 
@@ -54,7 +58,11 @@ class AdditionalCoreCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when:
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.close() // exercise close path
 
         then:

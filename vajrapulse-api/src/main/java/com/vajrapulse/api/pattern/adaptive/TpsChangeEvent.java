@@ -1,13 +1,14 @@
 package com.vajrapulse.api.pattern.adaptive;
 
 /**
- * Event representing a significant TPS change in an adaptive load pattern.
+ * Event representing a TPS change in an adaptive load pattern.
  * 
- * <p>This event is emitted when TPS changes by more than the configured
- * tolerance, or when explicitly set (e.g., during recovery).
+ * <p>This event is emitted when TPS changes, providing information about
+ * the previous and new TPS values, the current phase, and when the change occurred.
  * 
  * @param previousTps the previous TPS value
  * @param newTps the new TPS value
+ * @param phase the current phase when the change occurred
  * @param timestamp when the change occurred (milliseconds since epoch)
  * 
  * @see AdaptivePatternListener
@@ -16,6 +17,7 @@ package com.vajrapulse.api.pattern.adaptive;
 public record TpsChangeEvent(
     double previousTps,
     double newTps,
+    AdaptivePhase phase,
     long timestamp
 ) {
     /**
@@ -27,6 +29,9 @@ public record TpsChangeEvent(
         }
         if (newTps < 0) {
             throw new IllegalArgumentException("New TPS must be non-negative, got: " + newTps);
+        }
+        if (phase == null) {
+            throw new IllegalArgumentException("Phase must not be null");
         }
         if (timestamp < 0) {
             throw new IllegalArgumentException("Timestamp must be non-negative, got: " + timestamp);

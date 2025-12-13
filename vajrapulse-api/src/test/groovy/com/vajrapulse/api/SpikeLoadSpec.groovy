@@ -30,7 +30,7 @@ class SpikeLoadSpec extends Specification {
 
         then:
         def e = thrown(IllegalArgumentException)
-        e.message.contains("spikeDuration must be < spikeInterval")
+        e.message.toLowerCase().contains("spike duration") && e.message.toLowerCase().contains("spike interval")
     }
 
     def "spike load validation rejects negative rates"() {

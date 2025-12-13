@@ -89,12 +89,19 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
             .rampInterval(Duration.ofSeconds(1))
             .maxTps(50.0)
             .sustainDuration(Duration.ofSeconds(2))
-            .errorThreshold(0.01)
+            .minTps(5.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .stableIntervalsRequired(3)
             .metricsProvider(provider)
+            .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.01))
             .build()
         
         when: "creating ExecutionEngine with adaptive pattern"
-        def engine = new ExecutionEngine(task, pattern, metrics)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(pattern)
+                .withMetricsCollector(metrics)
+                .build()
         
         then: "adaptive pattern metrics should be registered"
         def registry = metrics.getRegistry()
@@ -127,8 +134,11 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
             .rampInterval(Duration.ofSeconds(1))
             .maxTps(50.0)
             .sustainDuration(Duration.ofSeconds(2))
-            .errorThreshold(0.01)
+            .minTps(5.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .stableIntervalsRequired(3)
             .metricsProvider(provider)
+            .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.01))
             .build()
         
         def engine = ExecutionEngine.builder()
@@ -223,8 +233,11 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
             .rampInterval(Duration.ofSeconds(1))
             .maxTps(50.0)
             .sustainDuration(Duration.ofSeconds(2))
-            .errorThreshold(0.01)
+            .minTps(5.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .stableIntervalsRequired(3)
             .metricsProvider(provider)
+            .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.01))
             .build()
         
         def engine = ExecutionEngine.builder()
@@ -306,8 +319,11 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
             .rampInterval(Duration.ofSeconds(1))
             .maxTps(50.0)
             .sustainDuration(Duration.ofSeconds(2))
-            .errorThreshold(0.01)
+            .minTps(5.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .stableIntervalsRequired(3)
             .metricsProvider(provider)
+            .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.01))
             .build()
         
         def engine = ExecutionEngine.builder()
@@ -466,8 +482,11 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
             .rampInterval(Duration.ofSeconds(1))
             .maxTps(50.0)
             .sustainDuration(Duration.ofSeconds(1))
-            .errorThreshold(0.01)
+            .minTps(5.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .stableIntervalsRequired(3)
             .metricsProvider(provider)
+            .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.01))
             .build()
         
         when: "checking pattern duration"
@@ -489,8 +508,11 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
             .rampInterval(Duration.ofSeconds(1))
             .maxTps(50.0)
             .sustainDuration(Duration.ofSeconds(1))
-            .errorThreshold(0.01)
+            .minTps(5.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .stableIntervalsRequired(3)
             .metricsProvider(provider)
+            .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.01))
             .build()
         
         when: "querying pattern state"

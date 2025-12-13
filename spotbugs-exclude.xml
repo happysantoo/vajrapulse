@@ -122,4 +122,18 @@
         <Bug pattern="EI_EXPOSE_REP2"/>
         <Class name="com.vajrapulse.core.engine.ShutdownManager$Builder"/>
     </Match>
+    
+    <!-- LoggingAdaptivePatternListener stores Logger - Logger is effectively immutable -->
+    <!-- java.util.logging.Logger is a facade and cannot be mutated by external code -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.api.pattern.adaptive.LoggingAdaptivePatternListener"/>
+    </Match>
+    
+    <!-- LoggingAdaptivePatternListener constructors throw IllegalArgumentException for null validation -->
+    <!-- Class is final, preventing finalizer attacks. Null validation is required for correctness -->
+    <Match>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+        <Class name="com.vajrapulse.api.pattern.adaptive.LoggingAdaptivePatternListener"/>
+    </Match>
 </FindBugsFilter>

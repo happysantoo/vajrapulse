@@ -46,16 +46,14 @@ public interface RampDecisionPolicy {
      * 
      * <p>Typically returns true when:
      * <ul>
-     *   <li>Stable point found (stable intervals count >= required)</li>
-     *   <li>Max TPS reached</li>
-     *   <li>Intermediate stability detected</li>
+     *   <li>Stable intervals count >= required</li>
      * </ul>
      * 
-     * @param metrics current metrics snapshot
-     * @param stability current stability tracking
+     * @param stableIntervalsCount current stable intervals count
+     * @param requiredIntervals required number of stable intervals
      * @return true if should sustain
      */
-    boolean shouldSustain(MetricsSnapshot metrics, AdaptiveStabilityTracking stability);
+    boolean shouldSustain(int stableIntervalsCount, int requiredIntervals);
     
     /**
      * Determines if recovery from minimum TPS is possible.
@@ -74,4 +72,3 @@ public interface RampDecisionPolicy {
      */
     boolean canRecoverFromMinimum(MetricsSnapshot metrics);
 }
-

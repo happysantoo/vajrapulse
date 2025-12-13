@@ -1,6 +1,4 @@
-package com.vajrapulse.api.metrics;
-
-import java.util.Map;
+package com.vajrapulse.api.backpressure;
 
 /**
  * Defines how to handle requests when backpressure is detected.
@@ -40,4 +38,3 @@ public interface BackpressureHandler {
      */
     BackpressureHandlingResult handle(double backpressureLevel, BackpressureContext context);
 }
-

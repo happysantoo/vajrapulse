@@ -23,7 +23,7 @@ import java.util.Map;
  * 
  * <p>Example usage:
  * <pre>{@code
- * MetricsPipeline.builder()
+ * LoadTestRunner.builder()
  *     .addExporter(new JsonReportExporter(Path.of("reports/test-run.json")))
  *     .build()
  *     .run(task, loadPattern);

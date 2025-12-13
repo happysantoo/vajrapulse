@@ -75,11 +75,16 @@ public final class CachedMetricsProvider implements MetricsProvider {
         return getCachedSnapshot().totalExecutions();
     }
     
+    @Override
+    public long getFailureCount() {
+        return getCachedSnapshot().failureCount();
+    }
+    
     /**
      * Gets a cached snapshot, refreshing if expired.
      * 
-     * <p>This method ensures that both getFailureRate() and getTotalExecutions()
-     * use the same cached snapshot, avoiding multiple calls to the delegate.
+     * <p>This method ensures that getFailureRate(), getTotalExecutions(), and
+     * getFailureCount() use the same cached snapshot, avoiding multiple calls to the delegate.
      * 
      * <p><strong>Thread Safety:</strong> This method uses double-check locking with
      * proper memory ordering guarantees:
@@ -111,7 +116,8 @@ public final class CachedMetricsProvider implements MetricsProvider {
                     // Refresh cache - call delegate methods once
                     double failureRate = delegate.getFailureRate();
                     long totalExecutions = delegate.getTotalExecutions();
-                    snapshot = new CachedSnapshot(failureRate, totalExecutions);
+                    long failureCount = delegate.getFailureCount();
+                    snapshot = new CachedSnapshot(failureRate, totalExecutions, failureCount);
                     
                     // Write both values with proper ordering
                     // Write timestamp first (atomic with memory ordering)
@@ -132,6 +138,6 @@ public final class CachedMetricsProvider implements MetricsProvider {
     /**
      * Cached snapshot of metrics.
      */
-    private record CachedSnapshot(double failureRate, long totalExecutions) {}
+    private record CachedSnapshot(double failureRate, long totalExecutions, long failureCount) {}
 }
 

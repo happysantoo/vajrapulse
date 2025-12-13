@@ -88,9 +88,11 @@ public class AdaptiveWithWarmupExample implements TaskLifecycle {
                 .rampDecrement(20.0)                  // Ramp decrement
                 .rampInterval(Duration.ofSeconds(5))  // Ramp interval
                 .maxTps(100.0)                        // Max TPS
+                .minTps(5.0)                          // Min TPS
                 .sustainDuration(Duration.ofSeconds(10)) // Sustain duration
-                .errorThreshold(0.05)                 // Error threshold (5% as ratio)
+                .stableIntervalsRequired(3)           // Require 3 stable intervals
                 .metricsProvider(metricsProvider)
+                .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.05))  // 5% error threshold
                 .build();
             
             // Wrap with warm-up and cool-down

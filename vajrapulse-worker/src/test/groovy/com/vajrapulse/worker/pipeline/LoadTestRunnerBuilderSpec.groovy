@@ -9,11 +9,11 @@ import spock.lang.Specification
 
 import java.time.Duration
 
-class MetricsPipelineBuilderSpec extends Specification {
+class LoadTestRunnerBuilderSpec extends Specification {
 
     def "should throw when withCollector combined with withPercentiles or withSloBuckets"() {
         when:
-        MetricsPipeline.builder()
+        LoadTestRunner.builder()
                 .withCollector(new MetricsCollector())
                 .withPercentiles(0.5d, 0.95d)
                 .build()
@@ -22,7 +22,7 @@ class MetricsPipelineBuilderSpec extends Specification {
         thrown(IllegalStateException)
 
         when:
-        MetricsPipeline.builder()
+        LoadTestRunner.builder()
                 .withCollector(new MetricsCollector())
                 .withSloBuckets(java.time.Duration.ofMillis(10))
                 .build()
@@ -37,7 +37,7 @@ class MetricsPipelineBuilderSpec extends Specification {
         def runId = UUID.randomUUID().toString()
 
         when:
-        def pipeline = MetricsPipeline.builder()
+        def pipeline = LoadTestRunner.builder()
             .withRunId(runId)
             .addExporter(exporter)
             .build()
@@ -52,7 +52,7 @@ class MetricsPipelineBuilderSpec extends Specification {
         def exporter = Mock(MetricsExporter)
 
         when:
-        def pipeline = MetricsPipeline.builder()
+        def pipeline = LoadTestRunner.builder()
             .addExporter(exporter)
             .withImmediateLive(true)
             .build()
@@ -68,7 +68,7 @@ class MetricsPipelineBuilderSpec extends Specification {
         def exporter = Mock(MetricsExporter)
 
         when:
-        def pipeline = MetricsPipeline.builder()
+        def pipeline = LoadTestRunner.builder()
             .withCollector(collector)
             .addExporter(exporter)
             .build()
@@ -87,7 +87,7 @@ class MetricsPipelineBuilderSpec extends Specification {
         }
         def loadPattern = new StaticLoad(10.0, Duration.ofMillis(100))
         def exporter = Mock(MetricsExporter)
-        def pipeline = MetricsPipeline.builder()
+        def pipeline = LoadTestRunner.builder()
             .addExporter(exporter)
             .build()
 

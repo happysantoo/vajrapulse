@@ -12,7 +12,7 @@ import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
 import com.vajrapulse.exporter.report.HtmlReportExporter;
 import com.vajrapulse.exporter.report.JsonReportExporter;
 import com.vajrapulse.exporter.report.CsvReportExporter;
-import com.vajrapulse.worker.pipeline.MetricsPipeline;
+import com.vajrapulse.worker.pipeline.LoadTestRunner;
 
 import java.nio.file.Path;
 import java.time.Duration;
@@ -73,9 +73,11 @@ public final class HttpLoadTestRunner {
                 .rampDecrement(100.0)                   // Decrease 100 TPS per interval when errors occur
                 .rampInterval(Duration.ofSeconds(5))   // Check/adjust every 5 seconds
                 .maxTps(500.0)                         // Max 500 TPS
+                .minTps(10.0)                          // Min TPS
                 .sustainDuration(Duration.ofSeconds(10)) // Sustain at stable point for 10 seconds
-                .errorThreshold(0.01)                   // 1% error rate threshold
+                .stableIntervalsRequired(3)            // Require 3 stable intervals
                 .metricsProvider(metricsProvider)
+                .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.01))  // 1% error rate threshold
                 .build();
         } else {
             loadPattern = switch (patternType) {
@@ -134,7 +136,7 @@ public final class HttpLoadTestRunner {
         
         // Pipeline automatically manages lifecycle
         // Add multiple exporters: console for live updates, reports for analysis
-        var pipelineBuilder = MetricsPipeline.builder()
+        var pipelineBuilder = LoadTestRunner.builder()
             .addExporter(new ConsoleMetricsExporter());
         
         // For adaptive pattern, pass registry to report exporters for phase visualization
@@ -152,7 +154,7 @@ public final class HttpLoadTestRunner {
                 .addExporter(new CsvReportExporter(csvReport));
         }
         
-        try (MetricsPipeline pipeline = pipelineBuilder
+        try (LoadTestRunner pipeline = pipelineBuilder
             .withPeriodic(Duration.ofSeconds(5))
             .withPercentiles(0.1,0.2,0.5,0.75,0.9,0.95,0.99)
             .build()) {

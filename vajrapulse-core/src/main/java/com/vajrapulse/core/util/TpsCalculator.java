@@ -13,11 +13,6 @@ package com.vajrapulse.core.util;
  */
 public final class TpsCalculator {
     
-    /**
-     * Milliseconds per second constant for TPS calculations.
-     */
-    private static final double MILLISECONDS_PER_SECOND = 1000.0;
-    
     // Private constructor to prevent instantiation
     private TpsCalculator() {
         throw new AssertionError("TpsCalculator should not be instantiated");
@@ -42,7 +37,7 @@ public final class TpsCalculator {
         if (elapsedMillis <= 0) {
             return 0.0;
         }
-        return (executionCount * MILLISECONDS_PER_SECOND) / elapsedMillis;
+        return (executionCount * TimeConstants.MILLISECONDS_PER_SECOND) / elapsedMillis;
     }
     
     /**
@@ -78,7 +73,7 @@ public final class TpsCalculator {
         if (targetTps <= 0 || elapsedMillis <= 0) {
             return 0;
         }
-        return (long) ((targetTps * elapsedMillis) / MILLISECONDS_PER_SECOND);
+        return (long) ((targetTps * elapsedMillis) / TimeConstants.MILLISECONDS_PER_SECOND);
     }
 }
 

@@ -270,7 +270,11 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         MetricsCollector collector = MetricsCollector.createWithRunId("static-${threadStrategy}", [0.50d, 0.95d, 0.99d] as double[])
         
         when: "running the engine"
-        ExecutionEngine engine = new ExecutionEngine(task, load, collector)
+        ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
         
@@ -298,7 +302,11 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         MetricsCollector collector = MetricsCollector.createWithRunId("rampup-${patternName}", [0.50d, 0.95d] as double[])
         
         when: "running the engine"
-        ExecutionEngine engine = new ExecutionEngine(task, load, collector)
+        ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
         
@@ -323,7 +331,11 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         MetricsCollector collector = MetricsCollector.createWithRunId("rampup-sustain", [0.50d, 0.95d] as double[])
         
         when: "running the engine"
-        ExecutionEngine engine = new ExecutionEngine(task, load, collector)
+        ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
         
@@ -342,7 +354,11 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         MetricsCollector collector = MetricsCollector.createWithRunId("step-${stepCount}", [0.50d, 0.95d] as double[])
         
         when: "running the engine"
-        ExecutionEngine engine = new ExecutionEngine(task, load, collector)
+        ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
         
@@ -363,7 +379,11 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         MetricsCollector collector = MetricsCollector.createWithRunId("sine", [0.50d, 0.95d] as double[])
         
         when: "running the engine"
-        ExecutionEngine engine = new ExecutionEngine(task, load, collector)
+        ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
         
@@ -380,7 +400,11 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         MetricsCollector collector = MetricsCollector.createWithRunId("spike", [0.50d, 0.95d] as double[])
         
         when: "running the engine"
-        ExecutionEngine engine = new ExecutionEngine(task, load, collector)
+        ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
         
@@ -409,7 +433,11 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         MetricsCollector collector = MetricsCollector.createWithRunId("queue-test", [0.50d] as double[])
         
         when: "running the engine"
-        ExecutionEngine engine = new ExecutionEngine(slowTask, load, collector)
+        ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(slowTask)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
         
@@ -427,7 +455,11 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         MetricsCollector collector = MetricsCollector.createWithRunId("mixed", [0.50d, 0.95d, 0.99d] as double[])
         
         when: "running the engine"
-        ExecutionEngine engine = new ExecutionEngine(task, load, collector)
+        ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
         
@@ -447,7 +479,11 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         Task task = new VirtualThreadSuccessTask()
         LoadPattern load = new ShortStaticLoad(50.0, Duration.ofMillis(1000))
         MetricsCollector collector = MetricsCollector.createWithRunId("shutdown", [0.50d] as double[])
-        ExecutionEngine engine = new ExecutionEngine(task, load, collector)
+        ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         
         when: "stopping the engine early"
         Thread.start {
@@ -469,7 +505,11 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
         MetricsCollector collector = MetricsCollector.createWithRunId("tps-test", [0.50d] as double[])
         
         when: "running the engine"
-        ExecutionEngine engine = new ExecutionEngine(task, load, collector)
+        ExecutionEngine engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
         

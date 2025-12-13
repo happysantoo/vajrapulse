@@ -384,7 +384,7 @@ class OpenTelemetryExporterSpec extends Specification {
             failurePercentiles,
             1000L,  // 1 second elapsed
             0L,     // queue size
-            [:] as Map<Double, Double>, new com.vajrapulse.core.metrics.ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>
         )
         
         when: "exporting metrics with percentiles"
@@ -409,7 +409,7 @@ class OpenTelemetryExporterSpec extends Specification {
             [:] as Map<Double, Double>,
             1000L, // 1 second elapsed
             0L,     // queue size
-            [:] as Map<Double, Double>, new com.vajrapulse.core.metrics.ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>
         )
         when: "exporting metrics"
         exporter.export("TPS Test", metrics)
@@ -468,7 +468,7 @@ class OpenTelemetryExporterSpec extends Specification {
             failurePercentiles,
             1000L,  // 1 second elapsed
             0L,     // queue size
-            [:] as Map<Double, Double>, new com.vajrapulse.core.metrics.ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>
         )
     }
 }

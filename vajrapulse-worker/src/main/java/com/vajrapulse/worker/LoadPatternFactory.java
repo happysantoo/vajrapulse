@@ -150,7 +150,7 @@ public final class LoadPatternFactory {
                     .rampInterval(rampInterval)
                     .maxTps(maxTps)
                     .sustainDuration(sustainDuration)
-                    .errorThreshold(adaptiveErrorThreshold)
+                    .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(adaptiveErrorThreshold))
                     .metricsProvider(provider)
                     .build();
             }

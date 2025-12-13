@@ -5,6 +5,7 @@ import com.vajrapulse.api.pattern.adaptive.AdaptivePatternListener
 import com.vajrapulse.api.pattern.adaptive.PhaseTransitionEvent
 import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
 import com.vajrapulse.api.pattern.adaptive.AdaptiveConfig
+import com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy
 import java.time.Duration
 
 /**
@@ -81,18 +82,28 @@ class AdaptiveLoadPatternBuilderSpec extends Specification {
             .maxTps(10000.0)
             .minTps(5.0)
             .sustainDuration(Duration.ofMinutes(5))
-            .errorThreshold(0.02)
-            .backpressureRampUpThreshold(0.2)
-            .backpressureRampDownThreshold(0.8)
             .stableIntervalsRequired(5)
-            .tpsTolerance(100.0)
-            .recoveryTpsRatio(0.3)
             .metricsProvider(provider)
             .build()
         
         then:
         pattern != null
         pattern.getCurrentTps() == 200.0
+    }
+    
+    def "should build pattern with decision policy"() {
+        given:
+        def provider = new MockMetricsProvider()
+        def policy = new DefaultRampDecisionPolicy(0.02, 0.2, 0.8)
+        
+        when:
+        def pattern = com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern.builder()
+            .metricsProvider(provider)
+            .decisionPolicy(policy)
+            .build()
+        
+        then:
+        pattern != null
     }
     
     def "should build pattern with backpressure provider"() {
@@ -189,4 +200,3 @@ class AdaptiveLoadPatternBuilderSpec extends Specification {
         e.message.contains("Initial TPS must be positive")
     }
 }
-

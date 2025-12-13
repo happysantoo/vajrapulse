@@ -13,9 +13,9 @@ import spock.lang.Specification
 import java.time.Duration
 
 /**
- * Tests for MetricsPipeline.getMetricsProvider() functionality.
+ * Tests for LoadTestRunner.getMetricsProvider() functionality.
  */
-class MetricsPipelineMetricsProviderSpec extends Specification {
+class LoadTestRunnerMetricsProviderSpec extends Specification {
 
     @VirtualThreads
     static class SimpleTask implements Task {
@@ -33,7 +33,7 @@ class MetricsPipelineMetricsProviderSpec extends Specification {
 
     def "should return MetricsProvider from pipeline"() {
         given: "a metrics pipeline"
-        def pipeline = MetricsPipeline.builder()
+        def pipeline = LoadTestRunner.builder()
             .addExporter(new ConsoleMetricsExporter())
             .build()
 
@@ -51,7 +51,7 @@ class MetricsPipelineMetricsProviderSpec extends Specification {
     def "should return MetricsProvider that reflects current metrics"() {
         given: "a metrics pipeline with a task"
         def task = new SimpleTask()
-        def pipeline = MetricsPipeline.builder()
+        def pipeline = LoadTestRunner.builder()
             .addExporter(new ConsoleMetricsExporter())
             .build()
 
@@ -78,7 +78,7 @@ class MetricsPipelineMetricsProviderSpec extends Specification {
 
     def "should return same MetricsProvider instance behavior across calls"() {
         given: "a metrics pipeline"
-        def pipeline = MetricsPipeline.builder()
+        def pipeline = LoadTestRunner.builder()
             .addExporter(new ConsoleMetricsExporter())
             .build()
 
@@ -99,7 +99,7 @@ class MetricsPipelineMetricsProviderSpec extends Specification {
 
     def "should work with AdaptiveLoadPattern"() {
         given: "a metrics pipeline"
-        def pipeline = MetricsPipeline.builder()
+        def pipeline = LoadTestRunner.builder()
             .addExporter(new ConsoleMetricsExporter())
             .build()
 
@@ -109,16 +109,16 @@ class MetricsPipelineMetricsProviderSpec extends Specification {
 
         when: "getting metrics provider and creating adaptive pattern"
         def provider = pipeline.getMetricsProvider()
-        def adaptivePattern = new AdaptiveLoadPattern(
-            5.0,                          // initialTps
-            5.0,                          // rampIncrement
-            5.0,                          // rampDecrement
-            Duration.ofSeconds(1),        // rampInterval
-            50.0,                         // maxTps
-            Duration.ofSeconds(2),        // sustainDuration
-            0.05,                         // errorThreshold (5%)
-            provider                      // MetricsProvider from pipeline
-        )
+        def adaptivePattern = AdaptiveLoadPattern.builder()
+            .initialTps(5.0)
+            .rampIncrement(5.0)
+            .rampDecrement(5.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(50.0)
+            .sustainDuration(Duration.ofSeconds(2))
+            .metricsProvider(provider)
+            .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.05))  // 5% error threshold
+            .build()
 
         and: "running pipeline with adaptive pattern"
         def result = pipeline.run(task, adaptivePattern)
@@ -140,7 +140,7 @@ class MetricsPipelineMetricsProviderSpec extends Specification {
         def customCollector = new MetricsCollector()
 
         and: "a pipeline using the custom collector"
-        def pipeline = MetricsPipeline.builder()
+        def pipeline = LoadTestRunner.builder()
             .withCollector(customCollector)
             .addExporter(new ConsoleMetricsExporter())
             .build()
@@ -159,7 +159,7 @@ class MetricsPipelineMetricsProviderSpec extends Specification {
 
     def "should provide real-time metrics updates"() {
         given: "a metrics pipeline"
-        def pipeline = MetricsPipeline.builder()
+        def pipeline = LoadTestRunner.builder()
             .addExporter(new ConsoleMetricsExporter())
             .build()
 

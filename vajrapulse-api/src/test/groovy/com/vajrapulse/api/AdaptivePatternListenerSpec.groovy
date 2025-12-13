@@ -59,21 +59,31 @@ class AdaptivePatternListenerSpec extends Specification {
     
     def "should create valid TpsChangeEvent"() {
         when:
-        def event = new TpsChangeEvent(100.0, 150.0, 1000L)
+        def event = new TpsChangeEvent(100.0, 150.0, AdaptivePhase.RAMP_UP, 1000L)
         
         then:
         event.previousTps() == 100.0
         event.newTps() == 150.0
+        event.phase() == AdaptivePhase.RAMP_UP
         event.timestamp() == 1000L
     }
     
     def "should reject negative TPS in TpsChangeEvent"() {
         when:
-        new TpsChangeEvent(-1.0, 150.0, 1000L)
+        new TpsChangeEvent(-1.0, 150.0, AdaptivePhase.RAMP_UP, 1000L)
         
         then:
         def e = thrown(IllegalArgumentException)
         e.message.contains("Previous TPS must be non-negative")
+    }
+    
+    def "should reject null phase in TpsChangeEvent"() {
+        when:
+        new TpsChangeEvent(100.0, 150.0, null, 1000L)
+        
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains("Phase must not be null")
     }
     
     def "should create valid StabilityDetectedEvent"() {
@@ -122,7 +132,7 @@ class AdaptivePatternListenerSpec extends Specification {
             100.0,
             1000L
         )
-        def event2 = new TpsChangeEvent(100.0, 150.0, 1000L)
+        def event2 = new TpsChangeEvent(100.0, 150.0, AdaptivePhase.RAMP_UP, 1000L)
         def event3 = new StabilityDetectedEvent(200.0, 1000L)
         def event4 = new RecoveryEvent(300.0, 150.0, 1000L)
         

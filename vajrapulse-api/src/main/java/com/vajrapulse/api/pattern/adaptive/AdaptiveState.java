@@ -1,176 +1,75 @@
 package com.vajrapulse.api.pattern.adaptive;
 
 /**
- * Complete state of an adaptive load pattern.
+ * Unified state for adaptive load pattern.
  * 
- * <p>This record composes core state with optional tracking
- * for stability and recovery.
+ * <p>All state is contained in a single record for simplicity.
+ * This replaces the previous nested state model (AdaptiveState,
+ * AdaptiveCoreState, AdaptiveStabilityTracking, AdaptiveRecoveryTracking).
  * 
- * @param core the core state (always present)
- * @param stability stability tracking (null if not tracking)
- * @param recovery recovery tracking (null if not in recovery)
+ * @param phase the current phase
+ * @param currentTps the current TPS value
+ * @param lastAdjustmentTime timestamp when TPS was last adjusted (millis)
+ * @param phaseStartTime timestamp when current phase started (millis)
+ * @param stableTps the found stable TPS (-1 if not found)
+ * @param stableIntervalsCount count of consecutive stable intervals
+ * @param lastKnownGoodTps the highest TPS achieved before problems
+ * @param inRecovery true if at minimum TPS waiting for recovery
+ * @param phaseTransitionCount total number of phase transitions
  * 
  * @see AdaptiveLoadPattern
  * @since 0.9.9
  */
 public record AdaptiveState(
-    AdaptiveCoreState core,
-    AdaptiveStabilityTracking stability,
-    AdaptiveRecoveryTracking recovery
+    AdaptivePhase phase,
+    double currentTps,
+    long lastAdjustmentTime,
+    long phaseStartTime,
+    double stableTps,
+    int stableIntervalsCount,
+    double lastKnownGoodTps,
+    boolean inRecovery,
+    long phaseTransitionCount
 ) {
     /**
      * Creates an adaptive state with validation.
      */
     public AdaptiveState {
-        if (core == null) {
-            throw new IllegalArgumentException("Core state must not be null");
+        if (phase == null) {
+            throw new IllegalArgumentException("Phase must not be null");
+        }
+        if (currentTps < 0) {
+            throw new IllegalArgumentException("Current TPS must be non-negative, got: " + currentTps);
+        }
+        if (stableTps < -1) {
+            throw new IllegalArgumentException("Stable TPS must be >= -1, got: " + stableTps);
+        }
+        if (stableIntervalsCount < 0) {
+            throw new IllegalArgumentException("Stable intervals count must be non-negative, got: " + stableIntervalsCount);
+        }
+        if (lastKnownGoodTps < 0) {
+            throw new IllegalArgumentException("Last known good TPS must be non-negative, got: " + lastKnownGoodTps);
+        }
+        if (phaseTransitionCount < 0) {
+            throw new IllegalArgumentException("Phase transition count must be non-negative, got: " + phaseTransitionCount);
         }
     }
     
-    // Helper methods for backward compatibility and easier access
     /**
-     * Gets the current phase.
+     * Checks if a stable TPS has been found.
      * 
-     * @return current phase
+     * @return true if stable TPS found
      */
-    public AdaptivePhase phase() {
-        return core.phase();
+    public boolean hasStableTps() {
+        return stableTps >= 0;
     }
     
     /**
-     * Gets the current TPS.
+     * Checks if currently tracking stability.
      * 
-     * @return current TPS
+     * @return true if tracking stability (stableIntervalsCount > 0)
      */
-    public double currentTps() {
-        return core.currentTps();
-    }
-    
-    /**
-     * Gets the last adjustment time.
-     * 
-     * @return last adjustment time
-     */
-    public long lastAdjustmentTime() {
-        return core.lastAdjustmentTime();
-    }
-    
-    /**
-     * Gets the phase start time.
-     * 
-     * @return phase start time
-     */
-    public long phaseStartTime() {
-        return core.phaseStartTime();
-    }
-    
-    /**
-     * Gets the stable TPS if found.
-     * 
-     * @return stable TPS or -1 if not found
-     */
-    public double stableTps() {
-        return stability != null && stability.hasStableTps() ? stability.stableTps() : -1;
-    }
-    
-    /**
-     * Gets the last known good TPS.
-     * 
-     * @return last known good TPS or 0 if not in recovery
-     */
-    public double lastKnownGoodTps() {
-        return recovery != null ? recovery.lastKnownGoodTps() : 0;
-    }
-    
-    /**
-     * Gets the stable intervals count.
-     * 
-     * @return stable intervals count
-     */
-    public int stableIntervalsCount() {
-        return stability != null ? stability.stableIntervalsCount() : 0;
-    }
-    
-    /**
-     * Gets the stable TPS candidate if tracking.
-     * 
-     * @return candidate TPS or -1 if not tracking
-     */
-    public double stableTpsCandidate() {
-        return stability != null && stability.isTracking() ? stability.candidateTps() : -1;
-    }
-    
-    /**
-     * Gets the stability start time if tracking.
-     * 
-     * @return stability start time or -1 if not tracking
-     */
-    public long stabilityStartTime() {
-        return stability != null && stability.isTracking() ? stability.candidateStartTime() : -1;
-    }
-    
-    /**
-     * Gets the ramp down attempts count.
-     * 
-     * @return ramp down attempts
-     */
-    public int rampDownAttempts() {
-        return core.rampDownAttempts();
-    }
-    
-    /**
-     * Gets the phase transition count.
-     * 
-     * @return phase transition count
-     */
-    public long phaseTransitionCount() {
-        return core.phaseTransitionCount();
-    }
-    
-    // Builder-style methods for state updates
-    /**
-     * Creates a new state with updated core state.
-     * 
-     * @param newCore new core state
-     * @return new state with updated core
-     */
-    public AdaptiveState withCore(AdaptiveCoreState newCore) {
-        return new AdaptiveState(newCore, stability, recovery);
-    }
-    
-    /**
-     * Creates a new state with updated stability tracking.
-     * 
-     * @param newStability new stability tracking
-     * @return new state with updated stability
-     */
-    public AdaptiveState withStability(AdaptiveStabilityTracking newStability) {
-        return new AdaptiveState(core, newStability, recovery);
-    }
-    
-    /**
-     * Creates a new state with updated recovery tracking.
-     * 
-     * @param newRecovery new recovery tracking
-     * @return new state with updated recovery
-     */
-    public AdaptiveState withRecovery(AdaptiveRecoveryTracking newRecovery) {
-        return new AdaptiveState(core, stability, newRecovery);
-    }
-    
-    /**
-     * Creates a new state with updated last known good TPS.
-     * 
-     * <p>The TPS is only updated if it's higher than the current value.
-     * 
-     * @param tps the TPS to set as last known good (only if higher than current)
-     * @return new state with updated lastKnownGoodTps
-     */
-    public AdaptiveState withLastKnownGoodTps(double tps) {
-        AdaptiveRecoveryTracking newRecovery = recovery != null 
-            ? new AdaptiveRecoveryTracking(Math.max(recovery.lastKnownGoodTps(), tps), recovery.recoveryStartTime())
-            : new AdaptiveRecoveryTracking(tps, -1);
-        return new AdaptiveState(core, stability, newRecovery);
+    public boolean isTrackingStability() {
+        return stableIntervalsCount > 0;
     }
 }
-

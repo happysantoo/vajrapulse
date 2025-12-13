@@ -7,7 +7,7 @@ import com.vajrapulse.api.pattern.LoadPattern
 import com.vajrapulse.core.metrics.AggregatedMetrics
 import com.vajrapulse.core.metrics.MetricsExporter
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter
-import com.vajrapulse.worker.pipeline.MetricsPipeline
+import com.vajrapulse.worker.pipeline.LoadTestRunner
 import spock.lang.Specification
 import spock.lang.Timeout
 
@@ -115,7 +115,7 @@ class ExporterIntegrationSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(30.0, Duration.ofMillis(150))
         
         and: "a pipeline with console exporter"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(consoleExporter)
             .build()
         
@@ -147,7 +147,7 @@ class ExporterIntegrationSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(20.0, Duration.ofMillis(100))
         
         and: "a pipeline with custom percentiles"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .withPercentiles(customPercentiles)
             .addExporter(consoleExporter)
             .build()
@@ -174,7 +174,7 @@ class ExporterIntegrationSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(40.0, Duration.ofMillis(150))
         
         and: "a pipeline with console exporter"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(consoleExporter)
             .build()
         
@@ -203,7 +203,7 @@ class ExporterIntegrationSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(25.0, Duration.ofMillis(100))
         
         and: "a pipeline with all exporters"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(exporter1)
             .addExporter(exporter2)
             .addExporter(exporter3)
@@ -241,7 +241,7 @@ class ExporterIntegrationSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(20.0, Duration.ofMillis(100))
         
         and: "a pipeline with both exporters"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(failingExporter)
             .addExporter(workingExporter)
             .build()
@@ -265,7 +265,7 @@ class ExporterIntegrationSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(50.0, Duration.ofMillis(300))
         
         and: "a pipeline with periodic reporting"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(exporter)
             .withPeriodic(Duration.ofMillis(50))
             .build()
@@ -293,7 +293,7 @@ class ExporterIntegrationSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(30.0, Duration.ofMillis(200))
         
         and: "a pipeline with immediate live reporting"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(exporter)
             .withPeriodic(Duration.ofMillis(50))
             .withImmediateLive(true)
@@ -332,7 +332,7 @@ class ExporterIntegrationSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(80.0, Duration.ofMillis(150))
         
         and: "a pipeline with exporter"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(exporter)
             .build()
         
@@ -356,7 +356,7 @@ class ExporterIntegrationSpec extends Specification {
         
         and: "a pipeline with explicit runId"
         String testRunId = "test-run-${System.currentTimeMillis()}"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .withRunId(testRunId)
             .addExporter(exporter)
             .build()

@@ -1,4 +1,4 @@
-package com.vajrapulse.api.metrics;
+package com.vajrapulse.api.backpressure;
 
 /**
  * Provides backpressure signals for adaptive load patterns.
@@ -52,4 +52,3 @@ public interface BackpressureProvider {
         return null;
     }
 }
-

@@ -1,4 +1,4 @@
-package com.vajrapulse.api.metrics;
+package com.vajrapulse.api.backpressure;
 
 import java.util.Map;
 
@@ -50,7 +50,6 @@ public record BackpressureContext(
             0L,
             errorRate,
             Map.of() // Already immutable
-        );
+    );
     }
 }
-

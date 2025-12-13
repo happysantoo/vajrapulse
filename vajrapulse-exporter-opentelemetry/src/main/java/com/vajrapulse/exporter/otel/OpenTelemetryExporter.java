@@ -42,7 +42,7 @@ import java.util.concurrent.TimeUnit;
  *     ))
  *     .build();
  * 
- * MetricsPipeline.builder()
+ * LoadTestRunner.builder()
  *     .addExporter(exporter)
  *     .withPeriodic(Duration.ofSeconds(10))
  *     .build()

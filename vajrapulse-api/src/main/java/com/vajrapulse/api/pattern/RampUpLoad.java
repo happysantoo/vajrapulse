@@ -17,12 +17,8 @@ import java.time.Duration;
 public record RampUpLoad(double maxTps, Duration rampDuration) implements LoadPattern {
     
     public RampUpLoad {
-        if (maxTps <= 0) {
-            throw new IllegalArgumentException("Max TPS must be positive: " + maxTps);
-        }
-        if (rampDuration.isNegative() || rampDuration.isZero()) {
-            throw new IllegalArgumentException("Ramp duration must be positive: " + rampDuration);
-        }
+        LoadPatternValidator.validateTps("Max TPS", maxTps);
+        LoadPatternValidator.validateDuration("Ramp duration", rampDuration);
     }
     
     @Override

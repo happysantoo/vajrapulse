@@ -38,7 +38,11 @@ class ExecutionEngineSpec extends Specification {
         def collector = MetricsCollector.createWithRunId("run-123", [0.50d, 0.95d] as double[])
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
 
@@ -61,7 +65,11 @@ class ExecutionEngineSpec extends Specification {
         def collector = new MetricsCollector() // no run id
 
         when:
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
 
         then:
@@ -78,7 +86,11 @@ class ExecutionEngineSpec extends Specification {
         }
         def load = new ShortStaticLoad(100.0, Duration.ofMillis(1000)) // long enough to stop early
         def collector = MetricsCollector.createWith([0.50d] as double[])
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
 
         when: "invoke stop after brief delay"
         Thread.start { sleep 100; engine.stop() }
@@ -110,7 +122,13 @@ class ExecutionEngineSpec extends Specification {
         def collector = MetricsCollector.createWithRunId("cfg-test", [0.50d] as double[])
 
         when: "creating engine with config"
-        def engine = new ExecutionEngine(task, load, collector, "cfg-test", customConfig)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withRunId("cfg-test")
+                .withConfig(customConfig)
+                .build()
 
         then: "engine created successfully with config applied"
         engine.runId == "cfg-test"
@@ -137,7 +155,13 @@ class ExecutionEngineSpec extends Specification {
         def collector = MetricsCollector.createWithRunId("force-test", [0.50d] as double[])
 
         when: "creating engine with config"
-        def engine = new ExecutionEngine(task, load, collector, "force-test", customConfig)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withRunId("force-test")
+                .withConfig(customConfig)
+                .build()
 
         then: "engine created with config applied"
         engine.config.execution().forceTimeout() == Duration.ofSeconds(15)
@@ -163,7 +187,13 @@ class ExecutionEngineSpec extends Specification {
         def collector = MetricsCollector.createWithRunId("virtual-test", [0.50d] as double[])
 
         when: "creating and running engine"
-        def engine = new ExecutionEngine(task, load, collector, "virtual-test", customConfig)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withRunId("virtual-test")
+                .withConfig(customConfig)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
 
@@ -192,7 +222,13 @@ class ExecutionEngineSpec extends Specification {
         def collector = MetricsCollector.createWithRunId("platform-test", [0.50d] as double[])
 
         when: "creating and running engine"
-        def engine = new ExecutionEngine(task, load, collector, "platform-test", customConfig)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withRunId("platform-test")
+                .withConfig(customConfig)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
 
@@ -222,7 +258,13 @@ class ExecutionEngineSpec extends Specification {
         def collector = MetricsCollector.createWithRunId("auto-test", [0.50d] as double[])
 
         when: "creating and running engine"
-        def engine = new ExecutionEngine(task, load, collector, "auto-test", customConfig)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withRunId("auto-test")
+                .withConfig(customConfig)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
 
@@ -239,7 +281,11 @@ class ExecutionEngineSpec extends Specification {
         def registry = collector.getRegistry()
 
         when: "creating and running engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         engine.close()
 
@@ -261,7 +307,11 @@ class ExecutionEngineSpec extends Specification {
         def registry = collector.getRegistry()
 
         when: "creating and running engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         engine.close()
 
@@ -282,7 +332,11 @@ class ExecutionEngineSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running engine that fails in init"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         try {
             engine.run()
         } catch (Exception e) {
@@ -294,109 +348,4 @@ class ExecutionEngineSpec extends Specification {
         noExceptionThrown()
     }
     
-    def "should support backpressure handler in builder"() {
-        given: "a task, load pattern, and backpressure handler"
-        Task task = new Task() {
-            @Override TaskResult execute() { return TaskResult.success() }
-            @Override void setup() {}
-            @Override void cleanup() {}
-        }
-        def load = new ShortStaticLoad(10.0, Duration.ofMillis(100))
-        def collector = new MetricsCollector()
-        def handler = com.vajrapulse.core.metrics.BackpressureHandlers.DROP
-        
-        when: "building engine with backpressure handler"
-        def engine = ExecutionEngine.builder()
-            .withTask(task)
-            .withLoadPattern(load)
-            .withMetricsCollector(collector)
-            .withBackpressureHandler(handler)
-            .withBackpressureThreshold(0.7)
-            .build()
-        
-        then: "engine should be created successfully"
-        engine != null
-        engine.runId != null
-        
-        cleanup:
-        engine?.close()
-        collector?.close()
-    }
-    
-    def "should support backpressure threshold configuration"() {
-        given: "a task and load pattern"
-        Task task = new Task() {
-            @Override TaskResult execute() { return TaskResult.success() }
-            @Override void setup() {}
-            @Override void cleanup() {}
-        }
-        def load = new ShortStaticLoad(10.0, Duration.ofMillis(100))
-        def collector = new MetricsCollector()
-        
-        when: "building engine with custom threshold"
-        def engine = ExecutionEngine.builder()
-            .withTask(task)
-            .withLoadPattern(load)
-            .withMetricsCollector(collector)
-            .withBackpressureThreshold(0.5)
-            .build()
-        
-        then: "engine should be created successfully"
-        engine != null
-        
-        cleanup:
-        engine?.close()
-        collector?.close()
-    }
-    
-    def "should accept requests when backpressure is below threshold"() {
-        given: "a task, load pattern, and backpressure handler"
-        Task task = new Task() {
-            @Override TaskResult execute() { return TaskResult.success() }
-            @Override void setup() {}
-            @Override void cleanup() {}
-        }
-        def load = new ShortStaticLoad(50.0, Duration.ofMillis(200))
-        def collector = new MetricsCollector()
-        def handler = Mock(com.vajrapulse.api.metrics.BackpressureHandler)
-        
-        when: "running engine with backpressure handler but low backpressure"
-        def engine = ExecutionEngine.builder()
-            .withTask(task)
-            .withLoadPattern(load)
-            .withMetricsCollector(collector)
-            .withBackpressureHandler(handler)
-            .withBackpressureThreshold(0.9) // High threshold
-            .build()
-        engine.run()
-        def snapshot = collector.snapshot()
-        
-        then: "handler should not be called (backpressure is 0.0 for non-adaptive patterns)"
-        snapshot.totalExecutions() > 0
-        0 * handler.handle(_, _, _)
-    }
-    
-    def "should throw exception when backpressure threshold is invalid"() {
-        when: "building engine with invalid threshold"
-        ExecutionEngine.builder()
-            .withTask(Mock(Task))
-            .withLoadPattern(Mock(LoadPattern))
-            .withMetricsCollector(new MetricsCollector())
-            .withBackpressureThreshold(-0.1)
-            .build()
-        
-        then: "should throw IllegalArgumentException"
-        thrown(IllegalArgumentException)
-        
-        when: "building engine with threshold > 1.0"
-        ExecutionEngine.builder()
-            .withTask(Mock(Task))
-            .withLoadPattern(Mock(LoadPattern))
-            .withMetricsCollector(new MetricsCollector())
-            .withBackpressureThreshold(1.1)
-            .build()
-        
-        then: "should throw IllegalArgumentException"
-        thrown(IllegalArgumentException)
-    }
 }

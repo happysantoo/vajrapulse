@@ -2,7 +2,7 @@ package com.vajrapulse.test;
 
 import com.vajrapulse.api.*;
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
-import com.vajrapulse.worker.pipeline.MetricsPipeline;
+import com.vajrapulse.worker.pipeline.LoadTestRunner;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,7 +57,7 @@ public class MixedResultsTest implements Task {
         Task task = new MixedResultsTest();
         LoadPattern loadPattern = new StaticLoad(40.0, Duration.ofSeconds(10));
         
-        try (MetricsPipeline pipeline = MetricsPipeline.builder()
+        try (LoadTestRunner pipeline = LoadTestRunner.builder()
                 .addExporter(new ConsoleMetricsExporter())
                 .withPeriodic(Duration.ofSeconds(2))
                 .build()) {

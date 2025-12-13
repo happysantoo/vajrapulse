@@ -26,7 +26,11 @@ class PerformanceHarnessSpec extends Specification {
         def collector = MetricsCollector.createWithRunId("perf-test", new double[]{0.5})
 
         when:
-        try (def engine = new ExecutionEngine(new NoOpTask(), pattern, collector)) {
+        try (def engine = ExecutionEngine.builder()
+                .withTask(new NoOpTask())
+                .withLoadPattern(pattern)
+                .withMetricsCollector(collector)
+                .build()) {
             engine.run()
         }
         def snapshot = collector.snapshot()

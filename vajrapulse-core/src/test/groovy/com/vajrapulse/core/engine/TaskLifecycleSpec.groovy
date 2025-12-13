@@ -47,7 +47,11 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         engine.close()
 
@@ -76,7 +80,11 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when:
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         engine.close()
 
@@ -111,7 +119,11 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
 
         then: "init exception is propagated and teardown not called"
@@ -139,7 +151,11 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         engine.close()
 
@@ -173,7 +189,11 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         engine.close()
 
@@ -210,7 +230,11 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         engine.close()
 
@@ -238,7 +262,11 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .build()
         engine.run()
         engine.close()
 

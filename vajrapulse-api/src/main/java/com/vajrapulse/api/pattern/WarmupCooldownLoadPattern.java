@@ -76,12 +76,8 @@ public final class WarmupCooldownLoadPattern implements LoadPattern {
         if (basePattern == null) {
             throw new IllegalArgumentException("Base pattern must not be null");
         }
-        if (warmupDuration == null || warmupDuration.isNegative()) {
-            throw new IllegalArgumentException("Warm-up duration must not be null or negative: " + warmupDuration);
-        }
-        if (cooldownDuration == null || cooldownDuration.isNegative()) {
-            throw new IllegalArgumentException("Cool-down duration must not be null or negative: " + cooldownDuration);
-        }
+        LoadPatternValidator.validateDurationNonNegative("Warm-up duration", warmupDuration);
+        LoadPatternValidator.validateDurationNonNegative("Cool-down duration", cooldownDuration);
         this.basePattern = basePattern;
         this.warmupDuration = warmupDuration;
         this.cooldownDuration = cooldownDuration;

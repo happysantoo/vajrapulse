@@ -31,12 +31,8 @@ public record StepLoad(List<Step> steps) implements LoadPattern {
         // This ensures the record's internal state cannot be changed after construction
         steps = List.copyOf(steps);
         for (Step s : steps) {
-            if (s.rate() < 0.0) {
-                throw new IllegalArgumentException("step rate must be >= 0");
-            }
-            if (s.duration().isNegative() || s.duration().isZero()) {
-                throw new IllegalArgumentException("step duration must be > 0");
-            }
+            LoadPatternValidator.validateTpsNonNegative("Step rate", s.rate());
+            LoadPatternValidator.validateDuration("Step duration", s.duration());
         }
     }
 

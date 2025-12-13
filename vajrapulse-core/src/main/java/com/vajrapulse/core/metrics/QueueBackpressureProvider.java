@@ -1,6 +1,6 @@
 package com.vajrapulse.core.metrics;
 
-import com.vajrapulse.api.metrics.BackpressureProvider;
+import com.vajrapulse.api.backpressure.BackpressureProvider;
 
 import java.util.function.Supplier;
 

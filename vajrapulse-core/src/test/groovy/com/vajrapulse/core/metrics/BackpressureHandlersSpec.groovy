@@ -1,8 +1,8 @@
 package com.vajrapulse.core.metrics
 
-import com.vajrapulse.api.metrics.BackpressureHandler
-import com.vajrapulse.api.metrics.BackpressureHandlingResult
-import com.vajrapulse.api.metrics.BackpressureContext
+import com.vajrapulse.api.backpressure.BackpressureHandler
+import com.vajrapulse.api.backpressure.BackpressureHandlingResult
+import com.vajrapulse.api.backpressure.BackpressureContext
 import spock.lang.Specification
 import java.time.Duration
 

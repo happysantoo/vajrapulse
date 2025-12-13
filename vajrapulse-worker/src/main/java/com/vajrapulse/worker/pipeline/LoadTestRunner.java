@@ -17,31 +17,31 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * High-level convenience pipeline bundling execution, metrics collection, optional
- * periodic reporting and final export. Lives in worker layer to keep core minimal.
+ * High-level convenience runner for executing load tests with metrics collection,
+ * optional periodic reporting, and final export. Lives in worker layer to keep core minimal.
  * 
  * <p>Implements {@link AutoCloseable} to manage exporter lifecycle automatically.
  * When used with try-with-resources, exporters are closed after final metrics are exported.
  * 
  * <p>Example:
  * <pre>{@code
- * try (MetricsPipeline pipeline = MetricsPipeline.builder()
+ * try (LoadTestRunner runner = LoadTestRunner.builder()
  *         .addExporter(new OpenTelemetryExporter(...))
  *         .withPeriodic(Duration.ofSeconds(5))
  *         .build()) {
- *     pipeline.run(task, loadPattern);
+ *     runner.run(task, loadPattern);
  * } // Automatic final export and cleanup
  * }</pre>
  */
-public final class MetricsPipeline implements AutoCloseable {
-    private static final Logger logger = LoggerFactory.getLogger(MetricsPipeline.class);
+public final class LoadTestRunner implements AutoCloseable {
+    private static final Logger logger = LoggerFactory.getLogger(LoadTestRunner.class);
 
     private final MetricsCollector collector;
     private final List<MetricsExporter> exporters;
     private final Duration periodicInterval;
     private final boolean fireImmediateLive;
 
-    private MetricsPipeline(MetricsCollector collector, List<MetricsExporter> exporters, Duration periodicInterval, boolean fireImmediateLive) {
+    private LoadTestRunner(MetricsCollector collector, List<MetricsExporter> exporters, Duration periodicInterval, boolean fireImmediateLive) {
         this.collector = collector;
         this.exporters = exporters;
         this.periodicInterval = periodicInterval;
@@ -51,27 +51,27 @@ public final class MetricsPipeline implements AutoCloseable {
     public static Builder builder() { return new Builder(); }
 
     /**
-     * Returns a MetricsProvider that provides real-time metrics from this pipeline.
+     * Returns a MetricsProvider that provides real-time metrics from this runner.
      * 
      * <p>The MetricsProvider is updated as tasks execute, providing current
      * failure rate and total execution count for use with AdaptiveLoadPattern.
      * 
      * <p>Example:
      * <pre>{@code
-     * try (MetricsPipeline pipeline = MetricsPipeline.builder()
+     * try (LoadTestRunner runner = LoadTestRunner.builder()
      *         .addExporter(new ConsoleMetricsExporter())
      *         .build()) {
-     *     MetricsProvider provider = pipeline.getMetricsProvider();
+     *     MetricsProvider provider = runner.getMetricsProvider();
      *     AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
      *         100.0, Duration.ofSeconds(10), ..., provider);
-     *     pipeline.run(task, pattern);
+     *     runner.run(task, pattern);
      * }
      * }</pre>
      * 
      * <p><strong>Note:</strong> The returned MetricsProvider uses caching internally
      * to optimize performance. Metrics are refreshed at most once per 100ms by default.
      * 
-     * @return a MetricsProvider backed by this pipeline's metrics collector
+     * @return a MetricsProvider backed by this runner's metrics collector
      * @since 0.9.6
      */
     public MetricsProvider getMetricsProvider() {
@@ -186,7 +186,7 @@ public final class MetricsPipeline implements AutoCloseable {
             return this;
         }
 
-        public MetricsPipeline build() {
+        public LoadTestRunner build() {
             if (collector != null && (percentiles != null || (sloBuckets != null && sloBuckets.length > 0))) {
                 throw new IllegalStateException("withCollector cannot be combined with withPercentiles/withSloBuckets");
             }
@@ -207,7 +207,7 @@ public final class MetricsPipeline implements AutoCloseable {
                     }
                 }
             }
-            return new MetricsPipeline(effectiveCollector, List.copyOf(exporters), periodicInterval, fireImmediateLive);
+            return new LoadTestRunner(effectiveCollector, List.copyOf(exporters), periodicInterval, fireImmediateLive);
         }
     }
 }

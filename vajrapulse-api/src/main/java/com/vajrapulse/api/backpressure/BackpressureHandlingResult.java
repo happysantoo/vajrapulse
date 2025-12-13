@@ -1,4 +1,4 @@
-package com.vajrapulse.api.metrics;
+package com.vajrapulse.api.backpressure;
 
 /**
  * Result of handling a request during backpressure.
@@ -19,4 +19,3 @@ public enum BackpressureHandlingResult {
     /** Request was accepted (normal processing) */
     ACCEPTED
 }
-

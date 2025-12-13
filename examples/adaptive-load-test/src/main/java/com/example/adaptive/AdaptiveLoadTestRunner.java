@@ -254,9 +254,11 @@ public class AdaptiveLoadTestRunner {
                     .rampDecrement(15.0)                       // Ramp decrement (decrease by 15 TPS per interval - balanced)
                     .rampInterval(Duration.ofSeconds(5))       // Ramp interval (check/adjust every 5 seconds)
                     .maxTps(200.0)                             // Max TPS
+                    .minTps(5.0)                               // Min TPS
                     .sustainDuration(Duration.ofSeconds(30))   // Sustain duration (sustain at stable point for 30 seconds)
-                    .errorThreshold(0.10)                      // Error threshold (10% - allows more tolerance before ramp-down)
+                    .stableIntervalsRequired(3)                // Require 3 stable intervals
                     .metricsProvider(metricsProvider)           // Metrics provider for feedback
+                    .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.10))  // 10% error threshold
                     .build();
                 
                 // Create task

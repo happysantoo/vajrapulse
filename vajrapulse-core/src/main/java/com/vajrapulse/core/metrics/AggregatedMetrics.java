@@ -1,6 +1,7 @@
 package com.vajrapulse.core.metrics;
 
 import com.vajrapulse.api.metrics.Metrics;
+import com.vajrapulse.core.util.TpsCalculator;
 import java.util.Collections;
 
 /**
@@ -19,7 +20,6 @@ import java.util.Collections;
  * @param elapsedMillis time elapsed since metrics collection started
  * @param queueSize current number of pending executions in queue
  * @param queueWaitPercentiles map of percentile→wait time nanos for queue wait
- * @param clientMetrics client-side metrics (connection pools, queues, timeouts)
  * @since 0.9.7
  */
 public record AggregatedMetrics(
@@ -30,18 +30,12 @@ public record AggregatedMetrics(
     java.util.Map<Double, Double> failurePercentiles,
     long elapsedMillis,
     long queueSize,
-    java.util.Map<Double, Double> queueWaitPercentiles,
-    ClientMetrics clientMetrics
+    java.util.Map<Double, Double> queueWaitPercentiles
 ) implements Metrics {
     /**
      * Percentage multiplier for rate calculations (100.0 = 100%).
      */
     private static final double PERCENTAGE_MULTIPLIER = 100.0;
-    
-    /**
-     * Milliseconds per second for TPS calculations.
-     */
-    private static final double MILLISECONDS_PER_SECOND = 1000.0;
     /**
      * Compact constructor that creates defensive copies of mutable collections.
      */
@@ -56,8 +50,6 @@ public record AggregatedMetrics(
         queueWaitPercentiles = queueWaitPercentiles != null
             ? Collections.unmodifiableMap(new java.util.LinkedHashMap<>(queueWaitPercentiles))
             : Collections.emptyMap();
-        // ClientMetrics is immutable (record), so no defensive copy needed
-        clientMetrics = clientMetrics != null ? clientMetrics : new ClientMetrics();
     }
     
     /**
@@ -90,10 +82,7 @@ public record AggregatedMetrics(
      * @return total response TPS
      */
     public double responseTps() {
-        if (elapsedMillis == 0) {
-            return 0.0;
-        }
-        return (totalExecutions * MILLISECONDS_PER_SECOND) / elapsedMillis;
+        return TpsCalculator.calculateActualTps(totalExecutions, elapsedMillis);
     }
     
     /**
@@ -102,10 +91,7 @@ public record AggregatedMetrics(
      * @return successful response TPS
      */
     public double successTps() {
-        if (elapsedMillis == 0) {
-            return 0.0;
-        }
-        return (successCount * MILLISECONDS_PER_SECOND) / elapsedMillis;
+        return TpsCalculator.calculateActualTps(successCount, elapsedMillis);
     }
     
     /**
@@ -114,9 +100,6 @@ public record AggregatedMetrics(
      * @return failed response TPS
      */
     public double failureTps() {
-        if (elapsedMillis == 0) {
-            return 0.0;
-        }
-        return (failureCount * MILLISECONDS_PER_SECOND) / elapsedMillis;
+        return TpsCalculator.calculateActualTps(failureCount, elapsedMillis);
     }
 }

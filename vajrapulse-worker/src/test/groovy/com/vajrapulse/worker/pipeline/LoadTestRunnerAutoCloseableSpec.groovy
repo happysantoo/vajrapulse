@@ -13,9 +13,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Tests for MetricsPipeline AutoCloseable lifecycle management.
+ * Tests for LoadTestRunner AutoCloseable lifecycle management.
  */
-class MetricsPipelineAutoCloseableSpec extends Specification {
+class LoadTestRunnerAutoCloseableSpec extends Specification {
 
     def "should close AutoCloseable exporters when pipeline is closed"() {
         given: "an AutoCloseable exporter tracking close calls"
@@ -26,7 +26,7 @@ class MetricsPipelineAutoCloseableSpec extends Specification {
         LoadPattern pattern = new SimplePattern(10.0, Duration.ofMillis(50))
         
         and: "a pipeline with the exporter"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(exporter)
             .build()
         
@@ -48,7 +48,7 @@ class MetricsPipelineAutoCloseableSpec extends Specification {
         
         when: "using try-with-resources"
         AggregatedMetrics result
-        try (MetricsPipeline pipeline = MetricsPipeline.builder()
+        try (LoadTestRunner pipeline = LoadTestRunner.builder()
                 .addExporter(exporter)
                 .build()) {
             result = pipeline.run(task, pattern)
@@ -74,7 +74,7 @@ class MetricsPipelineAutoCloseableSpec extends Specification {
         LoadPattern pattern = new SimplePattern(10.0, Duration.ofMillis(50))
         
         when: "using try-with-resources"
-        try (MetricsPipeline pipeline = MetricsPipeline.builder()
+        try (LoadTestRunner pipeline = LoadTestRunner.builder()
                 .addExporter(exporter)
                 .build()) {
             pipeline.run(task, pattern)
@@ -95,7 +95,7 @@ class MetricsPipelineAutoCloseableSpec extends Specification {
         LoadPattern pattern = new SimplePattern(10.0, Duration.ofMillis(50))
         
         when: "using try-with-resources with multiple exporters"
-        try (MetricsPipeline pipeline = MetricsPipeline.builder()
+        try (LoadTestRunner pipeline = LoadTestRunner.builder()
                 .addExporter(exporter1)
                 .addExporter(exporter2)
                 .addExporter(exporter3)
@@ -119,7 +119,7 @@ class MetricsPipelineAutoCloseableSpec extends Specification {
         LoadPattern pattern = new SimplePattern(10.0, Duration.ofMillis(50))
         
         when: "using try-with-resources"
-        try (MetricsPipeline pipeline = MetricsPipeline.builder()
+        try (LoadTestRunner pipeline = LoadTestRunner.builder()
                 .addExporter(failingExporter)
                 .addExporter(normalExporter)
                 .build()) {
@@ -142,7 +142,7 @@ class MetricsPipelineAutoCloseableSpec extends Specification {
         LoadPattern pattern = new SimplePattern(10.0, Duration.ofMillis(50))
         
         when: "using try-with-resources"
-        try (MetricsPipeline pipeline = MetricsPipeline.builder()
+        try (LoadTestRunner pipeline = LoadTestRunner.builder()
                 .addExporter(simpleExporter)
                 .build()) {
             pipeline.run(task, pattern)

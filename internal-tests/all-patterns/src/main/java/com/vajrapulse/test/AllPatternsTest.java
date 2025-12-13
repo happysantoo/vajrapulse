@@ -2,7 +2,7 @@ package com.vajrapulse.test;
 
 import com.vajrapulse.api.*;
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
-import com.vajrapulse.worker.pipeline.MetricsPipeline;
+import com.vajrapulse.worker.pipeline.LoadTestRunner;
 
 import java.time.Duration;
 import java.util.List;
@@ -77,7 +77,7 @@ public class AllPatternsTest implements Task {
             System.out.println("Testing: " + name);
             System.out.println("=".repeat(60));
             
-            try (MetricsPipeline pipeline = MetricsPipeline.builder()
+            try (LoadTestRunner pipeline = LoadTestRunner.builder()
                     .addExporter(new ConsoleMetricsExporter())
                     .build()) {
                 var metrics = pipeline.run(task, pattern);

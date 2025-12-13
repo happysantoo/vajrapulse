@@ -3,7 +3,6 @@ package com.vajrapulse.api
 import spock.lang.Specification
 import com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy
 import com.vajrapulse.api.pattern.adaptive.MetricsSnapshot
-import com.vajrapulse.api.pattern.adaptive.AdaptiveStabilityTracking
 
 /**
  * Tests for DefaultRampDecisionPolicy.
@@ -36,7 +35,7 @@ class DefaultRampDecisionPolicySpec extends Specification {
     
     def "should not ramp up when backpressure is high"() {
         given:
-        def policy = new DefaultRampDecisionPolicy(0.01)
+        def policy = new DefaultRampDecisionPolicy(0.01, 0.3, 0.7)
         def metrics = new MetricsSnapshot(0.005, 0.005, 0.5, 1000L)
         
         when:
@@ -60,7 +59,7 @@ class DefaultRampDecisionPolicySpec extends Specification {
     
     def "should ramp down when backpressure is high"() {
         given:
-        def policy = new DefaultRampDecisionPolicy(0.01)
+        def policy = new DefaultRampDecisionPolicy(0.01, 0.3, 0.7)
         def metrics = new MetricsSnapshot(0.005, 0.005, 0.8, 1000L)
         
         when:
@@ -84,12 +83,10 @@ class DefaultRampDecisionPolicySpec extends Specification {
     
     def "should sustain when stable intervals count is sufficient"() {
         given:
-        def policy = new DefaultRampDecisionPolicy(0.01, 0.3, 0.7, 3)
-        def metrics = new MetricsSnapshot(0.005, 0.005, 0.2, 1000L)
-        def stability = new AdaptiveStabilityTracking(-1, 100.0, 1000L, 3)
+        def policy = new DefaultRampDecisionPolicy(0.01, 0.3, 0.7)
         
         when:
-        def shouldSustain = policy.shouldSustain(metrics, stability)
+        def shouldSustain = policy.shouldSustain(3, 3)
         
         then:
         shouldSustain == true
@@ -97,12 +94,10 @@ class DefaultRampDecisionPolicySpec extends Specification {
     
     def "should not sustain when stable intervals count is insufficient"() {
         given:
-        def policy = new DefaultRampDecisionPolicy(0.01, 0.3, 0.7, 3)
-        def metrics = new MetricsSnapshot(0.005, 0.005, 0.2, 1000L)
-        def stability = new AdaptiveStabilityTracking(-1, 100.0, 1000L, 2)
+        def policy = new DefaultRampDecisionPolicy(0.01, 0.3, 0.7)
         
         when:
-        def shouldSustain = policy.shouldSustain(metrics, stability)
+        def shouldSustain = policy.shouldSustain(2, 3)
         
         then:
         shouldSustain == false
@@ -155,11 +150,10 @@ class DefaultRampDecisionPolicySpec extends Specification {
     
     def "should reject invalid backpressure thresholds"() {
         when:
-        new DefaultRampDecisionPolicy(0.01, 0.8, 0.7, 3)
+        new DefaultRampDecisionPolicy(0.01, 0.8, 0.7)
         
         then:
         def e = thrown(IllegalArgumentException)
         e.message.contains("Backpressure ramp up threshold must be less than ramp down threshold")
     }
 }
-

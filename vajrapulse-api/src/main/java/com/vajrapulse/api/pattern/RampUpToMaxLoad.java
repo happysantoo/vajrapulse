@@ -26,24 +26,27 @@ public record RampUpToMaxLoad(
 ) implements LoadPattern {
     
     public RampUpToMaxLoad {
-        if (maxTps <= 0) {
-            throw new IllegalArgumentException("Max TPS must be positive: " + maxTps);
-        }
-        if (rampDuration.isNegative() || rampDuration.isZero()) {
-            throw new IllegalArgumentException("Ramp duration must be positive: " + rampDuration);
-        }
-        if (sustainDuration.isNegative() || sustainDuration.isZero()) {
-            throw new IllegalArgumentException("Sustain duration must be positive: " + sustainDuration);
-        }
+        LoadPatternValidator.validateTps("Max TPS", maxTps);
+        LoadPatternValidator.validateDuration("Ramp duration", rampDuration);
+        LoadPatternValidator.validateDuration("Sustain duration", sustainDuration);
+    }
+    
+    /**
+     * Delegate ramp-up phase to RampUpLoad for code reuse.
+     */
+    private RampUpLoad rampUpPhase() {
+        return new RampUpLoad(maxTps, rampDuration);
     }
     
     @Override
     public double calculateTps(long elapsedMillis) {
         long rampMillis = rampDuration.toMillis();
-        if (elapsedMillis >= rampMillis) {
-            return maxTps;
+        if (elapsedMillis < rampMillis) {
+            // Use RampUpLoad for ramp-up phase
+            return rampUpPhase().calculateTps(elapsedMillis);
         }
-        return maxTps * elapsedMillis / (double) rampMillis;
+        // Sustain phase: return max TPS
+        return maxTps;
     }
     
     @Override

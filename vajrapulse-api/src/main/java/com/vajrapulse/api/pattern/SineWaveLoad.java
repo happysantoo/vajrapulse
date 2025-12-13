@@ -24,17 +24,10 @@ public record SineWaveLoad(
 ) implements LoadPattern {
 
     public SineWaveLoad {
-        if (meanRate < 0.0 || amplitude < 0.0) {
-            throw new IllegalArgumentException("meanRate and amplitude must be >= 0");
-        }
-        Objects.requireNonNull(totalDuration, "totalDuration");
-        Objects.requireNonNull(period, "period");
-        if (totalDuration.isNegative() || totalDuration.isZero()) {
-            throw new IllegalArgumentException("totalDuration must be > 0");
-        }
-        if (period.isNegative() || period.isZero()) {
-            throw new IllegalArgumentException("period must be > 0");
-        }
+        LoadPatternValidator.validateTpsNonNegative("Mean rate", meanRate);
+        LoadPatternValidator.validateTpsNonNegative("Amplitude", amplitude);
+        LoadPatternValidator.validateDuration("Total duration", totalDuration);
+        LoadPatternValidator.validateDuration("Period", period);
     }
 
     @Override

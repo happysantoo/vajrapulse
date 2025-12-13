@@ -51,7 +51,7 @@ class StepLoadSpec extends Specification {
 
         then:
         def e = thrown(IllegalArgumentException)
-        e.message.contains("step rate")
+        e.message.toLowerCase().contains("step rate")
     }
 
     def "step load validation rejects zero duration"() {
@@ -62,6 +62,6 @@ class StepLoadSpec extends Specification {
 
         then:
         def e = thrown(IllegalArgumentException)
-        e.message.contains("step duration")
+        e.message.toLowerCase().contains("step duration")
     }
 }

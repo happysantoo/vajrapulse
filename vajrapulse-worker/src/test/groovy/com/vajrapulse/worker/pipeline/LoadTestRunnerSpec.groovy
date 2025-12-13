@@ -11,7 +11,7 @@ import spock.lang.Specification
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 
-class MetricsPipelineSpec extends Specification {
+class LoadTestRunnerSpec extends Specification {
 
     def "should execute task and return aggregated metrics"() {
         given: "a simple task"
@@ -21,7 +21,7 @@ class MetricsPipelineSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(10.0, Duration.ofMillis(100))
         
         and: "a pipeline with no exporters"
-        MetricsPipeline pipeline = MetricsPipeline.builder().build()
+        LoadTestRunner pipeline = LoadTestRunner.builder().build()
         
         when: "running the pipeline"
         AggregatedMetrics metrics = pipeline.run(task, pattern)
@@ -40,7 +40,7 @@ class MetricsPipelineSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(10.0, Duration.ofMillis(50))
         
         and: "a pipeline with the stub exporter"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(exporter)
             .build()
         
@@ -61,7 +61,7 @@ class MetricsPipelineSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(50.0, Duration.ofMillis(300))
         
         and: "a pipeline with periodic reporting"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(exporter)
             .withPeriodic(Duration.ofMillis(50))
             .build()
@@ -85,7 +85,7 @@ class MetricsPipelineSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(20.0, Duration.ofMillis(100))
         
         and: "a pipeline with custom percentiles"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .withPercentiles(customPercentiles)
             .addExporter(exporter)
             .build()
@@ -108,7 +108,7 @@ class MetricsPipelineSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(10.0, Duration.ofMillis(50))
         
         and: "a pipeline with both exporters"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(exporter1)
             .addExporter(exporter2)
             .build()
@@ -132,7 +132,7 @@ class MetricsPipelineSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(50.0, Duration.ofMillis(100))
         
         and: "a pipeline"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(exporter)
             .build()
         
@@ -161,7 +161,7 @@ class MetricsPipelineSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(10.0, Duration.ofMillis(50))
         
         and: "a pipeline with failing exporter"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(failingExporter)
             .build()
         
@@ -182,7 +182,7 @@ class MetricsPipelineSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(10.0, Duration.ofMillis(50))
         
         and: "a pipeline without custom percentiles"
-        MetricsPipeline pipeline = MetricsPipeline.builder()
+        LoadTestRunner pipeline = LoadTestRunner.builder()
             .addExporter(exporter)
             .build()
         
@@ -202,7 +202,7 @@ class MetricsPipelineSpec extends Specification {
         LoadPattern pattern = new StaticLoadPattern(5.0, Duration.ofMillis(50))
         
         and: "a pipeline"
-        MetricsPipeline pipeline = MetricsPipeline.builder().build()
+        LoadTestRunner pipeline = LoadTestRunner.builder().build()
         
         when: "running the pipeline"
         pipeline.run(task, pattern)

@@ -2,7 +2,7 @@ package com.vajrapulse.test;
 
 import com.vajrapulse.api.*;
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
-import com.vajrapulse.worker.pipeline.MetricsPipeline;
+import com.vajrapulse.worker.pipeline.LoadTestRunner;
 
 import java.time.Duration;
 
@@ -63,7 +63,7 @@ public class SimpleSuccessTest implements Task {
             default -> throw new IllegalArgumentException("Unknown pattern: " + patternType);
         };
         
-        try (MetricsPipeline pipeline = MetricsPipeline.builder()
+        try (LoadTestRunner pipeline = LoadTestRunner.builder()
                 .addExporter(new ConsoleMetricsExporter())
                 .withPeriodic(Duration.ofSeconds(2))
                 .build()) {

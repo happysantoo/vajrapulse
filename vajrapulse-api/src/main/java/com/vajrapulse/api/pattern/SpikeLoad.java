@@ -28,23 +28,13 @@ public record SpikeLoad(
 ) implements LoadPattern {
 
     public SpikeLoad {
-        if (baseRate < 0.0 || spikeRate < 0.0) {
-            throw new IllegalArgumentException("rates must be >= 0");
-        }
-        Objects.requireNonNull(totalDuration, "totalDuration");
-        Objects.requireNonNull(spikeInterval, "spikeInterval");
-        Objects.requireNonNull(spikeDuration, "spikeDuration");
-        if (totalDuration.isNegative() || totalDuration.isZero()) {
-            throw new IllegalArgumentException("totalDuration must be > 0");
-        }
-        if (spikeInterval.isNegative() || spikeInterval.isZero()) {
-            throw new IllegalArgumentException("spikeInterval must be > 0");
-        }
-        if (spikeDuration.isNegative() || spikeDuration.isZero()) {
-            throw new IllegalArgumentException("spikeDuration must be > 0");
-        }
+        LoadPatternValidator.validateTpsNonNegative("Base rate", baseRate);
+        LoadPatternValidator.validateTpsNonNegative("Spike rate", spikeRate);
+        LoadPatternValidator.validateDuration("Total duration", totalDuration);
+        LoadPatternValidator.validateDuration("Spike interval", spikeInterval);
+        LoadPatternValidator.validateDuration("Spike duration", spikeDuration);
         if (spikeDuration.compareTo(spikeInterval) >= 0) {
-            throw new IllegalArgumentException("spikeDuration must be < spikeInterval");
+            throw new IllegalArgumentException("Spike duration must be < spike interval");
         }
     }
 

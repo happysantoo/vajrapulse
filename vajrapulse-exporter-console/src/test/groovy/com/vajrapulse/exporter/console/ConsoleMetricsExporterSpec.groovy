@@ -41,7 +41,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             1000L,  // 1 second elapsed
             0L,     // queue size
             [:] as Map<Double, Double>,  // queue wait percentiles
-            new com.vajrapulse.core.metrics.ClientMetrics()  // client metrics
+  // client metrics
         )
         
         and: "a console exporter capturing output"
@@ -82,7 +82,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             [:] as Map<Double, Double>, // no failures
             1000L,  // 1 second elapsed
             0L,     // queue size
-            [:] as Map<Double, Double>, new com.vajrapulse.core.metrics.ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>
         )
         
         and: "a console exporter"
@@ -120,7 +120,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             [:] as Map<Double, Double>,
             1000L,  // 1 second elapsed
             0L,     // queue size
-            [:] as Map<Double, Double>, new com.vajrapulse.core.metrics.ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>
         )
         
         and: "a console exporter"
@@ -150,7 +150,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             [:] as Map<Double, Double>,
             0L,  // No time elapsed
             0L,     // queue size
-            [:] as Map<Double, Double>, new com.vajrapulse.core.metrics.ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>
         )
         
         and: "a console exporter"
@@ -188,7 +188,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             [:] as Map<Double, Double>,
             1000L,  // 1 second elapsed
             0L,     // queue size
-            [:] as Map<Double, Double>, new com.vajrapulse.core.metrics.ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>
         )
         
         and: "a console exporter"
@@ -218,7 +218,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             [:] as Map<Double, Double>,
             1000L,  // 1 second elapsed
             0L,     // queue size
-            [:] as Map<Double, Double>, new com.vajrapulse.core.metrics.ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>
         )
 
         and: "a console exporter"
@@ -252,7 +252,7 @@ class ConsoleMetricsExporterSpec extends Specification {
             failurePercentiles,
             1000L,  // 1 second elapsed
             0L,     // queue size
-            [:] as Map<Double, Double>, new com.vajrapulse.core.metrics.ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>
         )
 
         and:
@@ -269,75 +269,13 @@ class ConsoleMetricsExporterSpec extends Specification {
         output.contains("P95:  500.00")
     }
 
-    def "should display client metrics when present"() {
-        given:
-        def clientMetrics = new com.vajrapulse.core.metrics.ClientMetrics(
-            10L,  // active connections
-            5L,   // idle connections
-            2L,   // waiting connections
-            3L,   // queue depth
-            50_000_000L, // 50ms queue wait time
-            100L, // queue operation count
-            1L,   // connection timeouts
-            2L,   // request timeouts
-            0L    // connection refused
-        )
-        def metrics = new AggregatedMetrics(
-            100L, 100L, 0L,
-            [0.50d: 10_000_000.0d], [:],
-            1000L, 0L, [:],
-            clientMetrics
-        )
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream()
-        ConsoleMetricsExporter exporter = new ConsoleMetricsExporter(new PrintStream(outputStream))
-
-        when:
-        exporter.export(metrics)
-        String output = outputStream.toString()
-
-        then:
-        output.contains("Client Metrics:")
-        output.contains("Connection Pool:")
-        output.contains("Active:           10")
-        output.contains("Idle:             5")
-        output.contains("Waiting:          2")
-        output.contains("Total:            15")
-        output.contains("Utilization:")
-        output.contains("Client Queue:")
-        output.contains("Depth:            3")
-        output.contains("Avg Wait Time:")
-        output.contains("Client Errors:")
-        output.contains("Connection Timeouts:  1")
-        output.contains("Request Timeouts:     2")
-    }
-
-    def "should not display client metrics when all zero"() {
-        given:
-        def metrics = new AggregatedMetrics(
-            100L, 100L, 0L,
-            [0.50d: 10_000_000.0d], [:],
-            1000L, 0L, [:],
-            new com.vajrapulse.core.metrics.ClientMetrics() // All zeros
-        )
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream()
-        ConsoleMetricsExporter exporter = new ConsoleMetricsExporter(new PrintStream(outputStream))
-
-        when:
-        exporter.export(metrics)
-        String output = outputStream.toString()
-
-        then:
-        !output.contains("Client Metrics:")
-    }
-
-    def "should display queue wait percentiles when present"() {
+def "should display queue wait percentiles when present"() {
         given:
         def metrics = new AggregatedMetrics(
             100L, 100L, 0L,
             [0.50d: 10_000_000.0d], [:],
             1000L, 5L,
-            [0.50d: 1_000_000.0d, 0.95d: 5_000_000.0d], // Queue wait percentiles
-            new com.vajrapulse.core.metrics.ClientMetrics()
+            [0.50d: 1_000_000.0d, 0.95d: 5_000_000.0d] // Queue wait percentiles
         )
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream()
         ConsoleMetricsExporter exporter = new ConsoleMetricsExporter(new PrintStream(outputStream))
