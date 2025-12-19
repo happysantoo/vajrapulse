@@ -8,11 +8,14 @@ import com.vajrapulse.api.pattern.LoadPattern
 import com.vajrapulse.api.pattern.StepLoad
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.metrics.MetricsCollector
+import com.vajrapulse.core.test.TestExecutionHelper
 import spock.lang.Specification
 import spock.lang.Timeout
 import spock.lang.Unroll
 
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -519,11 +522,18 @@ class ExecutionEngineLoadPatternIntegrationSpec extends Specification {
                 .build()
         
         when: "stopping the engine early"
-        Thread.start {
-            sleep(100)
+        // Use TestExecutionHelper to run until condition, then stop
+        // Stop the engine after a short delay using a background thread
+        def stopLatch = new CountDownLatch(1)
+        Thread.startVirtualThread {
+            Thread.sleep(100)
             engine.stop()
+            stopLatch.countDown()
         }
-        engine.run()
+        // Run engine until stop is invoked
+        TestExecutionHelper.runUntilCondition(engine, {
+            stopLatch.count == 0 // Stop has been invoked
+        }, Duration.ofSeconds(1))
         def snapshot = collector.snapshot()
         
         then: "execution stops gracefully"

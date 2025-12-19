@@ -1,12 +1,14 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
 import com.vajrapulse.api.pattern.adaptive.AdaptiveConfig
 import java.time.Duration
 
 /**
  * Tests for AdaptiveConfig.
  */
+@Timeout(10)
 class AdaptiveConfigSpec extends Specification {
     
     def "should create valid config with defaults"() {

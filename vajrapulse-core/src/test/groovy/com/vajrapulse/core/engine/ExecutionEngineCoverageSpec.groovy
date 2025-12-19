@@ -8,9 +8,11 @@ import spock.lang.Specification
 import spock.lang.Timeout
 
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 @Timeout(10)
 class ExecutionEngineCoverageSpec extends Specification {
@@ -70,11 +72,16 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withMetricsCollector(collector)
                 .withShutdownHook(false)
                 .build()
+        // Use proper synchronization for stopping engine
+        def stopLatch = new CountDownLatch(1)
         Thread.startVirtualThread {
             Thread.sleep(50)
             engine.stop()
+            stopLatch.countDown()
         }
         engine.run()
+        // Wait for stop to be invoked
+        assert stopLatch.await(1, TimeUnit.SECONDS) : "Stop should be invoked within 1 second"
         engine.close()
 
         then: "shutdown completed"
@@ -283,13 +290,18 @@ class ExecutionEngineCoverageSpec extends Specification {
                 .withMetricsCollector(collector)
                 .withShutdownHook(false)
                 .build()
+        // Use proper synchronization for stopping engine
+        def stopLatch = new CountDownLatch(1)
         Thread.startVirtualThread {
             Thread.sleep(50)
             engine.stop()
             engine.stop() // Second call should be idempotent
             engine.stop() // Third call should be idempotent
+            stopLatch.countDown()
         }
         engine.run()
+        // Wait for stop to be invoked
+        assert stopLatch.await(1, TimeUnit.SECONDS) : "Stop should be invoked within 1 second"
         engine.close()
 
         then: "no exception thrown"
@@ -426,11 +438,16 @@ class ExecutionEngineCoverageSpec extends Specification {
         def stateBeforeRun = registry.find("vajrapulse.engine.state").gauge()?.value() ?: 0.0
 
         and: "running engine"
+        // Use proper synchronization for stopping engine
+        def stopLatch = new CountDownLatch(1)
         Thread.startVirtualThread {
             Thread.sleep(50)
             engine.stop()
+            stopLatch.countDown()
         }
         engine.run()
+        // Wait for stop to be invoked
+        assert stopLatch.await(1, TimeUnit.SECONDS) : "Stop should be invoked within 1 second"
         def stateAfterRun = registry.find("vajrapulse.engine.state").gauge()?.value() ?: 0.0
         engine.close()
 

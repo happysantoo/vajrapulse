@@ -1,6 +1,7 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
 import com.vajrapulse.api.pattern.adaptive.AdaptivePatternListener
 import com.vajrapulse.api.pattern.adaptive.PhaseTransitionEvent
 import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
@@ -11,6 +12,7 @@ import java.time.Duration
 /**
  * Tests for AdaptiveLoadPattern builder.
  */
+@Timeout(10)
 class AdaptiveLoadPatternBuilderSpec extends Specification {
     
     // Mock MetricsProvider for testing

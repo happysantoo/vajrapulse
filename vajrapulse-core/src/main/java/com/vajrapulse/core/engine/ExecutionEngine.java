@@ -4,7 +4,6 @@ import com.vajrapulse.api.pattern.LoadPattern;
 import com.vajrapulse.api.task.PlatformThreads;
 import com.vajrapulse.api.task.TaskLifecycle;
 import com.vajrapulse.api.task.VirtualThreads;
-import com.vajrapulse.api.pattern.WarmupCooldownLoadPattern;
 import com.vajrapulse.core.config.ConfigLoader;
 import com.vajrapulse.core.config.VajraPulseConfig;
 import com.vajrapulse.core.metrics.MetricsCollector;
@@ -117,15 +116,7 @@ public final class ExecutionEngine implements AutoCloseable {
      */
     private ExecutionEngine(Builder builder) {
         // Validate required parameters
-        if (builder.taskLifecycle == null) {
-            throw new IllegalArgumentException("Task lifecycle must not be null");
-        }
-        if (builder.loadPattern == null) {
-            throw new IllegalArgumentException("Load pattern must not be null");
-        }
-        if (builder.metricsCollector == null) {
-            throw new IllegalArgumentException("Metrics collector must not be null");
-        }
+        validateBuilder(builder);
         
         this.taskLifecycle = builder.taskLifecycle;
         this.loadPattern = builder.loadPattern;
@@ -138,10 +129,6 @@ public final class ExecutionEngine implements AutoCloseable {
         Class<?> taskClass = taskLifecycle.getClass();
         this.executor = createExecutor(taskClass);
         
-        // Register thread pool metrics
-        com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerExecutorMetrics(
-            executor, taskClass, metricsCollector.getRegistry(), runId);
-        
         this.shutdownManager = createShutdownManager(runId, metricsCollector);
         
         // Only register shutdown hook if enabled (default: true for production, false for tests)
@@ -149,24 +136,8 @@ public final class ExecutionEngine implements AutoCloseable {
             shutdownManager.registerShutdownHook();
         }
         
-        // Register adaptive pattern metrics if applicable
-        if (loadPattern instanceof com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern adaptivePattern) {
-            AdaptivePatternMetrics.register(adaptivePattern, metricsCollector.getRegistry(), runId);
-        }
-        
-        // Register engine health metrics
-        var healthMetrics = com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerHealthMetrics(
-            metricsCollector.getRegistry(),
-            runId,
-            () -> engineState.getValue(),
-            startTimeMillis::get
-        );
-        this.lifecycleStartCounter = healthMetrics.lifecycleStartCounter();
-        this.lifecycleStopCounter = healthMetrics.lifecycleStopCounter();
-        this.lifecycleCompleteCounter = healthMetrics.lifecycleCompleteCounter();
-        this.uptimeTimer = healthMetrics.uptimeTimer();
-        
-        // Rate controller metrics will be registered in run() method when RateController is created
+        // Register all metrics in one place
+        registerMetrics(taskClass, metricsCollector.getRegistry(), runId);
     }
     
     /**
@@ -329,6 +300,24 @@ public final class ExecutionEngine implements AutoCloseable {
     }
     
 
+    /**
+     * Validates builder parameters.
+     * 
+     * @param builder the builder to validate
+     * @throws IllegalArgumentException if any required parameter is null
+     */
+    private static void validateBuilder(Builder builder) {
+        if (builder.taskLifecycle == null) {
+            throw new IllegalArgumentException("Task lifecycle must not be null");
+        }
+        if (builder.loadPattern == null) {
+            throw new IllegalArgumentException("Load pattern must not be null");
+        }
+        if (builder.metricsCollector == null) {
+            throw new IllegalArgumentException("Metrics collector must not be null");
+        }
+    }
+    
     private static String deriveRunId(MetricsCollector metricsCollector) {
         return (metricsCollector.getRunId() != null && !metricsCollector.getRunId().isBlank())
             ? metricsCollector.getRunId()
@@ -388,6 +377,49 @@ public final class ExecutionEngine implements AutoCloseable {
                 metricsCollector.snapshot();
             })
             .build();
+    }
+    
+    /**
+     * Registers all metrics for this execution engine.
+     * 
+     * <p>This method consolidates all metrics registration in one place:
+     * <ul>
+     *   <li>Executor metrics (thread pool statistics)</li>
+     *   <li>Engine health metrics (state, uptime, lifecycle events)</li>
+     *   <li>Adaptive pattern metrics (if applicable)</li>
+     * </ul>
+     * 
+     * <p>Rate controller metrics are registered separately in {@link #run()} when
+     * the RateController is created.
+     * 
+     * @param taskClass the task class for executor metrics
+     * @param registry the meter registry
+     * @param runId the run identifier for tagging
+     */
+    private void registerMetrics(Class<?> taskClass, io.micrometer.core.instrument.MeterRegistry registry, String runId) {
+        // Register executor metrics
+        com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerExecutorMetrics(
+            executor, taskClass, registry, runId);
+        
+        // Register engine health metrics
+        var healthMetrics = com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerHealthMetrics(
+            registry,
+            runId,
+            () -> engineState.getValue(),
+            startTimeMillis::get
+        );
+        this.lifecycleStartCounter = healthMetrics.lifecycleStartCounter();
+        this.lifecycleStopCounter = healthMetrics.lifecycleStopCounter();
+        this.lifecycleCompleteCounter = healthMetrics.lifecycleCompleteCounter();
+        this.uptimeTimer = healthMetrics.uptimeTimer();
+        
+        // Register adaptive pattern metrics if applicable
+        // Note: We still need instanceof here because AdaptivePatternMetrics.register()
+        // requires the AdaptiveLoadPattern instance and is in the core module.
+        // This is acceptable as it's isolated to this method.
+        if (loadPattern instanceof com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern adaptivePattern) {
+            AdaptivePatternMetrics.register(adaptivePattern, registry, runId);
+        }
     }
 
     /**
@@ -457,9 +489,6 @@ public final class ExecutionEngine implements AutoCloseable {
             long testDurationMillis = loadPattern.getDuration().toMillis();
             long iteration = 0;
             
-            // Check if load pattern supports warm-up/cool-down
-            boolean hasWarmupCooldown = loadPattern instanceof WarmupCooldownLoadPattern;
-            
             while (!stopRequested.get() && rateController.getElapsedMillis() < testDurationMillis) {
                 rateController.waitForNext();
                 
@@ -478,9 +507,8 @@ public final class ExecutionEngine implements AutoCloseable {
                     break;
                 }
                 
-                // Check if we should record metrics (only during steady-state phase)
-                boolean shouldRecordMetrics = !hasWarmupCooldown || 
-                    ((WarmupCooldownLoadPattern) loadPattern).shouldRecordMetrics(elapsedMillis);
+                // Check if we should record metrics (use interface method to avoid instanceof)
+                boolean shouldRecordMetrics = loadPattern.shouldRecordMetrics(elapsedMillis);
                 
                 long currentIteration = iteration++;
                 long queueStartNanos = System.nanoTime();
@@ -489,7 +517,8 @@ public final class ExecutionEngine implements AutoCloseable {
                 // Update queue size gauge
                 metricsCollector.updateQueueSize(pendingExecutions.get());
                 
-                executor.submit(new ExecutionCallable(taskExecutor, metricsCollector, currentIteration, queueStartNanos, pendingExecutions, shouldRecordMetrics));
+                executor.submit(new ExecutionCallable(
+                    taskExecutor, metricsCollector, currentIteration, queueStartNanos, pendingExecutions, shouldRecordMetrics));
             }
             
             if (stopRequested.get()) {
@@ -586,55 +615,4 @@ public final class ExecutionEngine implements AutoCloseable {
         return pendingExecutions.get();
     }
     
-    /**
-     * Callable for executing a task and recording metrics.
-     * Implemented as a concrete class to avoid lambda allocation in hot path.
-     */
-    private static final class ExecutionCallable implements Callable<Void> {
-        private final TaskExecutor taskExecutor;
-        private final MetricsCollector metricsCollector;
-        private final long iteration;
-        private final long queueStartNanos;
-        private final java.util.concurrent.atomic.AtomicLong pendingExecutions;
-        private final boolean shouldRecordMetrics;
-        
-        ExecutionCallable(TaskExecutor taskExecutor, MetricsCollector metricsCollector, long iteration, 
-                         long queueStartNanos, java.util.concurrent.atomic.AtomicLong pendingExecutions,
-                         boolean shouldRecordMetrics) {
-            this.taskExecutor = taskExecutor;
-            this.metricsCollector = metricsCollector;
-            this.iteration = iteration;
-            this.queueStartNanos = queueStartNanos;
-            this.pendingExecutions = pendingExecutions;
-            this.shouldRecordMetrics = shouldRecordMetrics;
-        }
-        
-        @Override
-        public Void call() {
-            // Record queue wait time (time from submission to actual execution start)
-            // Only record during steady-state phase
-            if (shouldRecordMetrics) {
-                long queueWaitNanos = System.nanoTime() - queueStartNanos;
-                metricsCollector.recordQueueWait(queueWaitNanos);
-            }
-            
-            // Decrement pending count when execution starts (before actual execution)
-            // This ensures queue size metric reflects only tasks waiting in queue,
-            // not tasks that have started executing
-            pendingExecutions.decrementAndGet();
-            metricsCollector.updateQueueSize(pendingExecutions.get());
-            
-            try {
-                ExecutionMetrics metrics = taskExecutor.executeWithMetrics(iteration);
-                // Only record metrics during steady-state phase (warm-up/cool-down excluded)
-                if (shouldRecordMetrics) {
-                    metricsCollector.record(metrics);
-                }
-            } finally {
-                // No cleanup needed - queue size already updated above
-            }
-            return null;
-        }
-    }
-
 }

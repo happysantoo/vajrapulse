@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 /**
  * Adaptive load pattern that automatically finds the maximum sustainable TPS.
@@ -100,17 +101,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         );
         
         // Initialize state (will be set on first calculateTps call)
-        this.state = new AtomicReference<>(new AdaptiveState(
-            AdaptivePhase.RAMP_UP,
-            config.initialTps(),
-            -1L,  // Will be set on first call
-            -1L,  // Will be set on first call
-            -1.0,  // No stable TPS yet
-            0,     // No stable intervals
-            config.initialTps(),  // Last known good = initial
-            false,  // Not in recovery
-            0L     // No transitions yet
-        ));
+        this.state = new AtomicReference<>(createInitialState(-1L));
     }
     
     @Override
@@ -153,19 +144,22 @@ public final class AdaptiveLoadPattern implements LoadPattern {
      * @return initialized state
      */
     private AdaptiveState initializeState(long elapsedMillis) {
-        AdaptiveState initialized = new AdaptiveState(
-            AdaptivePhase.RAMP_UP,
-            config.initialTps(),
-            elapsedMillis,
-            elapsedMillis,
-            -1.0,  // No stable TPS yet
-            0,     // No stable intervals
-            config.initialTps(),  // Last known good = initial
-            false,  // Not in recovery
-            0L     // No transitions yet
-        );
+        AdaptiveState initialized = createInitialState(elapsedMillis);
         state.set(initialized);
         return initialized;
+    }
+    
+    /**
+     * Creates the initial state for the pattern.
+     * 
+     * @param elapsedMillis current elapsed time
+     * @return initial state
+     */
+    private AdaptiveState createInitialState(long elapsedMillis) {
+        return new AdaptiveState(
+            AdaptivePhase.RAMP_UP, config.initialTps(), elapsedMillis, elapsedMillis,
+            -1.0, 0, config.initialTps(), false, 0L
+        );
     }
     
     /**
@@ -207,62 +201,47 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         
         // Check for errors/backpressure
         if (decisionPolicy.shouldRampDown(metrics)) {
-            double newTps = Math.max(config.minTps(), 
-                current.currentTps() - config.rampDecrement());
-            return new AdjustmentDecision(
-                AdaptivePhase.RAMP_DOWN,
-                newTps,
-                "Errors/backpressure detected"
-            );
+            return decision(AdaptivePhase.RAMP_DOWN, calculateRampDownTps(current.currentTps()),
+                "Errors/backpressure detected");
         }
         
-        // Check if max TPS reached
-        if (current.currentTps() >= config.maxTps()) {
-            return new AdjustmentDecision(
-                AdaptivePhase.SUSTAIN,
-                current.currentTps(),
-                "Max TPS reached"
-            );
+        // Check if max TPS reached (before or after increment)
+        AdjustmentDecision maxTpsDecision = checkMaxTpsReached(current.currentTps());
+        if (maxTpsDecision != null) {
+            return maxTpsDecision;
         }
         
-        // Check for stability (intermediate)
-        if (decisionPolicy.shouldRampUp(metrics)) {
-            // Conditions are good, check if we'll have enough stable intervals after incrementing
-            int newStableCount = current.stableIntervalsCount() + 1;
-            if (decisionPolicy.shouldSustain(newStableCount, config.stableIntervalsRequired())) {
-                return new AdjustmentDecision(
-                    AdaptivePhase.SUSTAIN,
-                    current.currentTps(),
-                    "Stability detected"
-                );
-            }
+        // Check for stability
+        if (isStable(current, metrics)) {
+            return decision(AdaptivePhase.SUSTAIN, current.currentTps(), "Stability detected");
         }
         
         // Continue ramping up
         if (decisionPolicy.shouldRampUp(metrics)) {
-            double newTps = Math.min(config.maxTps(),
-                current.currentTps() + config.rampIncrement());
-            // If new TPS reaches max, transition to SUSTAIN
-            if (newTps >= config.maxTps()) {
-                return new AdjustmentDecision(
-                    AdaptivePhase.SUSTAIN,
-                    newTps,
-                    "Max TPS reached"
-                );
+            double newTps = calculateRampUpTps(current.currentTps());
+            // Check if new TPS reaches max
+            AdjustmentDecision newMaxTpsDecision = checkMaxTpsReached(newTps);
+            if (newMaxTpsDecision != null) {
+                return newMaxTpsDecision;
             }
-            return new AdjustmentDecision(
-                AdaptivePhase.RAMP_UP,
-                newTps,
-                "Conditions good, ramping up"
-            );
+            return decision(AdaptivePhase.RAMP_UP, newTps, "Conditions good, ramping up");
         }
         
         // Hold current TPS
-        return new AdjustmentDecision(
-            AdaptivePhase.RAMP_UP,
-            current.currentTps(),
-            "Moderate backpressure, holding"
-        );
+        return decision(AdaptivePhase.RAMP_UP, current.currentTps(), "Moderate backpressure, holding");
+    }
+    
+    /**
+     * Checks if TPS has reached maximum and returns transition decision if so.
+     * 
+     * @param tps the TPS to check
+     * @return transition decision to SUSTAIN if max reached, null otherwise
+     */
+    private AdjustmentDecision checkMaxTpsReached(double tps) {
+        if (tps >= config.maxTps()) {
+            return decision(AdaptivePhase.SUSTAIN, tps, "Max TPS reached");
+        }
+        return null;
     }
     
     /**
@@ -275,53 +254,50 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         
         // Check if at minimum (recovery mode)
         if (current.inRecovery()) {
-            if (decisionPolicy.canRecoverFromMinimum(metrics)) {
-                double recoveryTps = Math.max(config.minTps(),
-                    current.lastKnownGoodTps() * RECOVERY_TPS_RATIO);
-                return new AdjustmentDecision(
-                    AdaptivePhase.RAMP_UP,
-                    recoveryTps,
-                    "Recovery: conditions improved"
-                );
-            }
-            // Stay at minimum
-            return new AdjustmentDecision(
-                AdaptivePhase.RAMP_DOWN,
-                config.minTps(),
-                "Recovery: waiting for conditions to improve"
-            );
+            return decideRecovery(current, metrics);
         }
         
-        // Check for stability
+        // Check for stability when conditions improve
         if (!decisionPolicy.shouldRampDown(metrics)) {
-            // Check if conditions are good (needed for stability)
-            if (decisionPolicy.shouldRampUp(metrics)) {
-                // Conditions are good, check if we'll have enough stable intervals after incrementing
-                int newStableCount = current.stableIntervalsCount() + 1;
-                if (decisionPolicy.shouldSustain(newStableCount, config.stableIntervalsRequired())) {
-                    return new AdjustmentDecision(
-                        AdaptivePhase.SUSTAIN,
-                        current.currentTps(),
-                        "Stability detected during ramp down"
-                    );
-                }
-            }
-            // Hold current TPS, continue tracking stability
-            return new AdjustmentDecision(
-                AdaptivePhase.RAMP_DOWN,
-                current.currentTps(),
-                "Conditions improved, checking stability"
-            );
+            return decideStabilityDuringRampDown(current, metrics);
         }
         
         // Continue ramping down
-        double newTps = Math.max(config.minTps(),
-            current.currentTps() - config.rampDecrement());
-        return new AdjustmentDecision(
-            AdaptivePhase.RAMP_DOWN,
-            newTps,
-            "Errors/backpressure persist, ramping down"
-        );
+        return decision(AdaptivePhase.RAMP_DOWN, calculateRampDownTps(current.currentTps()),
+            "Errors/backpressure persist, ramping down");
+    }
+    
+    /**
+     * Decides recovery action when at minimum TPS.
+     * 
+     * @param current current state
+     * @param metrics current metrics
+     * @return recovery decision
+     */
+    private AdjustmentDecision decideRecovery(AdaptiveState current, MetricsSnapshot metrics) {
+        if (decisionPolicy.canRecoverFromMinimum(metrics)) {
+            return decision(AdaptivePhase.RAMP_UP, 
+                calculateRecoveryTps(current.lastKnownGoodTps()),
+                "Recovery: conditions improved");
+        }
+        return decision(AdaptivePhase.RAMP_DOWN, config.minTps(),
+            "Recovery: waiting for conditions to improve");
+    }
+    
+    /**
+     * Decides action when conditions improve during ramp down.
+     * 
+     * @param current current state
+     * @param metrics current metrics
+     * @return decision (either SUSTAIN if stable, or continue RAMP_DOWN)
+     */
+    private AdjustmentDecision decideStabilityDuringRampDown(AdaptiveState current, MetricsSnapshot metrics) {
+        if (isStable(current, metrics)) {
+            return decision(AdaptivePhase.SUSTAIN, current.currentTps(),
+                "Stability detected during ramp down");
+        }
+        return decision(AdaptivePhase.RAMP_DOWN, current.currentTps(),
+            "Conditions improved, checking stability");
     }
     
     /**
@@ -334,37 +310,41 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         
         // Check if conditions worsened
         if (decisionPolicy.shouldRampDown(metrics)) {
-            double newTps = Math.max(config.minTps(),
-                current.currentTps() - config.rampDecrement());
-            return new AdjustmentDecision(
-                AdaptivePhase.RAMP_DOWN,
-                newTps,
-                "Conditions worsened during sustain"
-            );
+            return decision(AdaptivePhase.RAMP_DOWN, calculateRampDownTps(current.currentTps()),
+                "Conditions worsened during sustain");
         }
         
-        // Check if sustain duration elapsed
-        long phaseDuration = elapsedMillis - current.phaseStartTime();
-        if (phaseDuration >= config.sustainDuration().toMillis()) {
-            // Try to ramp up
-            if (decisionPolicy.shouldRampUp(metrics) && 
-                current.currentTps() < config.maxTps()) {
-                double newTps = Math.min(config.maxTps(),
-                    current.currentTps() + config.rampIncrement());
-                return new AdjustmentDecision(
-                    AdaptivePhase.RAMP_UP,
-                    newTps,
-                    "Sustain duration elapsed, ramping up"
-                );
-            }
+        // Check if sustain duration elapsed and can ramp up
+        AdjustmentDecision afterSustainDecision = checkAfterSustainDuration(current, metrics, elapsedMillis);
+        if (afterSustainDecision != null) {
+            return afterSustainDecision;
         }
         
         // Continue sustaining
-        return new AdjustmentDecision(
-            AdaptivePhase.SUSTAIN,
-            current.currentTps(),
-            "Continuing to sustain"
-        );
+        return decision(AdaptivePhase.SUSTAIN, current.currentTps(), "Continuing to sustain");
+    }
+    
+    /**
+     * Checks if sustain duration has elapsed and returns decision to ramp up if conditions allow.
+     * 
+     * @param current current state
+     * @param metrics current metrics
+     * @param elapsedMillis current elapsed time
+     * @return decision to ramp up if duration elapsed and conditions allow, null otherwise
+     */
+    private AdjustmentDecision checkAfterSustainDuration(
+            AdaptiveState current,
+            MetricsSnapshot metrics,
+            long elapsedMillis) {
+        
+        long phaseDuration = elapsedMillis - current.phaseStartTime();
+        if (phaseDuration >= config.sustainDuration().toMillis()) {
+            if (decisionPolicy.shouldRampUp(metrics) && current.currentTps() < config.maxTps()) {
+                return decision(AdaptivePhase.RAMP_UP, calculateRampUpTps(current.currentTps()),
+                    "Sustain duration elapsed, ramping up");
+            }
+        }
+        return null;
     }
     
     /**
@@ -372,7 +352,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
      * 
      * <p>Stability means:
      * - Conditions are good (error rate low, backpressure low)
-     * - Been stable for required number of intervals
+     * - Been stable for required number of intervals (after incrementing)
      * 
      * @param current current state
      * @param metrics current metrics
@@ -384,11 +364,9 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             return false;
         }
         
-        // Check if stable intervals count meets requirement
-        return decisionPolicy.shouldSustain(
-            current.stableIntervalsCount(),
-            config.stableIntervalsRequired()
-        );
+        // Check if we'll have enough stable intervals after incrementing
+        int newStableCount = current.stableIntervalsCount() + 1;
+        return decisionPolicy.shouldSustain(newStableCount, config.stableIntervalsRequired());
     }
     
     /**
@@ -406,11 +384,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         
         if (decision.newPhase() != current.phase()) {
             // Phase transition
-            return switch (decision.newPhase()) {
-                case RAMP_UP -> transitionToRampUp(current, elapsedMillis, decision.newTps());
-                case RAMP_DOWN -> transitionToRampDown(current, elapsedMillis, decision.newTps());
-                case SUSTAIN -> transitionToSustain(current, elapsedMillis, decision.newTps());
-            };
+            return transitionToPhase(current, decision.newPhase(), elapsedMillis, decision.newTps());
         } else {
             // Same phase, just update TPS and timing
             return updateStateInPhase(current, decision, elapsedMillis);
@@ -426,153 +400,140 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             long elapsedMillis) {
         
         // Update stability count if conditions are good
-        int newStableCount = 0;
-        if (decisionPolicy.shouldRampUp(captureMetricsSnapshot(elapsedMillis))) {
-            // Conditions are good, increment stability count
-            newStableCount = current.stableIntervalsCount() + 1;
-        }
-        // If conditions not good, stability count resets to 0
-        
-        // Check if at minimum TPS (recovery mode)
-        boolean inRecovery = decision.newTps() <= config.minTps();
-        
-        // Update last known good TPS - only increase, never decrease
-        // This captures the highest TPS we've achieved
-        // During ramp-down, preserve the maximum TPS we had before ramping down
-        // Only update if we're in RAMP_UP phase or if current TPS is higher than previous max
-        double lastKnownGood = current.lastKnownGoodTps();
-        if (current.phase() == AdaptivePhase.RAMP_UP) {
-            // During ramp-up, update if new TPS is higher
-            lastKnownGood = Math.max(
-                Math.max(current.currentTps(), decision.newTps()),
-                current.lastKnownGoodTps()
-            );
-        } else if (current.phase() == AdaptivePhase.RAMP_DOWN) {
-            // During ramp-down, preserve the peak - never decrease lastKnownGoodTps
-            // We only update if current TPS (before decrement) is higher than previous max
-            // This ensures we capture the TPS we're ramping down FROM, not the lower TPS we're going TO
-            lastKnownGood = Math.max(current.currentTps(), current.lastKnownGoodTps());
-        }
-        // For SUSTAIN phase, keep existing lastKnownGood (no change needed)
+        int newStableCount = calculateStableCount(current, elapsedMillis);
         
         return new AdaptiveState(
             current.phase(),
             decision.newTps(),
             elapsedMillis,
-            current.phaseStartTime(),  // Keep phase start time
-            current.stableTps(),  // Keep stable TPS if found
+            current.phaseStartTime(),
+            current.stableTps(),
             newStableCount,
-            lastKnownGood,
-            inRecovery,
+            updateLastKnownGoodTps(current, current.currentTps(), decision.newTps()),
+            decision.newTps() <= config.minTps(),
             current.phaseTransitionCount()
         );
     }
     
     /**
-     * Transitions to RAMP_UP phase.
+     * Calculates the new stable intervals count based on current conditions.
      * 
      * @param current current state
-     * @param elapsedMillis current time
-     * @param newTps new TPS (after increment or recovery)
-     * @return new state
+     * @param elapsedMillis current elapsed time
+     * @return new stable count (incremented if conditions good, reset to 0 otherwise)
      */
-    private AdaptiveState transitionToRampUp(
+    private int calculateStableCount(AdaptiveState current, long elapsedMillis) {
+        MetricsSnapshot metrics = captureMetricsSnapshot(elapsedMillis);
+        return decisionPolicy.shouldRampUp(metrics)
+            ? current.stableIntervalsCount() + 1
+            : 0;
+    }
+    
+    /**
+     * Transitions to a new phase.
+     * 
+     * @param current current state
+     * @param newPhase phase to transition to
+     * @param elapsedMillis current time
+     * @param newTps new TPS for the phase
+     * @return new state after transition
+     */
+    private AdaptiveState transitionToPhase(
             AdaptiveState current,
+            AdaptivePhase newPhase,
             long elapsedMillis,
             double newTps) {
         
-        // Update last known good TPS if new TPS is higher
-        // During recovery from minimum, preserve the lastKnownGoodTps (don't update with recovery TPS)
-        double lastKnownGood = current.lastKnownGoodTps();
-        if (!current.inRecovery()) {
-            // Normal ramp-up: update if new TPS is higher
-            lastKnownGood = Math.max(
-                Math.max(current.currentTps(), newTps),
-                current.lastKnownGoodTps()
+        return switch (newPhase) {
+            case RAMP_UP -> {
+                // Special handling for recovery: preserve lastKnownGoodTps
+                double lastKnownGood = current.inRecovery()
+                    ? current.lastKnownGoodTps()
+                    : updateLastKnownGoodTps(current, current.currentTps(), newTps);
+                yield new AdaptiveState(
+                    AdaptivePhase.RAMP_UP, newTps, elapsedMillis, elapsedMillis,
+                    current.stableTps(), 0, lastKnownGood, false,
+                    current.phaseTransitionCount() + 1
+                );
+            }
+            case RAMP_DOWN -> new AdaptiveState(
+                AdaptivePhase.RAMP_DOWN, newTps, elapsedMillis, elapsedMillis,
+                current.stableTps(), 0,
+                updateLastKnownGoodTps(current, current.currentTps(), newTps),
+                newTps <= config.minTps(),
+                current.phaseTransitionCount() + 1
             );
-        }
-        // If in recovery, keep existing lastKnownGoodTps (it should be the peak before ramping down)
-        
-        return new AdaptiveState(
-            AdaptivePhase.RAMP_UP,
-            newTps,
-            elapsedMillis,
-            elapsedMillis,  // New phase start time
-            current.stableTps(),  // Preserve stable TPS if found
-            0,  // Reset stability count
-            lastKnownGood,
-            false,  // Not in recovery
-            current.phaseTransitionCount() + 1
-        );
+            case SUSTAIN -> new AdaptiveState(
+                AdaptivePhase.SUSTAIN, newTps, elapsedMillis, elapsedMillis,
+                newTps, 0, Math.max(newTps, current.lastKnownGoodTps()),
+                false, current.phaseTransitionCount() + 1
+            );
+        };
     }
     
     /**
-     * Transitions to RAMP_DOWN phase.
+     * Updates last known good TPS based on phase and current/new TPS values.
+     * 
+     * <p>Last known good TPS represents the highest TPS achieved before problems.
+     * It only increases, never decreases, and is used for recovery calculations.
      * 
      * @param current current state
-     * @param elapsedMillis current time
-     * @param newTps new TPS (after decrement)
-     * @return new state
+     * @param currentTps current TPS value
+     * @param newTps new TPS value
+     * @return updated last known good TPS
      */
-    private AdaptiveState transitionToRampDown(
+    private double updateLastKnownGoodTps(
             AdaptiveState current,
-            long elapsedMillis,
+            double currentTps,
             double newTps) {
         
-        // Update last known good TPS - preserve the maximum TPS we've achieved
-        // When transitioning to RAMP_DOWN, current.currentTps() is the TPS we're ramping down from
-        // This should be captured as lastKnownGood if it's higher than previous
-        double lastKnownGood = Math.max(
-            current.currentTps(),  // The TPS we're ramping down from
-            current.lastKnownGoodTps()  // Previous maximum
-        );
-        
-        // Check if at minimum (recovery mode)
-        boolean inRecovery = newTps <= config.minTps();
-        
-        return new AdaptiveState(
-            AdaptivePhase.RAMP_DOWN,
-            newTps,
-            elapsedMillis,
-            elapsedMillis,  // New phase start time
-            current.stableTps(),  // Preserve stable TPS if found
-            0,  // Reset stability count
-            lastKnownGood,
-            inRecovery,
-            current.phaseTransitionCount() + 1
-        );
+        return switch (current.phase()) {
+            case RAMP_UP -> Math.max(Math.max(currentTps, newTps), current.lastKnownGoodTps());
+            case RAMP_DOWN -> Math.max(currentTps, current.lastKnownGoodTps());
+            case SUSTAIN -> current.lastKnownGoodTps();
+        };
     }
     
     /**
-     * Transitions to SUSTAIN phase.
+     * Calculates new TPS after ramping up, clamped to max TPS.
      * 
-     * @param current current state
-     * @param elapsedMillis current time
-     * @param stableTps the stable TPS to sustain at
-     * @return new state
+     * @param currentTps current TPS
+     * @return new TPS after increment, clamped to max
      */
-    private AdaptiveState transitionToSustain(
-            AdaptiveState current,
-            long elapsedMillis,
-            double stableTps) {
-        
-        // Update last known good TPS if stable TPS is higher
-        double lastKnownGood = Math.max(
-            stableTps,
-            current.lastKnownGoodTps()
-        );
-        
-        return new AdaptiveState(
-            AdaptivePhase.SUSTAIN,
-            stableTps,
-            elapsedMillis,
-            elapsedMillis,  // New phase start time
-            stableTps,  // Set stable TPS
-            0,  // Reset stability count
-            lastKnownGood,
-            false,  // Not in recovery
-            current.phaseTransitionCount() + 1
-        );
+    private double calculateRampUpTps(double currentTps) {
+        return Math.min(config.maxTps(), currentTps + config.rampIncrement());
+    }
+    
+    /**
+     * Calculates new TPS after ramping down, clamped to min TPS.
+     * 
+     * @param currentTps current TPS
+     * @return new TPS after decrement, clamped to min
+     */
+    private double calculateRampDownTps(double currentTps) {
+        return Math.max(config.minTps(), currentTps - config.rampDecrement());
+    }
+    
+    /**
+     * Calculates recovery TPS from last known good TPS.
+     * 
+     * @param lastKnownGoodTps last known good TPS
+     * @return recovery TPS (50% of last known good, clamped to min)
+     */
+    private double calculateRecoveryTps(double lastKnownGoodTps) {
+        return Math.max(config.minTps(), lastKnownGoodTps * RECOVERY_TPS_RATIO);
+    }
+    
+    /**
+     * Creates an adjustment decision.
+     * 
+     * @param newPhase new phase
+     * @param newTps new TPS
+     * @param reason reason for the decision
+     * @return adjustment decision
+     */
+    private AdjustmentDecision decision(AdaptivePhase newPhase, double newTps, String reason) {
+        return new AdjustmentDecision(newPhase, newTps, reason);
     }
     
     /**
@@ -582,16 +543,11 @@ public final class AdaptiveLoadPattern implements LoadPattern {
      * @return metrics snapshot
      */
     private MetricsSnapshot captureMetricsSnapshot(long elapsedMillis) {
-        double failureRate = metricsProvider.getFailureRate() / PERCENTAGE_TO_RATIO;
-        double recentFailureRate = metricsProvider.getRecentFailureRate(10) / PERCENTAGE_TO_RATIO;
-        double backpressure = getBackpressureLevel();
-        long totalExecutions = metricsProvider.getTotalExecutions();
-        
         return new MetricsSnapshot(
-            failureRate,
-            recentFailureRate,
-            backpressure,
-            totalExecutions
+            metricsProvider.getFailureRate() / PERCENTAGE_TO_RATIO,
+            metricsProvider.getRecentFailureRate(10) / PERCENTAGE_TO_RATIO,
+            getBackpressureLevel(),
+            metricsProvider.getTotalExecutions()
         );
     }
     
@@ -601,10 +557,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
      * @return backpressure level (0.0 if no provider)
      */
     public double getBackpressureLevel() {
-        if (backpressureProvider == null) {
-            return 0.0;
-        }
-        return backpressureProvider.getBackpressureLevel();
+        return backpressureProvider == null ? 0.0 : backpressureProvider.getBackpressureLevel();
     }
     
     /**
@@ -625,72 +578,79 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         
         // Phase transition
         if (oldState.phase() != newState.phase()) {
-            PhaseTransitionEvent event = new PhaseTransitionEvent(
-                oldState.phase(),
-                newState.phase(),
-                newState.currentTps(),
-                System.currentTimeMillis()
-            );
-            for (AdaptivePatternListener listener : listeners) {
-                try {
-                    listener.onPhaseTransition(event);
-                } catch (Exception e) {
-                    System.err.println("Listener error in onPhaseTransition: " + e.getMessage());
-                    e.printStackTrace();
-                }
-            }
+            notifyPhaseTransition(oldState.phase(), newState.phase(), newState.currentTps());
         }
         
         // TPS change
         if (Math.abs(newState.currentTps() - oldState.currentTps()) > 0.001) {
-            TpsChangeEvent event = new TpsChangeEvent(
-                oldState.currentTps(),
-                newState.currentTps(),
-                newState.phase(),
-                System.currentTimeMillis()
-            );
-            for (AdaptivePatternListener listener : listeners) {
-                try {
-                    listener.onTpsChange(event);
-                } catch (Exception e) {
-                    System.err.println("Listener error in onTpsChange: " + e.getMessage());
-                    e.printStackTrace();
-                }
-            }
+            notifyTpsChange(oldState.currentTps(), newState.currentTps(), newState.phase());
         }
         
         // Stability detected
         if (newState.phase() == AdaptivePhase.SUSTAIN && 
             newState.hasStableTps() && 
             !oldState.hasStableTps()) {
-            StabilityDetectedEvent event = new StabilityDetectedEvent(
-                newState.stableTps(),
-                System.currentTimeMillis()
-            );
-            for (AdaptivePatternListener listener : listeners) {
-                try {
-                    listener.onStabilityDetected(event);
-                } catch (Exception e) {
-                    System.err.println("Listener error in onStabilityDetected: " + e.getMessage());
-                    e.printStackTrace();
-                }
-            }
+            notifyStabilityDetected(newState.stableTps());
         }
         
         // Recovery entry
         if (newState.inRecovery() && !oldState.inRecovery()) {
-            RecoveryEvent event = new RecoveryEvent(
-                newState.lastKnownGoodTps(),
-                newState.currentTps(),
-                System.currentTimeMillis()
-            );
-            for (AdaptivePatternListener listener : listeners) {
-                try {
-                    listener.onRecovery(event);
-                } catch (Exception e) {
-                    System.err.println("Listener error in onRecovery: " + e.getMessage());
-                    e.printStackTrace();
-                }
+            notifyRecovery(newState.lastKnownGoodTps(), newState.currentTps());
+        }
+    }
+    
+    /**
+     * Notifies listeners of phase transition.
+     */
+    private void notifyPhaseTransition(AdaptivePhase oldPhase, AdaptivePhase newPhase, double tps) {
+        PhaseTransitionEvent event = new PhaseTransitionEvent(
+            oldPhase, newPhase, tps, System.currentTimeMillis()
+        );
+        notifyListeners(listener -> listener.onPhaseTransition(event), "onPhaseTransition");
+    }
+    
+    /**
+     * Notifies listeners of TPS change.
+     */
+    private void notifyTpsChange(double oldTps, double newTps, AdaptivePhase phase) {
+        TpsChangeEvent event = new TpsChangeEvent(
+            oldTps, newTps, phase, System.currentTimeMillis()
+        );
+        notifyListeners(listener -> listener.onTpsChange(event), "onTpsChange");
+    }
+    
+    /**
+     * Notifies listeners of stability detection.
+     */
+    private void notifyStabilityDetected(double stableTps) {
+        StabilityDetectedEvent event = new StabilityDetectedEvent(
+            stableTps, System.currentTimeMillis()
+        );
+        notifyListeners(listener -> listener.onStabilityDetected(event), "onStabilityDetected");
+    }
+    
+    /**
+     * Notifies listeners of recovery entry.
+     */
+    private void notifyRecovery(double lastKnownGoodTps, double currentTps) {
+        RecoveryEvent event = new RecoveryEvent(
+            lastKnownGoodTps, currentTps, System.currentTimeMillis()
+        );
+        notifyListeners(listener -> listener.onRecovery(event), "onRecovery");
+    }
+    
+    /**
+     * Helper method to notify all listeners with error handling.
+     */
+    private void notifyListeners(
+            java.util.function.Consumer<AdaptivePatternListener> notification,
+            String methodName) {
+        for (AdaptivePatternListener listener : listeners) {
+            try {
+                notification.accept(listener);
+            } catch (Exception e) {
+                System.err.println("Listener error in " + methodName + ": " + e.getMessage());
+                e.printStackTrace();
             }
         }
     }
@@ -785,7 +745,16 @@ public final class AdaptiveLoadPattern implements LoadPattern {
      * @since 0.9.9
      */
     public static final class Builder {
-        private AdaptiveConfig config = AdaptiveConfig.defaults();
+        // Mutable fields for configuration (create AdaptiveConfig only in build())
+        private double initialTps = 100.0;
+        private double maxTps = 5000.0;
+        private double minTps = 10.0;
+        private double rampIncrement = 50.0;
+        private double rampDecrement = 100.0;
+        private Duration rampInterval = Duration.ofMinutes(1);
+        private Duration sustainDuration = Duration.ofMinutes(10);
+        private int stableIntervalsRequired = 3;
+        
         private MetricsProvider metricsProvider;
         private BackpressureProvider backpressureProvider;
         private RampDecisionPolicy decisionPolicy;
@@ -802,8 +771,15 @@ public final class AdaptiveLoadPattern implements LoadPattern {
          * @return this builder
          */
         public Builder config(AdaptiveConfig config) {
-            this.config = Objects.requireNonNull(config, "Config must not be null");
-            return this;
+            Objects.requireNonNull(config, "Config must not be null");
+            return initialTps(config.initialTps())
+                .maxTps(config.maxTps())
+                .minTps(config.minTps())
+                .rampIncrement(config.rampIncrement())
+                .rampDecrement(config.rampDecrement())
+                .rampInterval(config.rampInterval())
+                .sustainDuration(config.sustainDuration())
+                .stableIntervalsRequired(config.stableIntervalsRequired());
         }
         
         /**
@@ -813,16 +789,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
          * @return this builder
          */
         public Builder initialTps(double tps) {
-            this.config = new AdaptiveConfig(
-                tps,
-                config.maxTps(),
-                config.minTps(),
-                config.rampIncrement(),
-                config.rampDecrement(),
-                config.rampInterval(),
-                config.sustainDuration(),
-                config.stableIntervalsRequired()
-            );
+            this.initialTps = tps;
             return this;
         }
         
@@ -833,16 +800,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
          * @return this builder
          */
         public Builder rampIncrement(double increment) {
-            this.config = new AdaptiveConfig(
-                config.initialTps(),
-                config.maxTps(),
-                config.minTps(),
-                increment,
-                config.rampDecrement(),
-                config.rampInterval(),
-                config.sustainDuration(),
-                config.stableIntervalsRequired()
-            );
+            this.rampIncrement = increment;
             return this;
         }
         
@@ -853,16 +811,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
          * @return this builder
          */
         public Builder rampDecrement(double decrement) {
-            this.config = new AdaptiveConfig(
-                config.initialTps(),
-                config.maxTps(),
-                config.minTps(),
-                config.rampIncrement(),
-                decrement,
-                config.rampInterval(),
-                config.sustainDuration(),
-                config.stableIntervalsRequired()
-            );
+            this.rampDecrement = decrement;
             return this;
         }
         
@@ -873,16 +822,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
          * @return this builder
          */
         public Builder rampInterval(Duration interval) {
-            this.config = new AdaptiveConfig(
-                config.initialTps(),
-                config.maxTps(),
-                config.minTps(),
-                config.rampIncrement(),
-                config.rampDecrement(),
-                interval,
-                config.sustainDuration(),
-                config.stableIntervalsRequired()
-            );
+            this.rampInterval = interval;
             return this;
         }
         
@@ -893,16 +833,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
          * @return this builder
          */
         public Builder maxTps(double maxTps) {
-            this.config = new AdaptiveConfig(
-                config.initialTps(),
-                maxTps,
-                config.minTps(),
-                config.rampIncrement(),
-                config.rampDecrement(),
-                config.rampInterval(),
-                config.sustainDuration(),
-                config.stableIntervalsRequired()
-            );
+            this.maxTps = maxTps;
             return this;
         }
         
@@ -913,16 +844,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
          * @return this builder
          */
         public Builder minTps(double minTps) {
-            this.config = new AdaptiveConfig(
-                config.initialTps(),
-                config.maxTps(),
-                minTps,
-                config.rampIncrement(),
-                config.rampDecrement(),
-                config.rampInterval(),
-                config.sustainDuration(),
-                config.stableIntervalsRequired()
-            );
+            this.minTps = minTps;
             return this;
         }
         
@@ -933,16 +855,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
          * @return this builder
          */
         public Builder sustainDuration(Duration duration) {
-            this.config = new AdaptiveConfig(
-                config.initialTps(),
-                config.maxTps(),
-                config.minTps(),
-                config.rampIncrement(),
-                config.rampDecrement(),
-                config.rampInterval(),
-                duration,
-                config.stableIntervalsRequired()
-            );
+            this.sustainDuration = duration;
             return this;
         }
         
@@ -953,16 +866,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
          * @return this builder
          */
         public Builder stableIntervalsRequired(int count) {
-            this.config = new AdaptiveConfig(
-                config.initialTps(),
-                config.maxTps(),
-                config.minTps(),
-                config.rampIncrement(),
-                config.rampDecrement(),
-                config.rampInterval(),
-                config.sustainDuration(),
-                count
-            );
+            this.stableIntervalsRequired = count;
             return this;
         }
         
@@ -1024,19 +928,47 @@ public final class AdaptiveLoadPattern implements LoadPattern {
          * @throws IllegalArgumentException if configuration is invalid
          */
         public AdaptiveLoadPattern build() {
-            if (metricsProvider == null) {
-                throw new IllegalStateException("Metrics provider must be set");
-            }
-            if (decisionPolicy == null) {
-                // Default policy with 1% error threshold
-                decisionPolicy = new DefaultRampDecisionPolicy(0.01);
-            }
+            validateBuilder();
+            AdaptiveConfig config = createConfig();
+            RampDecisionPolicy policy = decisionPolicy != null 
+                ? decisionPolicy 
+                : new DefaultRampDecisionPolicy(0.01);
+            
             return new AdaptiveLoadPattern(
                 config,
                 metricsProvider,
                 backpressureProvider,
-                decisionPolicy,
+                policy,
                 listeners
+            );
+        }
+        
+        /**
+         * Validates that required builder fields are set.
+         * 
+         * @throws IllegalStateException if metrics provider is not set
+         */
+        private void validateBuilder() {
+            if (metricsProvider == null) {
+                throw new IllegalStateException("Metrics provider must be set");
+            }
+        }
+        
+        /**
+         * Creates AdaptiveConfig from builder fields.
+         * 
+         * @return new AdaptiveConfig instance
+         */
+        private AdaptiveConfig createConfig() {
+            return new AdaptiveConfig(
+                initialTps,
+                maxTps,
+                minTps,
+                rampIncrement,
+                rampDecrement,
+                rampInterval,
+                sustainDuration,
+                stableIntervalsRequired
             );
         }
     }

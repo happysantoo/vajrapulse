@@ -36,4 +36,36 @@ public interface LoadPattern {
      * @return total test duration
      */
     Duration getDuration();
+    
+    /**
+     * Returns true if this pattern supports warm-up/cool-down metrics exclusion.
+     * 
+     * <p>Patterns that support warm-up/cool-down phases (e.g., {@link WarmupCooldownLoadPattern})
+     * should override this method to return {@code true} and implement
+     * {@link #shouldRecordMetrics(long)} to control when metrics are recorded.
+     * 
+     * @return true if this pattern supports warm-up/cool-down phases
+     * @since 0.9.9
+     */
+    default boolean supportsWarmupCooldown() {
+        return false;
+    }
+    
+    /**
+     * Returns true if metrics should be recorded at the given elapsed time.
+     * 
+     * <p>This method is only called if {@link #supportsWarmupCooldown()} returns {@code true}.
+     * Patterns that support warm-up/cool-down should override this to exclude metrics
+     * during warm-up and cool-down phases.
+     * 
+     * <p>Default implementation returns {@code true} (record metrics at all times).
+     * 
+     * @param elapsedMillis milliseconds since test start
+     * @return true if metrics should be recorded, false otherwise
+     * @since 0.9.9
+     */
+    default boolean shouldRecordMetrics(long elapsedMillis) {
+        return true;
+    }
+    
 }

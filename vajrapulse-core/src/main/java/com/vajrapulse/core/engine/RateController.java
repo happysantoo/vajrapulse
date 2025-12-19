@@ -2,6 +2,7 @@ package com.vajrapulse.core.engine;
 
 import com.vajrapulse.api.pattern.LoadPattern;
 import com.vajrapulse.core.util.TimeConstants;
+import com.vajrapulse.core.util.TpsCalculator;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
@@ -111,9 +112,8 @@ public final class RateController {
             return;
         }
         
-        // Calculate expected execution count based on elapsed time and target TPS
-        double elapsedSeconds = elapsedNanos / (double) TimeConstants.NANOS_PER_SECOND;
-        long expectedCount = (long) (targetTps * elapsedSeconds);
+        // Calculate expected execution count using centralized utility
+        long expectedCount = TpsCalculator.calculateExpectedCount(targetTps, elapsedMillis);
         
         // If we're ahead of schedule, sleep
         if (currentCount > expectedCount) {

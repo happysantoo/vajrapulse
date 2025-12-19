@@ -1,12 +1,15 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
 import com.vajrapulse.api.pattern.adaptive.AdaptivePatternListener
 import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
 import com.vajrapulse.api.pattern.adaptive.PhaseTransitionEvent
 import com.vajrapulse.api.pattern.adaptive.TpsChangeEvent
 import com.vajrapulse.api.pattern.adaptive.StabilityDetectedEvent
 import com.vajrapulse.api.pattern.adaptive.RecoveryEvent
+
+@Timeout(10)
 
 /**
  * Tests for AdaptivePatternListener and event records.

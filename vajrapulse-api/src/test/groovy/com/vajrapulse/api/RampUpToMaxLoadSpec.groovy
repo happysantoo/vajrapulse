@@ -1,9 +1,11 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
 import com.vajrapulse.api.pattern.RampUpToMaxLoad
 import java.time.Duration
 
+@Timeout(10)
 class RampUpToMaxLoadSpec extends Specification {
 
     def "should ramp up then sustain at max"() {

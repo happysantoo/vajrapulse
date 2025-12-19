@@ -1,6 +1,7 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
 import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern
 import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
 import com.vajrapulse.api.pattern.adaptive.AdaptivePatternListener
@@ -8,6 +9,8 @@ import com.vajrapulse.api.pattern.adaptive.TpsChangeEvent
 import com.vajrapulse.api.metrics.MetricsProvider
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
+
+@Timeout(10)
 
 /**
  * Tests for AdaptiveLoadPattern listener notifications.

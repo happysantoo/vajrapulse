@@ -1,10 +1,12 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
 import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.api.task.TaskResultSuccess
 import com.vajrapulse.api.task.TaskResultFailure
 
+@Timeout(10)
 class TaskResultSpec extends Specification {
 
     def "should create success with data"() {

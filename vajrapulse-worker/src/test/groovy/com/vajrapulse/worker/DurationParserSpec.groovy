@@ -1,7 +1,9 @@
 package com.vajrapulse.worker
 
 import spock.lang.Specification
+import spock.lang.Timeout
 
+@Timeout(10)
 class DurationParserSpec extends Specification {
 
     def "parseDuration should parse seconds"() {

@@ -2,7 +2,12 @@ package com.vajrapulse.core.engine
 
 import com.vajrapulse.core.metrics.MetricsCollector
 import spock.lang.Specification
+import spock.lang.Timeout
 
+import static org.awaitility.Awaitility.*
+import static java.util.concurrent.TimeUnit.*
+
+@Timeout(30)
 class MetricsProviderAdapterSpec extends Specification {
 
     def "should cache snapshot results"() {
@@ -76,8 +81,13 @@ class MetricsProviderAdapterSpec extends Specification {
             collector.record(successMetrics)
         }
         
-        // Wait a bit to create time separation
-        Thread.sleep(1100) // More than 1 second
+        // Wait for time separation (more than 1 second) to test recent window
+        def startTime = System.currentTimeMillis()
+        await().atMost(2, SECONDS)
+            .pollInterval(100, MILLISECONDS)
+            .until {
+                System.currentTimeMillis() - startTime >= 1100
+            }
         
         // Record failures in recent window
         3.times {

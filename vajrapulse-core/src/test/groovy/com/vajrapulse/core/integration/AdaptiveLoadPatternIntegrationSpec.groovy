@@ -9,10 +9,13 @@ import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.engine.MetricsProviderAdapter
 import com.vajrapulse.core.metrics.MetricsCollector
+import com.vajrapulse.core.test.TestExecutionHelper
 import spock.lang.Specification
 import spock.lang.Timeout
 
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 import static org.awaitility.Awaitility.*
@@ -153,44 +156,30 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
             .build()
         
         when: "running engine through recovery cycle"
-        def executionThread = Thread.start {
-            try {
-                engine.run()
-            } catch (Exception e) {
-                // Expected - test will stop engine
-            }
-        }
-        
         // Monitor pattern state transitions
         def phases = []
         def tpsValues = []
         def startTime = System.currentTimeMillis()
         
-        // Wait for pattern to complete recovery cycle
-        await().atMost(15, SECONDS)
-            .pollInterval(500, MILLISECONDS)
-            .until {
-                def phase = pattern.getCurrentPhase()
-                def tps = pattern.getCurrentTps()
-                phases.add(phase)
-                tpsValues.add(tps)
-                
-                // Check if we've seen the full cycle: RAMP_UP -> RAMP_DOWN (at minimum) -> RAMP_UP
-                def uniquePhases = phases.unique()
-                // Recovery behavior happens in RAMP_DOWN when at minimum TPS
-                // Check if we've seen RAMP_DOWN followed by RAMP_UP (recovery happened)
-                def rampDownIndices = phases.findIndexValues { it == AdaptivePhase.RAMP_DOWN }
-                def rampUpIndices = phases.findIndexValues { it == AdaptivePhase.RAMP_UP }
-                def hasRecoveryThenRampUp = !rampDownIndices.isEmpty() && !rampUpIndices.isEmpty() &&
-                    rampUpIndices.last() > rampDownIndices.last()
-                
-                // Stop when we've seen recovery (RAMP_DOWN at minimum followed by RAMP_UP), or after 10 seconds
-                hasRecoveryThenRampUp || (System.currentTimeMillis() - startTime) >= 10000
-            }
-        
-        // Stop the engine
-        engine.stop()
-        executionThread.join(10000)
+        // Use TestExecutionHelper to run until recovery cycle completes
+        TestExecutionHelper.runUntilCondition(engine, {
+            def phase = pattern.getCurrentPhase()
+            def tps = pattern.getCurrentTps()
+            phases.add(phase)
+            tpsValues.add(tps)
+            
+            // Check if we've seen the full cycle: RAMP_UP -> RAMP_DOWN (at minimum) -> RAMP_UP
+            def uniquePhases = phases.unique()
+            // Recovery behavior happens in RAMP_DOWN when at minimum TPS
+            // Check if we've seen RAMP_DOWN followed by RAMP_UP (recovery happened)
+            def rampDownIndices = phases.findIndexValues { it == AdaptivePhase.RAMP_DOWN }
+            def rampUpIndices = phases.findIndexValues { it == AdaptivePhase.RAMP_UP }
+            def hasRecoveryThenRampUp = !rampDownIndices.isEmpty() && !rampUpIndices.isEmpty() &&
+                rampUpIndices.last() > rampDownIndices.last()
+            
+            // Stop when we've seen recovery (RAMP_DOWN at minimum followed by RAMP_UP), or after 10 seconds
+            hasRecoveryThenRampUp || (System.currentTimeMillis() - startTime) >= 10000
+        }, Duration.ofSeconds(15))
         
         then: "pattern should have transitioned through multiple phases"
         def uniquePhasesList = phases.unique()
@@ -253,36 +242,22 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
             .build()
         
         when: "running engine until pattern finds optimal TPS"
-        def executionThread = Thread.start {
-            try {
-                engine.run()
-            } catch (Exception e) {
-                // Expected - test will stop engine
-            }
-        }
-        
         // Monitor pattern state
         def phases = []
         def tpsValues = []
         def startTime = System.currentTimeMillis()
         
-        // Wait for pattern to find stability at intermediate TPS
-        await().atMost(12, SECONDS)
-            .pollInterval(500, MILLISECONDS)
-            .until {
-                def phase = pattern.getCurrentPhase()
-                def tps = pattern.getCurrentTps()
-                phases.add(phase)
-                tpsValues.add(tps)
-                
-                // Stop when we reach SUSTAIN phase at intermediate TPS (not max), or after 8 seconds
-                (phase == AdaptivePhase.SUSTAIN && tps < 50.0) ||
-                (System.currentTimeMillis() - startTime) >= 8000
-            }
-        
-        // Stop the engine
-        engine.stop()
-        executionThread.join(10000)
+        // Use TestExecutionHelper to run until pattern finds stability at intermediate TPS
+        TestExecutionHelper.runUntilCondition(engine, {
+            def phase = pattern.getCurrentPhase()
+            def tps = pattern.getCurrentTps()
+            phases.add(phase)
+            tpsValues.add(tps)
+            
+            // Stop when we reach SUSTAIN phase at intermediate TPS (not max), or after 8 seconds
+            (phase == AdaptivePhase.SUSTAIN && tps < 50.0) ||
+            (System.currentTimeMillis() - startTime) >= 8000
+        }, Duration.ofSeconds(12))
         
         then: "pattern should have found stability at intermediate TPS"
         def finalPhase = pattern.getCurrentPhase()
@@ -340,35 +315,21 @@ class AdaptiveLoadPatternIntegrationSpec extends Specification {
             .build()
         
         when: "running engine for extended period"
-        def executionThread = Thread.start {
-            try {
-                engine.run()
-            } catch (Exception e) {
-                // Expected - test will stop engine
-            }
-        }
-        
         // Monitor pattern state over time
         def phaseTransitions = []
         def tpsHistory = []
         def startTime = System.currentTimeMillis()
         
-        // Run for 10 seconds to verify continuous operation (reduced from 20s for faster tests)
-        await().atMost(12, SECONDS)
-            .pollInterval(1, SECONDS)
-            .until {
-                def phase = pattern.getCurrentPhase()
-                def tps = pattern.getCurrentTps()
-                phaseTransitions.add(phase)
-                tpsHistory.add(tps)
-                
-                // Continue for 10 seconds (enough to verify continuous operation)
-                (System.currentTimeMillis() - startTime) >= 10000
-            }
-        
-        // Stop the engine
-        engine.stop()
-        executionThread.join(10000)
+        // Use TestExecutionHelper to run for extended period to verify continuous operation
+        TestExecutionHelper.runUntilCondition(engine, {
+            def phase = pattern.getCurrentPhase()
+            def tps = pattern.getCurrentTps()
+            phaseTransitions.add(phase)
+            tpsHistory.add(tps)
+            
+            // Continue for 10 seconds (enough to verify continuous operation)
+            (System.currentTimeMillis() - startTime) >= 10000
+        }, Duration.ofSeconds(12))
         
         then: "pattern should have transitioned through multiple phases"
         def uniquePhases = phaseTransitions.unique()

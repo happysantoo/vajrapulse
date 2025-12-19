@@ -7,9 +7,11 @@ import com.vajrapulse.api.task.VirtualThreads
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.metrics.MetricsCollector
 import spock.lang.Specification
+import spock.lang.Timeout
 
 import java.time.Duration
 
+@Timeout(30)
 class PerformanceHarnessSpec extends Specification {
 
     @VirtualThreads

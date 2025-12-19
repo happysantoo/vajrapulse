@@ -7,6 +7,9 @@ import com.vajrapulse.core.engine.RateController
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import spock.lang.Specification
+import spock.lang.Timeout
+
+@Timeout(10)
 
 import java.time.Duration
 import java.util.concurrent.ExecutorService

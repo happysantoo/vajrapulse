@@ -1,11 +1,13 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
 import com.vajrapulse.api.pattern.adaptive.MetricsSnapshot
 
 /**
  * Tests for MetricsSnapshot.
  */
+@Timeout(10)
 class MetricsSnapshotSpec extends Specification {
     
     def "should create valid snapshot"() {

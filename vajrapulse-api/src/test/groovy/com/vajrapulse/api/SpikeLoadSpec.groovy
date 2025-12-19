@@ -1,10 +1,12 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
 import com.vajrapulse.api.pattern.SpikeLoad
 
 import java.time.Duration
 
+@Timeout(10)
 class SpikeLoadSpec extends Specification {
 
     def "spike load alternates base and spike rates"() {

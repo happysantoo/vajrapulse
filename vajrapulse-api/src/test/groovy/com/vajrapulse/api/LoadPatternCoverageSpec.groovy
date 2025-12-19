@@ -1,11 +1,13 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
 import com.vajrapulse.api.pattern.StepLoad
 import com.vajrapulse.api.pattern.SpikeLoad
 import com.vajrapulse.api.pattern.SineWaveLoad
 import java.time.Duration
 
+@Timeout(10)
 class LoadPatternCoverageSpec extends Specification {
 
     def "StepLoad getDuration should sum all step durations"() {

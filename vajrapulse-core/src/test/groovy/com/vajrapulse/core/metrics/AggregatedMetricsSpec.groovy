@@ -1,7 +1,9 @@
 package com.vajrapulse.core.metrics
 
 import spock.lang.Specification
+import spock.lang.Timeout
 
+@Timeout(10)
 class AggregatedMetricsSpec extends Specification {
 
     def "should calculate response TPS correctly"() {

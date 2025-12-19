@@ -7,6 +7,9 @@ import com.vajrapulse.api.task.VirtualThreads
 import com.vajrapulse.core.metrics.AggregatedMetrics
 import com.vajrapulse.core.metrics.MetricsExporter
 import spock.lang.Specification
+import spock.lang.Timeout
+
+@Timeout(30)
 
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicBoolean

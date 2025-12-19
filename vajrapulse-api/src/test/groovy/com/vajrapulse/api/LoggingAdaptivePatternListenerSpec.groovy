@@ -1,6 +1,7 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
 import com.vajrapulse.api.pattern.adaptive.LoggingAdaptivePatternListener
 import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
 import com.vajrapulse.api.pattern.adaptive.PhaseTransitionEvent
@@ -8,6 +9,8 @@ import com.vajrapulse.api.pattern.adaptive.TpsChangeEvent
 import com.vajrapulse.api.pattern.adaptive.StabilityDetectedEvent
 import com.vajrapulse.api.pattern.adaptive.RecoveryEvent
 import java.util.logging.Logger
+
+@Timeout(10)
 import java.util.logging.Level
 import java.util.logging.LogRecord
 import java.util.logging.Handler

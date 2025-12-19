@@ -1,7 +1,9 @@
 package com.vajrapulse.core.perf
 
 import spock.lang.Specification
+import spock.lang.Timeout
 
+@Timeout(30)
 class PerformanceHarnessMainSpec extends Specification {
 
     def "harness main runs with ms duration"() {

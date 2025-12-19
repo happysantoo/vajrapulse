@@ -2,7 +2,9 @@ package com.vajrapulse.core.metrics
 
 import com.vajrapulse.core.engine.ExecutionMetrics
 import spock.lang.Specification
+import spock.lang.Timeout
 
+@Timeout(10)
 class MetricsCollectorRoundingSpec extends Specification {
 
     def "should round configured percentiles to 3 decimals and dedupe"() {

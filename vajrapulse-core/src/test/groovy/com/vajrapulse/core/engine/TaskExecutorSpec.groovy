@@ -5,7 +5,9 @@ import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.api.task.TaskResultSuccess
 import com.vajrapulse.api.task.TaskResultFailure
 import spock.lang.Specification
+import spock.lang.Timeout
 
+@Timeout(10)
 class TaskExecutorSpec extends Specification {
 
     def "should execute task successfully and capture metrics"() {

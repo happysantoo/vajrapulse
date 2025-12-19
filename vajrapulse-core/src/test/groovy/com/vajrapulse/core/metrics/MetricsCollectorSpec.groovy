@@ -4,9 +4,14 @@ import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.core.engine.ExecutionMetrics
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import spock.lang.Specification
+import spock.lang.Timeout
 
 import java.util.Collections
 
+import static org.awaitility.Awaitility.*
+import static java.util.concurrent.TimeUnit.*
+
+@Timeout(30)
 class MetricsCollectorSpec extends Specification {
 
     def "should record successful executions"() {
@@ -246,8 +251,10 @@ class MetricsCollectorSpec extends Specification {
             }
         }
         
-        // Wait a bit to let some snapshots start, but not too long
-        Thread.sleep(20)
+        // Wait for at least one snapshot to complete
+        await().atMost(100, MILLISECONDS)
+            .pollInterval(5, MILLISECONDS)
+            .until { results.size() > 0 }
         collector.close()
         
         threads.each { it.join(1000) } // Add timeout to prevent hanging

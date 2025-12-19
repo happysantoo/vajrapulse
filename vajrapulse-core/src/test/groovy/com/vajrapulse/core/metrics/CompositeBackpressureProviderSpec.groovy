@@ -3,7 +3,9 @@ package com.vajrapulse.core.metrics
 import com.vajrapulse.api.backpressure.BackpressureProvider
 import spock.lang.Specification
 import spock.lang.Subject
+import spock.lang.Timeout
 
+@Timeout(10)
 class CompositeBackpressureProviderSpec extends Specification {
     
     @Subject

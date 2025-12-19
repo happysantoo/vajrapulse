@@ -9,6 +9,7 @@ import com.vajrapulse.api.pattern.StaticLoad
 import com.vajrapulse.core.metrics.MetricsCollector
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter
 import spock.lang.Specification
+import spock.lang.Timeout
 
 import java.time.Duration
 
@@ -23,6 +24,7 @@ import java.time.Duration
  *   <li>MetricsProvider works with custom MetricsCollector</li>
  * </ul>
  */
+@Timeout(30)
 class LoadTestRunnerMetricsProviderSpec extends Specification {
 
     @VirtualThreads

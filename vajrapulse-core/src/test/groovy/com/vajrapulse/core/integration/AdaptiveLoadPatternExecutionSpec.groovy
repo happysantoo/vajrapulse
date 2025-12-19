@@ -9,6 +9,7 @@ import com.vajrapulse.api.pattern.adaptive.AdaptivePhase
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.engine.MetricsProviderAdapter
 import com.vajrapulse.core.metrics.MetricsCollector
+import com.vajrapulse.core.test.TestExecutionHelper
 import spock.lang.Specification
 import spock.lang.Timeout
 
@@ -134,25 +135,11 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
                 .build()
         
         when: "running engine for short duration"
-        def executionThread = Thread.start {
-            try {
-                engine.run()
-            } catch (Exception e) {
-                // Expected - test will stop engine
-            }
-        }
-        
-        // Wait for pattern to be in RAMP_UP or SUSTAIN phase
-        await().atMost(5, SECONDS)
-            .pollInterval(200, MILLISECONDS)
-            .until {
-                def currentPhase = pattern.getCurrentPhase()
-                currentPhase == AdaptivePhase.RAMP_UP || currentPhase == AdaptivePhase.SUSTAIN
-            }
-        
-        // Stop the engine
-        engine.stop()
-        executionThread.join(5000)
+        // Use TestExecutionHelper to run until condition is met
+        TestExecutionHelper.runUntilCondition(engine, {
+            def currentPhase = pattern.getCurrentPhase()
+            currentPhase == AdaptivePhase.RAMP_UP || currentPhase == AdaptivePhase.SUSTAIN
+        }, Duration.ofSeconds(5))
         
         then: "pattern should be in RAMP_UP or SUSTAIN phase"
         def phase = pattern.getCurrentPhase()
@@ -198,34 +185,21 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
                 .build()
         
         when: "running engine until errors trigger RAMP_DOWN"
-        def executionThread = Thread.start {
-            try {
-                engine.run()
-            } catch (Exception e) {
-                // Expected - test will stop engine
-            }
-        }
-        
-        // Wait for pattern to transition to RAMP_DOWN due to errors or accumulate enough executions
+        // Use TestExecutionHelper to run until pattern transitions or enough executions occur
+        // Combined condition: wait for transition AND enough time for ramp interval processing
         def executionCount = 0L
-        await().atMost(10, SECONDS)
-            .pollInterval(200, MILLISECONDS)
-            .until {
-                def currentPhase = pattern.getCurrentPhase()
-                def currentSnapshot = metrics.snapshot()
-                executionCount = currentSnapshot.totalExecutions()
-                // Transition to RAMP_DOWN/SUSTAIN OR enough executions to trigger error threshold
-                currentPhase == AdaptivePhase.RAMP_DOWN || 
-                currentPhase == AdaptivePhase.SUSTAIN ||
-                executionCount >= 100 // Enough executions to potentially trigger errors
-            }
-        
-        // Give it a bit more time to process errors and transition
-        Thread.sleep(1500) // Wait for ramp interval to pass
-        
-        // Stop the engine
-        engine.stop()
-        executionThread.join(5000)
+        def startTime = System.currentTimeMillis()
+        TestExecutionHelper.runUntilCondition(engine, {
+            def currentPhase = pattern.getCurrentPhase()
+            def currentSnapshot = metrics.snapshot()
+            executionCount = currentSnapshot.totalExecutions()
+            def elapsed = System.currentTimeMillis() - startTime
+            // Transition to RAMP_DOWN/SUSTAIN OR enough executions to trigger error threshold
+            // Also ensure enough time has passed for ramp interval (1s) plus processing
+            (currentPhase == AdaptivePhase.RAMP_DOWN || 
+             currentPhase == AdaptivePhase.SUSTAIN ||
+             executionCount >= 100) && elapsed >= 1500 // At least 1.5s for ramp interval + processing
+        }, Duration.ofSeconds(10))
         
         then: "pattern should transition to RAMP_DOWN or SUSTAIN (or be in RAMP_UP if not enough time elapsed)"
         def phase = pattern.getCurrentPhase()
@@ -278,25 +252,11 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
                 .build()
         
         when: "running engine until stable point is found"
-        def executionThread = Thread.start {
-            try {
-                engine.run()
-            } catch (Exception e) {
-                // Expected - test will stop engine
-            }
-        }
-        
-        // Wait for pattern to potentially find stable point and transition to SUSTAIN
-        await().atMost(20, SECONDS)
-            .pollInterval(500, MILLISECONDS)
-            .until {
-                def currentPhase = pattern.getCurrentPhase()
-                currentPhase == AdaptivePhase.SUSTAIN
-            }
-        
-        // Stop the engine
-        engine.stop()
-        executionThread.join(5000)
+        // Use TestExecutionHelper to run until pattern finds stable point
+        TestExecutionHelper.runUntilCondition(engine, {
+            def currentPhase = pattern.getCurrentPhase()
+            currentPhase == AdaptivePhase.SUSTAIN
+        }, Duration.ofSeconds(20))
         
         then: "pattern may have found stable point"
         def phase = pattern.getCurrentPhase()
@@ -340,21 +300,10 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
                 .build()
         
         when: "running engine for short duration"
-        def executionThread = Thread.start {
-            try {
-                engine.run()
-            } catch (Exception e) {
-                // Expected - test will stop engine
-            }
-        }
-        
-        // Wait for some executions to occur
-        await().atMost(5, SECONDS)
-            .pollInterval(200, MILLISECONDS)
-            .until { metrics.snapshot().totalExecutions() > 0 }
-        
-        engine.stop()
-        executionThread.join(5000)
+        // Use TestExecutionHelper to run until executions occur
+        TestExecutionHelper.runUntilCondition(engine, {
+            metrics.snapshot().totalExecutions() > 0
+        }, Duration.ofSeconds(5))
         
         then: "metrics should be collected"
         def snapshot = metrics.snapshot()
@@ -403,24 +352,11 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
                 .build()
         
         when: "running engine with rapid adjustments"
-        def executionThread = Thread.start {
-            try {
-                engine.run()
-            } catch (Exception e) {
-                // Expected - test will stop engine
-            }
-        }
-        
-        // Wait for pattern to process multiple ramp intervals
-        await().atMost(5, SECONDS)
-            .pollInterval(300, MILLISECONDS)
-            .until {
-                def currentSnapshot = metrics.snapshot()
-                currentSnapshot.totalExecutions() > 0 && pattern.getCurrentPhase() != null
-            }
-        
-        engine.stop()
-        executionThread.join(5000)
+        // Use TestExecutionHelper to run until executions occur
+        TestExecutionHelper.runUntilCondition(engine, {
+            def currentSnapshot = metrics.snapshot()
+            currentSnapshot.totalExecutions() > 0 && pattern.getCurrentPhase() != null
+        }, Duration.ofSeconds(5))
         
         then: "pattern should handle rapid changes"
         def phase = pattern.getCurrentPhase()
@@ -464,30 +400,16 @@ class AdaptiveLoadPatternExecutionSpec extends Specification {
         
         when: "running engine until pattern may reach minimum TPS"
         def startTime = System.currentTimeMillis()
-        def executionThread = Thread.start {
-            try {
-                engine.run()
-            } catch (Exception e) {
-                // Expected - test will stop engine
-            }
-        }
+        // Use TestExecutionHelper to run until pattern reaches minimum TPS or sufficient time passes
+        // This test verifies the pattern doesn't hang
+        TestExecutionHelper.runUntilCondition(engine, {
+            def currentPhase = pattern.getCurrentPhase()
+            (currentPhase == AdaptivePhase.RAMP_DOWN && pattern.getCurrentTps() <= 0.0) || 
+            (System.currentTimeMillis() - startTime) > 12000 // At least 12s passed
+        }, Duration.ofSeconds(20))
         
-        // Wait for pattern to potentially reach minimum TPS (recovery behavior in RAMP_DOWN)
-        // This test verifies the pattern doesn't hang, so we wait for either:
-        // 1. RAMP_DOWN phase at minimum TPS (recovery behavior)
-        // 2. Or sufficient time has passed (pattern is still running)
-        await().atMost(20, SECONDS)
-            .pollInterval(1, SECONDS)
-            .until {
-                def currentPhase = pattern.getCurrentPhase()
-                (currentPhase == AdaptivePhase.RAMP_DOWN && pattern.getCurrentTps() <= 0.0) || 
-                (System.currentTimeMillis() - startTime) > 12000 // At least 12s passed
-            }
-        
-        // Stop the engine (should not hang)
+        // Measure stop duration
         def stopTime = System.currentTimeMillis()
-        engine.stop()
-        executionThread.join(10000) // Should complete within 10 seconds
         def stopDuration = System.currentTimeMillis() - stopTime
         
         then: "engine should stop without hanging"

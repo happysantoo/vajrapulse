@@ -3,9 +3,11 @@ package com.vajrapulse.core.engine
 import com.vajrapulse.api.pattern.LoadPattern
 import com.vajrapulse.api.pattern.StaticLoad
 import spock.lang.Specification
+import spock.lang.Timeout
 
 import java.time.Duration
 
+@Timeout(10)
 class RateControllerSpec extends Specification {
 
     def "should calculate current TPS from load pattern"() {

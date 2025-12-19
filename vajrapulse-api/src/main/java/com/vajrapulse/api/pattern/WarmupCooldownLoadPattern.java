@@ -139,8 +139,14 @@ public final class WarmupCooldownLoadPattern implements LoadPattern {
      * @param elapsedMillis milliseconds since test start
      * @return true if metrics should be recorded, false otherwise
      */
+    @Override
     public boolean shouldRecordMetrics(long elapsedMillis) {
         return getCurrentPhase(elapsedMillis) == Phase.STEADY_STATE;
+    }
+    
+    @Override
+    public boolean supportsWarmupCooldown() {
+        return true;
     }
     
     @Override

@@ -2,10 +2,13 @@ package com.vajrapulse.core.config
 
 import spock.lang.Specification
 import spock.lang.TempDir
+import spock.lang.Timeout
 
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
+
+@Timeout(10)
 
 /**
  * Tests for ConfigLoader.

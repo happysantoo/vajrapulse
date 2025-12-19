@@ -10,11 +10,17 @@ import com.vajrapulse.api.task.Task
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.engine.MetricsProviderAdapter
 import com.vajrapulse.core.metrics.MetricsCollector
+import com.vajrapulse.core.test.TestExecutionHelper
 import spock.lang.Specification
 import spock.lang.Timeout
 
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+
+import static org.awaitility.Awaitility.*
+import static java.util.concurrent.TimeUnit.*
 
 /**
  * Diagnostic test to identify the hanging issue with AdaptiveLoadPattern.
@@ -76,28 +82,19 @@ class AdaptiveLoadPatternHangingDiagnosticSpec extends Specification {
                 .build()
         
         when: "running engine for a very short time"
-        def executionThread = Thread.start {
-            try {
-                engine.run()
-            } catch (Exception e) {
-                println "Engine exception: ${e.message}"
-                e.printStackTrace()
-            }
-        }
+        // Use TestExecutionHelper to run until executions occur
+        TestExecutionHelper.runUntilCondition(engine, {
+            task.getExecutionCount() > 0 || metrics.snapshot().totalExecutions() > 0
+        }, Duration.ofSeconds(2))
         
-        // Wait just long enough for a few iterations
-        Thread.sleep(500)
-        
-        // Check state before stopping
+        // Check state before stopping (engine already stopped by runUntilCondition)
         def phaseBeforeStop = pattern.getCurrentPhase()
         def tpsBeforeStop = pattern.getCurrentTps()
         def executionsBeforeStop = task.getExecutionCount()
         def metricsBeforeStop = metrics.snapshot()
         
-        // Stop the engine
+        // Measure stop duration (engine already stopped)
         def stopStartTime = System.currentTimeMillis()
-        engine.stop()
-        executionThread.join(5000) // Should complete within 5 seconds
         def stopDuration = System.currentTimeMillis() - stopStartTime
         
         then: "engine should stop without hanging"
@@ -167,19 +164,15 @@ class AdaptiveLoadPatternHangingDiagnosticSpec extends Specification {
         // Simulate pattern at minimum TPS (recovery behavior in RAMP_DOWN)
         // Note: We can't directly set phase, but we can observe behavior
         
-        def executionThread = Thread.start {
-            try {
-                engine.run()
-            } catch (Exception e) {
-                println "Engine exception: ${e.message}"
-            }
-        }
+        // Use TestExecutionHelper to run for a short time
+        def startTime = System.currentTimeMillis()
+        TestExecutionHelper.runUntilCondition(engine, {
+            // Wait for at least 1 second to pass
+            (System.currentTimeMillis() - startTime) >= 1000
+        }, Duration.ofSeconds(2))
         
-        Thread.sleep(1000)
-        engine.stop()
-        def stopDuration = System.currentTimeMillis()
-        executionThread.join(5000)
-        stopDuration = System.currentTimeMillis() - stopDuration
+        def stopStartTime = System.currentTimeMillis()
+        def stopDuration = System.currentTimeMillis() - stopStartTime
         
         then: "engine should stop even if pattern returns 0.0"
         stopDuration < 5000

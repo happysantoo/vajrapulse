@@ -2,7 +2,9 @@ package com.vajrapulse.core.metrics
 
 import spock.lang.Specification
 import spock.lang.Subject
+import spock.lang.Timeout
 
+@Timeout(10)
 class QueueBackpressureProviderSpec extends Specification {
     
     @Subject

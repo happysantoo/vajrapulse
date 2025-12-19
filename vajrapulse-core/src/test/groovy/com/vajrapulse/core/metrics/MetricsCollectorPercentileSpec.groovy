@@ -3,7 +3,9 @@ package com.vajrapulse.core.metrics
 import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.core.engine.ExecutionMetrics
 import spock.lang.Specification
+import spock.lang.Timeout
 
+@Timeout(10)
 class MetricsCollectorPercentileSpec extends Specification {
 
     def "should configure custom percentiles"() {

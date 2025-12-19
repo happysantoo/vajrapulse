@@ -6,8 +6,11 @@ import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.core.metrics.MetricsCollector
 import com.vajrapulse.core.metrics.MetricsExporter
 import spock.lang.Specification
+import spock.lang.Timeout
 
 import java.time.Duration
+
+@Timeout(10)
 
 class LoadTestRunnerBuilderSpec extends Specification {
 

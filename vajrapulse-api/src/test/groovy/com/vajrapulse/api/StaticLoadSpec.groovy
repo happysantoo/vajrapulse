@@ -1,10 +1,12 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
 import com.vajrapulse.api.pattern.StaticLoad
 
 import java.time.Duration
 
+@Timeout(10)
 class StaticLoadSpec extends Specification {
 
     def "should maintain constant TPS"() {

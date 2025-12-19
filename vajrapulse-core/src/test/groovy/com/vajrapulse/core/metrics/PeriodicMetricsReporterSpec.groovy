@@ -3,9 +3,14 @@ package com.vajrapulse.core.metrics
 import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.core.engine.ExecutionMetrics
 import spock.lang.Specification
+import spock.lang.Timeout
 
 import java.util.concurrent.atomic.AtomicInteger
 
+import static org.awaitility.Awaitility.*
+import static java.util.concurrent.TimeUnit.*
+
+@Timeout(10)
 class PeriodicMetricsReporterSpec extends Specification {
 
     static class CountingExporter implements MetricsExporter {
@@ -28,8 +33,10 @@ class PeriodicMetricsReporterSpec extends Specification {
 
         when:
         reporter.start()
-        // give a little time for the immediate task to run
-        Thread.sleep(50)
+        // Wait for the immediate task to run
+        await().atMost(200, MILLISECONDS)
+            .pollInterval(10, MILLISECONDS)
+            .until { exporter.calls.get() >= 1 }
         reporter.close()
 
         then:

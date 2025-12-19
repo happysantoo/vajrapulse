@@ -4,8 +4,10 @@ import com.vajrapulse.api.backpressure.BackpressureHandler
 import com.vajrapulse.api.backpressure.BackpressureHandlingResult
 import com.vajrapulse.api.backpressure.BackpressureContext
 import spock.lang.Specification
+import spock.lang.Timeout
 import java.time.Duration
 
+@Timeout(10)
 class BackpressureHandlersSpec extends Specification {
     
     def "DROP handler should return DROPPED result"() {
@@ -161,14 +163,18 @@ class BackpressureHandlersSpec extends Specification {
         def results = Collections.synchronizedList(new ArrayList())
         
         when:
+        // Use virtual threads for better performance and proper synchronization
         def threads = (1..10).collect {
-            Thread.start {
+            Thread.startVirtualThread {
                 100.times {
                     results.add(handler.handle(0.8, context))
                 }
             }
         }
-        threads*.join()
+        // Wait for all threads to complete with timeout
+        threads.each { thread ->
+            thread.join(5000) // 5 second timeout per thread
+        }
         
         then:
         results.size() == 1000

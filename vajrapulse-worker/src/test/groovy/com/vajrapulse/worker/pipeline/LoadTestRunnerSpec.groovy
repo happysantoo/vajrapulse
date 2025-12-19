@@ -7,10 +7,12 @@ import com.vajrapulse.api.task.VirtualThreads
 import com.vajrapulse.core.metrics.AggregatedMetrics
 import com.vajrapulse.core.metrics.MetricsExporter
 import spock.lang.Specification
+import spock.lang.Timeout
 
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 
+@Timeout(30)
 class LoadTestRunnerSpec extends Specification {
 
     def "should execute task and return aggregated metrics"() {

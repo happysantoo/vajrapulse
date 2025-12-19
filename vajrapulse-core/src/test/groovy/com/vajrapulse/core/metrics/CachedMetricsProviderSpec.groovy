@@ -1,11 +1,17 @@
 package com.vajrapulse.core.metrics
 
 import com.vajrapulse.api.metrics.MetricsProvider
+import com.vajrapulse.core.test.TestMetricsHelper
 import spock.lang.Specification
+import spock.lang.Timeout
 
 import java.time.Duration
 import java.util.Collections
 
+import static org.awaitility.Awaitility.*
+import static java.util.concurrent.TimeUnit.*
+
+@Timeout(10)
 class CachedMetricsProviderSpec extends Specification {
 
     def "should cache metrics with default TTL"() {
@@ -66,8 +72,13 @@ class CachedMetricsProviderSpec extends Specification {
         callCount.get() == 1
 
         when: "waiting for TTL to expire and calling again"
-        // Wait for TTL to expire (50ms TTL, wait 60ms)
-        Thread.sleep(60)
+        // Wait for TTL to expire (50ms TTL) by checking if cache refreshes
+        await().atMost(200, MILLISECONDS)
+            .pollInterval(10, MILLISECONDS)
+            .until {
+                def testValue = cached.getFailureRate()
+                testValue != rate1 // Cache expired and refreshed
+            }
         def rate3 = cached.getFailureRate()
 
         then: "cache refreshed"
@@ -203,9 +214,13 @@ class CachedMetricsProviderSpec extends Specification {
 
         when: "accessing cache, waiting for expiration, then accessing again concurrently"
         def firstValue = cached.getFailureRate()
-        // Wait for TTL to expire (10ms TTL, wait 20ms to ensure expiration)
-        // Using Thread.sleep directly since we're waiting for time to pass, not a condition
-        Thread.sleep(20)
+        // Wait for TTL to expire (10ms TTL) by checking if cache refreshes
+        await().atMost(100, MILLISECONDS)
+            .pollInterval(5, MILLISECONDS)
+            .until {
+                def testValue = cached.getFailureRate()
+                testValue != firstValue // Cache expired and refreshed
+            }
         
         def results = []
         def threads = []

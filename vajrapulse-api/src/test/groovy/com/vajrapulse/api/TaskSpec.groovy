@@ -3,7 +3,9 @@ package com.vajrapulse.api
 import com.vajrapulse.api.task.Task
 import com.vajrapulse.api.task.TaskResult
 import spock.lang.Specification
+import spock.lang.Timeout
 
+@Timeout(10)
 class TaskSpec extends Specification {
 
     def "should execute default setup successfully"() {
