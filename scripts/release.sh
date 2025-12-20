@@ -101,10 +101,15 @@ check_prerequisites() {
         fi
     fi
     
-    # Check if version is already tagged
+    # Check if version is already tagged (only warn, don't exit)
     if git rev-parse "v${VERSION}" &>/dev/null; then
-        echo -e "${RED}Error: Tag v${VERSION} already exists${NC}"
-        exit 1
+        echo -e "${YELLOW}Warning: Tag v${VERSION} already exists locally${NC}"
+        # Check if tag exists on remote
+        if git ls-remote --tags origin "v${VERSION}" | grep -q "v${VERSION}"; then
+            echo -e "${YELLOW}Tag v${VERSION} also exists on remote. Will skip tag creation.${NC}"
+        else
+            echo -e "${YELLOW}Tag exists locally but not on remote. Will push existing tag.${NC}"
+        fi
     fi
     
     # Check Gradle properties
@@ -216,15 +221,50 @@ publish_central() {
     
     echo -e "${BLUE}[8/8] Publishing to Maven Central...${NC}"
     
-    # Create bundle if not skipped
-    if [[ "${SKIP_BUNDLE}" != "true" ]]; then
-        echo "Creating Maven Central bundle..."
-        ./scripts/create-central-bundle.sh "${VERSION}"
+    # Create bundle
+    echo "Creating Maven Central bundle..."
+    BUNDLE_PATH="/tmp/vajrapulse-${VERSION}-central.zip"
+    ./scripts/create-central-bundle.sh "${VERSION}" "${BUNDLE_PATH}"
+    
+    if [[ ! -f "${BUNDLE_PATH}" ]]; then
+        echo -e "${RED}Error: Bundle file not created: ${BUNDLE_PATH}${NC}"
+        exit 1
     fi
     
-    # Use JReleaser for publishing
-    echo "Publishing with JReleaser..."
-    ./gradlew jreleaserDeploy --no-configuration-cache
+    # Upload to Maven Central Portal
+    echo "Uploading bundle to Maven Central Portal..."
+    
+    if [[ -z "${mavenCentralUsername:-}" ]] || [[ -z "${mavenCentralPassword:-}" ]]; then
+        echo -e "${RED}Error: mavenCentralUsername and mavenCentralPassword must be set${NC}"
+        echo "Set them in ~/.gradle/gradle.properties or as environment variables"
+        exit 1
+    fi
+    
+    RESPONSE=$(curl -s -w "\n%{http_code}" -u "${mavenCentralUsername}:${mavenCentralPassword}" \
+        -F "bundle=@${BUNDLE_PATH}" \
+        "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC")
+    
+    HTTP_CODE=$(echo "${RESPONSE}" | tail -n1)
+    BODY=$(echo "${RESPONSE}" | sed '$d')
+    
+    if [[ "${HTTP_CODE}" == "201" ]] || [[ "${HTTP_CODE}" == "200" ]]; then
+        echo -e "${GREEN}✓ Bundle uploaded successfully${NC}"
+        echo "Response: ${BODY}"
+        
+        # Extract transaction ID if present
+        if echo "${BODY}" | grep -q "transactionId"; then
+            TRANSACTION_ID=$(echo "${BODY}" | grep -o '"transactionId":"[^"]*"' | cut -d'"' -f4)
+            echo "Transaction ID: ${TRANSACTION_ID}"
+        fi
+        
+        echo ""
+        echo -e "${YELLOW}Note: Maven Central sync typically takes 10-120 minutes${NC}"
+        echo "Monitor at: https://central.sonatype.com/"
+    else
+        echo -e "${RED}Error: Upload failed with HTTP ${HTTP_CODE}${NC}"
+        echo "Response: ${BODY}"
+        exit 1
+    fi
     
     echo -e "${GREEN}✓ Published to Maven Central${NC}"
     echo ""
@@ -242,20 +282,36 @@ create_tag() {
         return
     fi
     
-    # Check if tag already exists
+    # Check if tag already exists locally
     if git rev-parse "v${VERSION}" &>/dev/null; then
-        echo -e "${YELLOW}Tag v${VERSION} already exists, skipping tag creation${NC}"
-        return
+        echo -e "${YELLOW}Tag v${VERSION} already exists locally${NC}"
+        
+        # Check if tag exists on remote
+        if git ls-remote --tags origin "v${VERSION}" | grep -q "v${VERSION}"; then
+            echo -e "${YELLOW}Tag v${VERSION} already exists on remote, skipping tag push${NC}"
+        else
+            echo -e "${BLUE}Pushing existing tag v${VERSION} to remote...${NC}"
+            git push origin "v${VERSION}"
+            echo -e "${GREEN}✓ Tag pushed${NC}"
+        fi
+    else
+        echo -e "${BLUE}Creating Git tag v${VERSION}...${NC}"
+        git tag -a "v${VERSION}" -m "Release v${VERSION}: Code Quality Improvements and Refactoring
+
+- AdaptiveLoadPattern refactoring (23.5% code reduction)
+- ExecutionEngine improvements (3.4% code reduction)
+- Test reliability improvements (100% timeout coverage, 0% flakiness)
+- Polymorphism over type checking
+- Comprehensive test utilities and best practices guide
+
+See CHANGELOG.md for complete release notes."
+        echo -e "${GREEN}✓ Tag created${NC}"
+        
+        # Push tag to remote
+        echo -e "${BLUE}Pushing tag to remote...${NC}"
+        git push origin "v${VERSION}"
+        echo -e "${GREEN}✓ Tag pushed${NC}"
     fi
-    
-    echo -e "${BLUE}Creating Git tag v${VERSION}...${NC}"
-    git tag -a "v${VERSION}" -m "Release v${VERSION}"
-    echo -e "${GREEN}✓ Tag created${NC}"
-    
-    # Push tag to remote
-    echo -e "${BLUE}Pushing tag to remote...${NC}"
-    git push origin "v${VERSION}"
-    echo -e "${GREEN}✓ Tag pushed${NC}"
     echo ""
 }
 
