@@ -76,29 +76,29 @@ fi
 load_gradle_properties() {
     local gradle_props="${HOME}/.gradle/gradle.properties"
     if [[ -f "${gradle_props}" ]]; then
-        # Read properties file, skip comments and empty lines
-        while IFS='=' read -r key value || [[ -n "${key}" ]]; do
+        # Read properties file line by line
+        while IFS= read -r line || [[ -n "${line}" ]]; do
             # Skip comments and empty lines
-            [[ "${key}" =~ ^[[:space:]]*# ]] && continue
-            [[ -z "${key// }" ]] && continue
+            [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "${line// }" ]] && continue
             
-            # Remove leading/trailing whitespace from key
-            key="${key%%=*}"
-            key="${key%"${key##*[![:space:]]}"}"
-            key="${key#"${key%%[![:space:]]*}"}"
-            
-            # Remove leading/trailing whitespace from value
-            value="${value#"${value%%[![:space:]]*}"}"
-            value="${value%"${value##*[![:space:]]}"}"
-            
-            # Export as environment variable if not already set
-            if [[ -n "${key}" ]] && [[ -n "${value}" ]]; then
-                # Only set if not already in environment (env vars take precedence)
-                if [[ -z "${!key:-}" ]]; then
+            # Split on first '=' sign
+            if [[ "${line}" =~ ^([^=]+)=(.*)$ ]]; then
+                local key="${BASH_REMATCH[1]}"
+                local value="${BASH_REMATCH[2]}"
+                
+                # Remove leading/trailing whitespace
+                key="${key#"${key%%[![:space:]]*}"}"
+                key="${key%"${key##*[![:space:]]}"}"
+                value="${value#"${value%%[![:space:]]*}"}"
+                value="${value%"${value##*[![:space:]]}"}"
+                
+                # Export as environment variable if not already set (env vars take precedence)
+                if [[ -n "${key}" ]] && [[ -z "${!key:-}" ]]; then
                     export "${key}=${value}"
                 fi
             fi
-        done < <(grep -v '^[[:space:]]*#' "${gradle_props}" | grep -v '^[[:space:]]*$' || true)
+        done < "${gradle_props}"
     fi
 }
 
