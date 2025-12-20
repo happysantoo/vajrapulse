@@ -13,7 +13,20 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - GraalVM native image validation
 - Scenario scripting DSL
 
-## [0.9.9] - 2025-12-12
+## [0.9.9] - 2025-12-14
+
+### 🎯 Release Highlights
+
+Version 0.9.9 focuses on **code quality improvements**, **architectural refactoring**, and **test reliability enhancements**. This release delivers significant improvements to maintainability, testability, and developer experience.
+
+**Key Improvements**:
+- ✅ **23.5% code reduction** in `AdaptiveLoadPattern` (1,275 → 975 lines)
+- ✅ **3.4% code reduction** in `ExecutionEngine` (640 → 618 lines)
+- ✅ **100% test timeout coverage** (62/62 test files)
+- ✅ **0% test flakiness** (validated across 10 consecutive runs)
+- ✅ **Polymorphism over type checking** (eliminated `instanceof` checks)
+- ✅ **Comprehensive test utilities** and best practices guide
+
 ### Removed
 - **BackpressureHandlingResult.RETRY**: Removed incomplete retry handling result
 - **BackpressureHandlingResult.DEGRADED**: Removed incomplete degradation handling result
@@ -23,6 +36,11 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - **com.vajrapulse.core.backpressure package**: Removed package, classes moved to metrics package
 
 ### Added
+- **Test Reliability Improvements**: Comprehensive test quality enhancements
+  - **100% Timeout Coverage**: All 62 test files now have `@Timeout` annotations
+  - **Test Utilities**: Created `TestExecutionHelper` and `TestMetricsHelper` for consistent test patterns
+  - **Test Best Practices Guide**: Comprehensive guide in `documents/guides/TEST_BEST_PRACTICES.md`
+  - **Reliability Validation**: 10 consecutive test runs with 100% pass rate, 0% flakiness
 - **Vortex 0.0.9 Integration**: Added vortex micro-batching library as dependency
   - Integrated vortex 0.0.9 into BOM and core module
   - Prepared foundation for potential future batching optimizations
@@ -44,6 +62,11 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
   - `PhaseStrategy`: Interface for phase-specific logic handling
   - `RampUpStrategy`, `RampDownStrategy`, `SustainStrategy`: Strategy implementations for each phase
   - `AdaptivePatternListener`: Interface for event notifications with event records (`PhaseTransitionEvent`, `TpsChangeEvent`, `StabilityDetectedEvent`, `RecoveryEvent`)
+- **ExecutionEngine Improvements**: Code quality and maintainability enhancements
+  - **Polymorphism**: Eliminated `instanceof` checks for `WarmupCooldownLoadPattern` using interface methods
+  - **Metrics Registration**: Consolidated into single `registerMetrics()` method
+  - **ExecutionCallable**: Extracted to top-level class for better organization
+  - **Code Reduction**: Reduced from 640 lines to 618 lines (3.4% reduction)
 
 ### Changed
 - **BackpressureHandler interface**: Simplified `handle()` method signature
@@ -62,6 +85,10 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
   - Prevents external modification of steps after construction
   - Removed SpotBugs exclusion (issue fixed in code)
 - **AdaptiveLoadPattern**: Major architectural refactoring
+  - **Code Reduction**: Reduced from 1,275 lines to 975 lines (23.5% reduction)
+  - **Helper Methods**: Extracted decision logic into focused helper methods (`checkMaxTpsReached`, `decideRecovery`, `decideStabilityDuringRampDown`, `checkAfterSustainDuration`, `calculateStableCount`, `createInitialState`)
+  - **State Transitions**: Unified state transitions into single `transitionToPhase()` method
+  - **Builder Pattern**: Simplified builder with method chaining and extracted validation/config creation
   - State is now composed of three focused records instead of one large record
   - Phase machine simplified from 4 phases to 3 phases (RAMP_UP, RAMP_DOWN, SUSTAIN)
   - Decision logic extracted to pluggable `RampDecisionPolicy` interface
@@ -70,6 +97,10 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
   - Phase-specific logic moved to strategy classes
   - Event notification system for external integration
   - Deprecated constructors maintained for backward compatibility
+- **LoadPattern Interface**: Enhanced with polymorphism support
+  - Added `supportsWarmupCooldown()` default method for pattern capability detection
+  - Added `shouldRecordMetrics(long elapsedMillis)` default method for metrics recording control
+  - Enables polymorphism over `instanceof` checks for better extensibility
 - **MetricsProvider**: Enhanced with failure count tracking
   - Added `getFailureCount()` method with default implementation
   - `MetricsProviderAdapter` implements failure count tracking
@@ -86,6 +117,8 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - **SpotBugs exclusions**: Updated exclusion file with correct package names after reorganization
 - **Duplicate test files**: Removed duplicate test files after package reorganization
 - **SpotBugs build failures**: Fixed package name mismatches in exclusion file
+- **Test reliability**: Fixed test access to private fields, improved test patterns
+- **Test timeouts**: Added 100% timeout coverage to prevent hanging tests
 
 ### Migration Guide
 
