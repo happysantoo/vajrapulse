@@ -16,6 +16,21 @@
 
 ---
 
+## 🆕 What's New in 0.9.9
+
+Version 0.9.9 focuses on **code quality improvements**, **architectural refactoring**, and **test reliability enhancements**:
+
+- ✅ **23.5% code reduction** in `AdaptiveLoadPattern` (1,275 → 975 lines)
+- ✅ **3.4% code reduction** in `ExecutionEngine` (640 → 618 lines)
+- ✅ **100% test timeout coverage** (62/62 test files)
+- ✅ **0% test flakiness** (validated across 10 consecutive runs)
+- ✅ **Polymorphism over type checking** (eliminated `instanceof` checks)
+- ✅ **Comprehensive test utilities** and best practices guide
+
+See [CHANGELOG.md](CHANGELOG.md#099---2025-12-14) for complete release notes.
+
+---
+
 ## Why VajraPulse?
 
 **VajraPulse** makes load testing simple, fast, and resource-efficient. Built on Java 21's virtual threads, it can handle **10,000+ requests per second** with minimal memory overhead—perfect for testing APIs, databases, message queues, and any I/O-bound service.
