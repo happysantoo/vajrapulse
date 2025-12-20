@@ -72,6 +72,39 @@ if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9-]+)?$ ]]; then
     exit 1
 fi
 
+# Load Gradle properties from ~/.gradle/gradle.properties
+load_gradle_properties() {
+    local gradle_props="${HOME}/.gradle/gradle.properties"
+    if [[ -f "${gradle_props}" ]]; then
+        # Read properties file, skip comments and empty lines
+        while IFS='=' read -r key value || [[ -n "${key}" ]]; do
+            # Skip comments and empty lines
+            [[ "${key}" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "${key// }" ]] && continue
+            
+            # Remove leading/trailing whitespace from key
+            key="${key%%=*}"
+            key="${key%"${key##*[![:space:]]}"}"
+            key="${key#"${key%%[![:space:]]*}"}"
+            
+            # Remove leading/trailing whitespace from value
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+            
+            # Export as environment variable if not already set
+            if [[ -n "${key}" ]] && [[ -n "${value}" ]]; then
+                # Only set if not already in environment (env vars take precedence)
+                if [[ -z "${!key:-}" ]]; then
+                    export "${key}=${value}"
+                fi
+            fi
+        done < <(grep -v '^[[:space:]]*#' "${gradle_props}" | grep -v '^[[:space:]]*$' || true)
+    fi
+}
+
+# Load Gradle properties before checking prerequisites
+load_gradle_properties
+
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}VajraPulse Release Process${NC}"
 echo -e "${BLUE}========================================${NC}"
