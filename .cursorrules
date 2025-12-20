@@ -157,6 +157,86 @@ def "should execute task and record metrics"() {
 }
 ```
 
+#### Test Best Practices (MANDATORY)
+
+**ALWAYS refer to and follow the Test Best Practices Guide**: `documents/guides/TEST_BEST_PRACTICES.md`
+
+**All tests MUST follow these rules:**
+
+1. **Test Timeouts (REQUIRED)**
+   - **ALL test classes MUST have `@Timeout` annotation**
+   - Unit tests: `@Timeout(10)` (10 seconds)
+   - Integration tests: `@Timeout(30)` (30 seconds)
+   - Complex integration tests: `@Timeout(60)` (60 seconds)
+   - Metrics tests: `@Timeout(30)` (30 seconds)
+   - **Never create tests without `@Timeout` - prevents hanging tests**
+
+2. **Awaitility vs Thread.sleep() (MANDATORY)**
+   - **Use Awaitility** when waiting for conditions to become true:
+     - Waiting for state changes
+     - Waiting for metrics to reach thresholds
+     - Waiting for async operations
+     - Waiting for cache expiration
+   - **Use Thread.sleep() ONLY** for intentional delays:
+     - Simulating work in task implementations (e.g., `Thread.sleep(10) // Simulate I/O`)
+     - Testing rate control/timing behavior
+     - Testing shutdown behavior
+     - GC-related delays
+   - **NEVER use `Thread.sleep()` to wait for conditions** - use Awaitility instead
+   - **Decision Tree**: See `documents/guides/TEST_BEST_PRACTICES.md` for complete decision tree
+
+3. **Test Utilities (REQUIRED for ExecutionEngine Tests)**
+   - **ALWAYS use `TestExecutionHelper`** when testing `ExecutionEngine`:
+     - `TestExecutionHelper.runWithTimeout()` - for finite load patterns
+     - `TestExecutionHelper.runUntilCondition()` - for waiting on conditions
+     - `TestExecutionHelper.awaitCondition()` - for custom conditions
+   - **ALWAYS use `TestMetricsHelper`** when testing metrics:
+     - `TestMetricsHelper.waitForExecutions()` - wait for execution count
+     - `TestMetricsHelper.waitForCacheExpiration()` - wait for cache TTL
+     - `TestMetricsHelper.waitForMetricsCondition()` - custom metrics conditions
+   - **NEVER manually manage threads** for ExecutionEngine tests:
+     - ❌ Don't use `Thread.startVirtualThread { engine.run() }` with `Thread.join()`
+     - ❌ Don't use `CountDownLatch` manually for ExecutionEngine
+     - ✅ Use `TestExecutionHelper` utilities instead
+   - **Location**: `com.vajrapulse.core.test.TestExecutionHelper` and `TestMetricsHelper`
+
+4. **Async Testing Patterns (MANDATORY)**
+   - **ExecutionEngine tests**: Use `TestExecutionHelper.runUntilCondition()` or `runWithTimeout()`
+   - **CountDownLatch**: Use with timeout: `latch.await(5, TimeUnit.SECONDS)`
+   - **Virtual threads**: Use `Thread.startVirtualThread` for background operations
+   - **NEVER use `Thread.join()` without timeout** - may hang indefinitely
+   - **Always use `withShutdownHook(false)`** in ExecutionEngine builder for tests
+
+5. **Anti-patterns to AVOID**
+   - ❌ Missing `@Timeout` annotations
+   - ❌ `Thread.sleep()` for waiting on conditions
+   - ❌ `Thread.start/join` without synchronization
+   - ❌ Hard-coded sleep durations
+   - ❌ Fixed delays for TTL expiration
+   - ❌ Non-idempotent conditions in Awaitility
+   - ❌ Manual thread management for ExecutionEngine
+
+6. **Test Examples Reference**
+   - See `documents/guides/TEST_BEST_PRACTICES.md` for comprehensive good vs bad examples
+   - See existing test files for reference:
+     - `AdaptiveLoadPatternExecutionSpec.groovy` - uses `TestExecutionHelper`
+     - `CachedMetricsProviderSpec.groovy` - uses `TestMetricsHelper`
+     - `MetricsProviderAdapterSpec.groovy` - uses Awaitility
+
+**When creating or modifying tests:**
+1. **Check the Test Best Practices Guide first**: `documents/guides/TEST_BEST_PRACTICES.md`
+2. **Use test utilities** (`TestExecutionHelper`, `TestMetricsHelper`) instead of manual patterns
+3. **Add `@Timeout` annotation** to all test classes
+4. **Use Awaitility** for waiting on conditions, not `Thread.sleep()`
+5. **Follow the decision tree** in the guide for choosing the right approach
+
+**Cursor MUST:**
+- Remind developers to check `documents/guides/TEST_BEST_PRACTICES.md` when creating tests
+- Suggest using `TestExecutionHelper` and `TestMetricsHelper` utilities
+- Warn against using `Thread.sleep()` for waiting on conditions
+- Ensure `@Timeout` annotations are present on all test classes
+- Suggest proper async testing patterns from the guide
+
 ### 7. Error Handling
 
 #### Exception Strategy
@@ -391,6 +471,12 @@ Before submitting code:
 - [ ] Proper error handling
 - [ ] Performance considered
 - [ ] Module boundaries respected
+- [ ] **Test Best Practices followed** (see section 6.3):
+  - [ ] All test classes have `@Timeout` annotation
+  - [ ] Using `TestExecutionHelper`/`TestMetricsHelper` for ExecutionEngine/metrics tests
+  - [ ] Using Awaitility for waiting on conditions (not `Thread.sleep()`)
+  - [ ] Proper async testing patterns used
+  - [ ] Referenced `documents/guides/TEST_BEST_PRACTICES.md` when creating tests
 - [ ] All tests pass
 
 #### Code Coverage Requirements (MANDATORY)
@@ -474,5 +560,6 @@ LoadPattern pattern = new StaticLoad(100.0, Duration.ofSeconds(30));
 - See `.github/copilot-instructions.md` for complete guidelines
 - See `documents/architecture/DESIGN.md` for architecture details
 - See `documents/DOCUMENT_ORGANIZATION_STRATEGY.md` for document classification rules
+- See `documents/guides/TEST_BEST_PRACTICES.md` for test best practices and guidelines
 - See `README.md` for project overview
 

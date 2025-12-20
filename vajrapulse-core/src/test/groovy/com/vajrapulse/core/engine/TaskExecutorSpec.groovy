@@ -1,9 +1,13 @@
 package com.vajrapulse.core.engine
 
-import com.vajrapulse.api.TaskLifecycle
-import com.vajrapulse.api.TaskResult
+import com.vajrapulse.api.task.TaskLifecycle
+import com.vajrapulse.api.task.TaskResult
+import com.vajrapulse.api.task.TaskResultSuccess
+import com.vajrapulse.api.task.TaskResultFailure
 import spock.lang.Specification
+import spock.lang.Timeout
 
+@Timeout(10)
 class TaskExecutorSpec extends Specification {
 
     def "should execute task successfully and capture metrics"() {
@@ -30,8 +34,8 @@ class TaskExecutorSpec extends Specification {
         !metrics.isFailure()
         metrics.durationNanos() > 0
         metrics.iteration() == 0
-        metrics.result() instanceof TaskResult.Success
-        ((TaskResult.Success) metrics.result()).data() == "test-data"
+        metrics.result() instanceof TaskResultSuccess
+        ((TaskResultSuccess) metrics.result()).data() == "test-data"
     }
     
     def "should capture failure when task fails"() {
@@ -57,8 +61,8 @@ class TaskExecutorSpec extends Specification {
         then: "metrics show failure"
         !metrics.isSuccess()
         metrics.isFailure()
-        metrics.result() instanceof TaskResult.Failure
-        ((TaskResult.Failure) metrics.result()).error() == error
+        metrics.result() instanceof TaskResultFailure
+        ((TaskResultFailure) metrics.result()).error() == error
     }
     
     def "should catch exceptions and wrap in failure"() {
@@ -83,8 +87,8 @@ class TaskExecutorSpec extends Specification {
         
         then: "exception is wrapped in failure"
         metrics.isFailure()
-        metrics.result() instanceof TaskResult.Failure
-        ((TaskResult.Failure) metrics.result()).error() == error
+        metrics.result() instanceof TaskResultFailure
+        ((TaskResultFailure) metrics.result()).error() == error
     }
     
     def "should track iteration number"() {

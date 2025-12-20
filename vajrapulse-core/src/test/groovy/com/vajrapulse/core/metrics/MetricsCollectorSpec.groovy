@@ -1,12 +1,17 @@
 package com.vajrapulse.core.metrics
 
-import com.vajrapulse.api.TaskResult
+import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.core.engine.ExecutionMetrics
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import spock.lang.Specification
+import spock.lang.Timeout
 
 import java.util.Collections
 
+import static org.awaitility.Awaitility.*
+import static java.util.concurrent.TimeUnit.*
+
+@Timeout(30)
 class MetricsCollectorSpec extends Specification {
 
     def "should record successful executions"() {
@@ -222,9 +227,17 @@ class MetricsCollectorSpec extends Specification {
         given: "a metrics collector"
         def collector = new MetricsCollector()
         
+        // Record some metrics first to ensure there's data to snapshot
+        collector.record(new ExecutionMetrics(
+            System.nanoTime(),
+            System.nanoTime() + 1_000_000,
+            TaskResult.success(),
+            0
+        ))
+        
         when: "calling snapshot and close concurrently"
-        def results = []
-        def exceptions = []
+        def results = Collections.synchronizedList([])
+        def exceptions = Collections.synchronizedList([])
         def threads = []
         
         10.times {
@@ -238,15 +251,26 @@ class MetricsCollectorSpec extends Specification {
             }
         }
         
-        Thread.sleep(50) // Let some snapshots start
+        // Wait for at least one snapshot to complete
+        await().atMost(100, MILLISECONDS)
+            .pollInterval(5, MILLISECONDS)
+            .until { results.size() > 0 }
         collector.close()
         
-        threads.each { it.join() }
+        threads.each { it.join(1000) } // Add timeout to prevent hanging
         
         then: "operations complete without deadlock"
         // Some snapshots may succeed, some may fail after close - both are acceptable
         // The important thing is no deadlock or crash
-        (results.size() + exceptions.size()) == 10
+        def totalOperations = results.size() + exceptions.size()
+        totalOperations == 10
+        
+        and: "no unexpected exceptions"
+        exceptions.every { 
+            it instanceof IllegalStateException || 
+            it instanceof java.util.concurrent.CompletionException ||
+            it.cause instanceof IllegalStateException
+        }
     }
     
     def "should not leak memory in long-running scenario"() {

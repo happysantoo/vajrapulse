@@ -1,6 +1,8 @@
 package com.vajrapulse.core.engine;
 
-import com.vajrapulse.api.TaskResult;
+import com.vajrapulse.api.task.TaskResult;
+import com.vajrapulse.api.task.TaskResultSuccess;
+import com.vajrapulse.api.task.TaskResultFailure;
 
 /**
  * Captures metrics for a single task execution.
@@ -35,7 +37,7 @@ public record ExecutionMetrics(
      * @return true if result is Success, false otherwise
      */
     public boolean isSuccess() {
-        return result instanceof TaskResult.Success;
+        return result instanceof TaskResultSuccess;
     }
     
     /**
@@ -44,6 +46,6 @@ public record ExecutionMetrics(
      * @return true if result is Failure, false otherwise
      */
     public boolean isFailure() {
-        return result instanceof TaskResult.Failure;
+        return result instanceof TaskResultFailure;
     }
 }

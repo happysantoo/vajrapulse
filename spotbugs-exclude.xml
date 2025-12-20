@@ -62,38 +62,29 @@
         <Method name="getRegistry"/>
     </Match>
     
-    <!-- Record compact constructors and accessors - records are immutable by design -->
-    <!-- The compact constructor validates input, and records provide immutability guarantees -->
-    <!-- Accessors return the record fields directly, which is the standard record pattern -->
-    <Match>
-        <Bug pattern="EI_EXPOSE_REP"/>
-        <Class name="com.vajrapulse.api.StepLoad"/>
-    </Match>
-    <Match>
-        <Bug pattern="EI_EXPOSE_REP2"/>
-        <Class name="com.vajrapulse.api.StepLoad"/>
-    </Match>
+    <!-- StepLoad now creates immutable list copy in compact constructor - exclusion no longer needed -->
+    <!-- Removed: StepLoad exclusions (fixed in code) -->
     
-    <!-- TaskResult.Failure stores/returns Throwable - this is intentional for error handling -->
+    <!-- TaskResultFailure stores/returns Throwable - this is intentional for error handling -->
     <!-- Throwable is part of the failure record and should be accessible -->
     <Match>
         <Bug pattern="EI_EXPOSE_REP"/>
-        <Class name="com.vajrapulse.api.TaskResult$Failure"/>
+        <Class name="com.vajrapulse.api.task.TaskResultFailure"/>
     </Match>
     <Match>
         <Bug pattern="EI_EXPOSE_REP2"/>
-        <Class name="com.vajrapulse.api.TaskResult$Failure"/>
+        <Class name="com.vajrapulse.api.task.TaskResultFailure"/>
     </Match>
     
-    <!-- TaskResult.Success stores/returns Object - this is intentional for result data -->
+    <!-- TaskResultSuccess stores/returns Object - this is intentional for result data -->
     <!-- The data is part of the success record and should be accessible -->
     <Match>
         <Bug pattern="EI_EXPOSE_REP"/>
-        <Class name="com.vajrapulse.api.TaskResult$Success"/>
+        <Class name="com.vajrapulse.api.task.TaskResultSuccess"/>
     </Match>
     <Match>
         <Bug pattern="EI_EXPOSE_REP2"/>
-        <Class name="com.vajrapulse.api.TaskResult$Success"/>
+        <Class name="com.vajrapulse.api.task.TaskResultSuccess"/>
     </Match>
     
     <!-- ConsoleMetricsExporter stores PrintStream - this is intentional for output control -->
@@ -130,5 +121,19 @@
     <Match>
         <Bug pattern="EI_EXPOSE_REP2"/>
         <Class name="com.vajrapulse.core.engine.ShutdownManager$Builder"/>
+    </Match>
+    
+    <!-- LoggingAdaptivePatternListener stores Logger - Logger is effectively immutable -->
+    <!-- java.util.logging.Logger is a facade and cannot be mutated by external code -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.api.pattern.adaptive.LoggingAdaptivePatternListener"/>
+    </Match>
+    
+    <!-- LoggingAdaptivePatternListener constructors throw IllegalArgumentException for null validation -->
+    <!-- Class is final, preventing finalizer attacks. Null validation is required for correctness -->
+    <Match>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+        <Class name="com.vajrapulse.api.pattern.adaptive.LoggingAdaptivePatternListener"/>
     </Match>
 </FindBugsFilter>

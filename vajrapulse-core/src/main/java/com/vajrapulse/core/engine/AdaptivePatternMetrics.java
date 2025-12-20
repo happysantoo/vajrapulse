@@ -1,6 +1,7 @@
 package com.vajrapulse.core.engine;
 
-import com.vajrapulse.api.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.adaptive.AdaptivePhase;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -15,7 +16,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * 
  * <p>This class registers gauges, counters, and timers to track:
  * <ul>
- *   <li>Current phase (RAMP_UP, RAMP_DOWN, SUSTAIN, RECOVERY)</li>
+ *   <li>Current phase (RAMP_UP, RAMP_DOWN, SUSTAIN)</li>
  *   <li>Current target TPS</li>
  *   <li>Stable TPS found (if any)</li>
  *   <li>Phase transition count and reasons</li>
@@ -37,22 +38,20 @@ public final class AdaptivePatternMetrics {
     
     // Track previous state to detect transitions and TPS changes
     private static final class PatternStateTracker {
-        private final AtomicReference<AdaptiveLoadPattern.Phase> lastPhase = new AtomicReference<>();
+        private final AtomicReference<AdaptivePhase> lastPhase = new AtomicReference<>();
         private final AtomicReference<Double> lastTps = new AtomicReference<>();
         private final AtomicLong lastPhaseStartTime = new AtomicLong(0);
         
         // Counters for transition reasons
         private final Counter rampUpToRampDownCounter;
         private final Counter rampDownToSustainCounter;
-        private final Counter rampDownToRecoveryCounter;
-        private final Counter recoveryToRampUpCounter;
+        private final Counter rampDownToRampUpCounter; // Recovery: RAMP_DOWN at minimum -> RAMP_UP
         private final Counter rampUpToSustainCounter;
         
         // Timers for phase durations
         private final Timer rampUpDurationTimer;
         private final Timer rampDownDurationTimer;
         private final Timer sustainDurationTimer;
-        private final Timer recoveryDurationTimer;
         
         // Histogram for TPS adjustments
         private final io.micrometer.core.instrument.DistributionSummary tpsAdjustmentHistogram;
@@ -69,16 +68,11 @@ public final class AdaptivePatternMetrics {
                 .tag("to_phase", "SUSTAIN")
                 .tag("reason", "stable_point_found")
                 .description("Transitions from RAMP_DOWN to SUSTAIN when stable point found");
-            var rampDownToRecoveryBuilder = Counter.builder("vajrapulse.adaptive.transitions")
+            var rampDownToRampUpBuilder = Counter.builder("vajrapulse.adaptive.transitions")
                 .tag("from_phase", "RAMP_DOWN")
-                .tag("to_phase", "RECOVERY")
-                .tag("reason", "minimum_tps_reached")
-                .description("Transitions from RAMP_DOWN to RECOVERY when minimum TPS reached");
-            var recoveryToRampUpBuilder = Counter.builder("vajrapulse.adaptive.transitions")
-                .tag("from_phase", "RECOVERY")
                 .tag("to_phase", "RAMP_UP")
-                .tag("reason", "conditions_improved")
-                .description("Transitions from RECOVERY to RAMP_UP when conditions improved");
+                .tag("reason", "recovery_from_minimum")
+                .description("Transitions from RAMP_DOWN (at minimum) to RAMP_UP when conditions improved (recovery)");
             var rampUpToSustainBuilder = Counter.builder("vajrapulse.adaptive.transitions")
                 .tag("from_phase", "RAMP_UP")
                 .tag("to_phase", "SUSTAIN")
@@ -88,15 +82,13 @@ public final class AdaptivePatternMetrics {
             if (runId != null && !runId.isBlank()) {
                 rampUpToRampDownBuilder.tag("run_id", runId);
                 rampDownToSustainBuilder.tag("run_id", runId);
-                rampDownToRecoveryBuilder.tag("run_id", runId);
-                recoveryToRampUpBuilder.tag("run_id", runId);
+                rampDownToRampUpBuilder.tag("run_id", runId);
                 rampUpToSustainBuilder.tag("run_id", runId);
             }
             
             this.rampUpToRampDownCounter = rampUpToRampDownBuilder.register(registry);
             this.rampDownToSustainCounter = rampDownToSustainBuilder.register(registry);
-            this.rampDownToRecoveryCounter = rampDownToRecoveryBuilder.register(registry);
-            this.recoveryToRampUpCounter = recoveryToRampUpBuilder.register(registry);
+            this.rampDownToRampUpCounter = rampDownToRampUpBuilder.register(registry);
             this.rampUpToSustainCounter = rampUpToSustainBuilder.register(registry);
             
             // Phase duration timers
@@ -109,21 +101,15 @@ public final class AdaptivePatternMetrics {
             var sustainDurationBuilder = Timer.builder("vajrapulse.adaptive.phase.duration")
                 .tag("phase", "SUSTAIN")
                 .description("Duration spent in SUSTAIN phase");
-            var recoveryDurationBuilder = Timer.builder("vajrapulse.adaptive.phase.duration")
-                .tag("phase", "RECOVERY")
-                .description("Duration spent in RECOVERY phase");
-            
             if (runId != null && !runId.isBlank()) {
                 rampUpDurationBuilder.tag("run_id", runId);
                 rampDownDurationBuilder.tag("run_id", runId);
                 sustainDurationBuilder.tag("run_id", runId);
-                recoveryDurationBuilder.tag("run_id", runId);
             }
             
             this.rampUpDurationTimer = rampUpDurationBuilder.register(registry);
             this.rampDownDurationTimer = rampDownDurationBuilder.register(registry);
             this.sustainDurationTimer = sustainDurationBuilder.register(registry);
-            this.recoveryDurationTimer = recoveryDurationBuilder.register(registry);
             
             // TPS adjustment histogram
             var tpsAdjustmentBuilder = io.micrometer.core.instrument.DistributionSummary.builder("vajrapulse.adaptive.tps_adjustment")
@@ -136,10 +122,10 @@ public final class AdaptivePatternMetrics {
         }
         
         void update(AdaptiveLoadPattern pattern) {
-            AdaptiveLoadPattern.Phase currentPhase = pattern.getCurrentPhase();
+            AdaptivePhase currentPhase = pattern.getCurrentPhase();
             double currentTps = pattern.getCurrentTps();
             
-            AdaptiveLoadPattern.Phase previousPhase = lastPhase.getAndSet(currentPhase);
+            AdaptivePhase previousPhase = lastPhase.getAndSet(currentPhase);
             Double previousTps = lastTps.getAndSet(currentTps);
             
             // Detect phase transitions and record reasons
@@ -155,21 +141,20 @@ public final class AdaptivePatternMetrics {
             }
         }
         
-        private void recordPhaseTransition(AdaptiveLoadPattern.Phase from, AdaptiveLoadPattern.Phase to) {
-            if (from == AdaptiveLoadPattern.Phase.RAMP_UP && to == AdaptiveLoadPattern.Phase.RAMP_DOWN) {
+        private void recordPhaseTransition(AdaptivePhase from, AdaptivePhase to) {
+            if (from == AdaptivePhase.RAMP_UP && to == AdaptivePhase.RAMP_DOWN) {
                 rampUpToRampDownCounter.increment();
-            } else if (from == AdaptiveLoadPattern.Phase.RAMP_DOWN && to == AdaptiveLoadPattern.Phase.SUSTAIN) {
+            } else if (from == AdaptivePhase.RAMP_DOWN && to == AdaptivePhase.SUSTAIN) {
                 rampDownToSustainCounter.increment();
-            } else if (from == AdaptiveLoadPattern.Phase.RAMP_DOWN && to == AdaptiveLoadPattern.Phase.RECOVERY) {
-                rampDownToRecoveryCounter.increment();
-            } else if (from == AdaptiveLoadPattern.Phase.RECOVERY && to == AdaptiveLoadPattern.Phase.RAMP_UP) {
-                recoveryToRampUpCounter.increment();
-            } else if (from == AdaptiveLoadPattern.Phase.RAMP_UP && to == AdaptiveLoadPattern.Phase.SUSTAIN) {
+            } else if (from == AdaptivePhase.RAMP_DOWN && to == AdaptivePhase.RAMP_UP) {
+                // This includes recovery transitions (RAMP_DOWN at minimum -> RAMP_UP)
+                rampDownToRampUpCounter.increment();
+            } else if (from == AdaptivePhase.RAMP_UP && to == AdaptivePhase.SUSTAIN) {
                 rampUpToSustainCounter.increment();
             }
         }
         
-        private void recordPhaseDuration(AdaptiveLoadPattern.Phase phase) {
+        private void recordPhaseDuration(AdaptivePhase phase) {
             long currentTime = System.currentTimeMillis();
             long phaseStart = lastPhaseStartTime.getAndSet(currentTime);
             if (phaseStart > 0) {
@@ -178,7 +163,6 @@ public final class AdaptivePatternMetrics {
                     case RAMP_UP -> rampUpDurationTimer.record(duration, java.util.concurrent.TimeUnit.MILLISECONDS);
                     case RAMP_DOWN -> rampDownDurationTimer.record(duration, java.util.concurrent.TimeUnit.MILLISECONDS);
                     case SUSTAIN -> sustainDurationTimer.record(duration, java.util.concurrent.TimeUnit.MILLISECONDS);
-                    case RECOVERY -> recoveryDurationTimer.record(duration, java.util.concurrent.TimeUnit.MILLISECONDS);
                     default -> { /* Other phases handled above */ }
                 }
             }
@@ -194,7 +178,7 @@ public final class AdaptivePatternMetrics {
      * 
      * <p>Registers the following metrics:
      * <ul>
-     *   <li>{@code vajrapulse.adaptive.phase} - Current phase (0=RAMP_UP, 1=RAMP_DOWN, 2=SUSTAIN, 3=RECOVERY)</li>
+     *   <li>{@code vajrapulse.adaptive.phase} - Current phase (0=RAMP_UP, 1=RAMP_DOWN, 2=SUSTAIN)</li>
      *   <li>{@code vajrapulse.adaptive.current_tps} - Current target TPS</li>
      *   <li>{@code vajrapulse.adaptive.stable_tps} - Stable TPS found (NaN if not found yet)</li>
      *   <li>{@code vajrapulse.adaptive.phase_transitions} - Number of phase transitions (gauge)</li>
@@ -210,10 +194,10 @@ public final class AdaptivePatternMetrics {
      * @param runId optional run ID for tagging (can be null)
      */
     public static void register(AdaptiveLoadPattern pattern, MeterRegistry registry, String runId) {
-        // Phase gauge (0=RAMP_UP, 1=RAMP_DOWN, 2=SUSTAIN, 3=RECOVERY)
+        // Phase gauge (0=RAMP_UP, 1=RAMP_DOWN, 2=SUSTAIN)
         var phaseBuilder = Gauge.builder("vajrapulse.adaptive.phase", pattern, 
                 p -> (double) p.getCurrentPhase().ordinal())
-            .description("Current adaptive pattern phase (0=RAMP_UP, 1=RAMP_DOWN, 2=SUSTAIN, 3=RECOVERY)");
+            .description("Current adaptive pattern phase (0=RAMP_UP, 1=RAMP_DOWN, 2=SUSTAIN)");
         if (runId != null && !runId.isBlank()) {
             phaseBuilder.tag("run_id", runId);
         }

@@ -1,7 +1,9 @@
 package com.vajrapulse.core.util
 
 import spock.lang.Specification
+import spock.lang.Timeout
 
+@Timeout(10)
 class ExceptionContextSpec extends Specification {
 
     def "should create exception with runId context"() {

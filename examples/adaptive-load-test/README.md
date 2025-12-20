@@ -118,16 +118,18 @@ The example uses a task that simulates realistic backpressure behavior:
 ### Adaptive Pattern Configuration
 
 ```java
-AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
-    10.0,                          // Start at 10 TPS
-    10.0,                          // Increase by 10 TPS per interval
-    20.0,                          // Decrease by 20 TPS per interval when errors occur
-    Duration.ofSeconds(5),         // Check/adjust every 5 seconds
-    200.0,                         // Maximum 200 TPS
-    Duration.ofSeconds(30),       // Sustain at stable point for 30 seconds
-    0.01,                          // 1% error threshold
-    metricsProvider                // Metrics for feedback
-);
+AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+    .initialTps(10.0)                          // Start at 10 TPS
+    .rampIncrement(10.0)                       // Increase by 10 TPS per interval
+    .rampDecrement(20.0)                       // Decrease by 20 TPS per interval when errors occur
+    .rampInterval(Duration.ofSeconds(5))        // Check/adjust every 5 seconds
+    .maxTps(200.0)                             // Maximum 200 TPS
+    .minTps(5.0)                               // Minimum 5 TPS
+    .sustainDuration(Duration.ofSeconds(30))   // Sustain at stable point for 30 seconds
+    .stableIntervalsRequired(3)                // Require 3 stable intervals
+    .metricsProvider(metricsProvider)          // Metrics for feedback
+    .decisionPolicy(new DefaultRampDecisionPolicy(0.01))  // 1% error threshold
+    .build();
 ```
 
 ### Pattern Phases

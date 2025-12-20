@@ -1,7 +1,7 @@
 package com.vajrapulse.worker;
 
-import com.vajrapulse.api.LoadPattern;
-import com.vajrapulse.api.TaskLifecycle;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.task.TaskLifecycle;
 import com.vajrapulse.core.config.ConfigLoader;
 import com.vajrapulse.core.config.VajraPulseConfig;
 import com.vajrapulse.core.engine.ExecutionEngine;

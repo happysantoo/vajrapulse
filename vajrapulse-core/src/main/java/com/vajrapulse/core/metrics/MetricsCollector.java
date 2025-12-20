@@ -63,27 +63,6 @@ public final class MetricsCollector implements AutoCloseable {
     private final Counter droppedRequestsCounter;
     private final Counter rejectedRequestsCounter;
     
-    // Client-side metrics
-    @SuppressWarnings("unused") // Gauge is registered and used by Micrometer
-    private final io.micrometer.core.instrument.Gauge activeConnectionsGauge;
-    @SuppressWarnings("unused") // Gauge is registered and used by Micrometer
-    private final io.micrometer.core.instrument.Gauge idleConnectionsGauge;
-    @SuppressWarnings("unused") // Gauge is registered and used by Micrometer
-    private final io.micrometer.core.instrument.Gauge waitingConnectionsGauge;
-    @SuppressWarnings("unused") // Gauge is registered and used by Micrometer
-    private final io.micrometer.core.instrument.Gauge clientQueueDepthGauge;
-    private final Counter connectionTimeoutsCounter;
-    private final Counter requestTimeoutsCounter;
-    private final Counter connectionRefusedCounter;
-    private final Timer clientQueueWaitTimer;
-    
-    // Holders for client metrics (updated by recordClientMetrics)
-    private final AtomicLong activeConnectionsHolder = new AtomicLong(0);
-    private final AtomicLong idleConnectionsHolder = new AtomicLong(0);
-    private final AtomicLong waitingConnectionsHolder = new AtomicLong(0);
-    private final AtomicLong clientQueueDepthHolder = new AtomicLong(0);
-    private final AtomicLong clientQueueWaitTimeNanos = new AtomicLong(0);
-    
     private final double[] configuredPercentiles;
     private final String runId; // Optional run correlation tag
     private final long startMillis; // Track when collection started
@@ -238,58 +217,6 @@ public final class MetricsCollector implements AutoCloseable {
         this.droppedRequestsCounter = droppedBuilder.register(registry);
         this.rejectedRequestsCounter = rejectedBuilder.register(registry);
         
-        // Client-side metrics
-        var activeConnectionsBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.client.connections.active", 
-                activeConnectionsHolder, AtomicLong::get)
-            .description("Number of active connections in client connection pool");
-        var idleConnectionsBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.client.connections.idle",
-                idleConnectionsHolder, AtomicLong::get)
-            .description("Number of idle connections in client connection pool");
-        var waitingConnectionsBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.client.connections.waiting",
-                waitingConnectionsHolder, AtomicLong::get)
-            .description("Number of threads waiting for a connection from the pool");
-        var clientQueueDepthBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.client.queue.depth",
-                clientQueueDepthHolder, AtomicLong::get)
-            .description("Current depth of client-side request queue");
-        var connectionTimeoutsBuilder = Counter.builder("vajrapulse.client.errors.connection_timeout")
-            .description("Number of connection timeout errors");
-        var requestTimeoutsBuilder = Counter.builder("vajrapulse.client.errors.request_timeout")
-            .description("Number of request timeout errors");
-        var connectionRefusedBuilder = Counter.builder("vajrapulse.client.errors.connection_refused")
-            .description("Number of connection refused errors");
-        var clientQueueWaitBuilder = Timer.builder("vajrapulse.client.queue.wait_time")
-            .description("Time spent waiting in client-side queue")
-            .publishPercentiles(configuredPercentiles)
-            .publishPercentileHistogram()
-            .percentilePrecision(2)
-            .serviceLevelObjectives(
-                Duration.ofNanos(1_000_000),      // 1ms
-                Duration.ofNanos(10_000_000),     // 10ms
-                Duration.ofNanos(50_000_000),     // 50ms
-                Duration.ofNanos(100_000_000),    // 100ms
-                Duration.ofNanos(500_000_000)     // 500ms
-            );
-        
-        if (runId != null && !runId.isBlank()) {
-            activeConnectionsBuilder.tag("run_id", runId);
-            idleConnectionsBuilder.tag("run_id", runId);
-            waitingConnectionsBuilder.tag("run_id", runId);
-            clientQueueDepthBuilder.tag("run_id", runId);
-            connectionTimeoutsBuilder.tag("run_id", runId);
-            requestTimeoutsBuilder.tag("run_id", runId);
-            connectionRefusedBuilder.tag("run_id", runId);
-            clientQueueWaitBuilder.tag("run_id", runId);
-        }
-        
-        this.activeConnectionsGauge = activeConnectionsBuilder.register(registry);
-        this.idleConnectionsGauge = idleConnectionsBuilder.register(registry);
-        this.waitingConnectionsGauge = waitingConnectionsBuilder.register(registry);
-        this.clientQueueDepthGauge = clientQueueDepthBuilder.register(registry);
-        this.connectionTimeoutsCounter = connectionTimeoutsBuilder.register(registry);
-        this.requestTimeoutsCounter = requestTimeoutsBuilder.register(registry);
-        this.connectionRefusedCounter = connectionRefusedBuilder.register(registry);
-        this.clientQueueWaitTimer = clientQueueWaitBuilder.register(registry);
-        
         // Register JVM GC and memory metrics
         registerJvmMetrics(registry, runId);
     }
@@ -416,66 +343,6 @@ public final class MetricsCollector implements AutoCloseable {
     }
     
     /**
-     * Records client-side metrics.
-     * 
-     * <p>This method updates client-side connection pool, queue, and error metrics.
-     * It should be called periodically (e.g., every second) to update the current state.
-     * 
-     * @param metrics the client metrics to record
-     * @since 0.9.7
-     */
-    public void recordClientMetrics(ClientMetrics metrics) {
-        activeConnectionsHolder.set(metrics.activeConnections());
-        idleConnectionsHolder.set(metrics.idleConnections());
-        waitingConnectionsHolder.set(metrics.waitingConnections());
-        clientQueueDepthHolder.set(metrics.queueDepth());
-        
-        // Record queue wait time if provided
-        if (metrics.queueWaitTimeNanos() > 0) {
-            clientQueueWaitTimeNanos.addAndGet(metrics.queueWaitTimeNanos());
-            // Note: Timer.record() expects a Duration, but we're tracking cumulative time
-            // For now, we'll use the gauge to track total time
-        }
-    }
-    
-    /**
-     * Records a connection timeout error.
-     * 
-     * @since 0.9.7
-     */
-    public void recordConnectionTimeout() {
-        connectionTimeoutsCounter.increment();
-    }
-    
-    /**
-     * Records a request timeout error.
-     * 
-     * @since 0.9.7
-     */
-    public void recordRequestTimeout() {
-        requestTimeoutsCounter.increment();
-    }
-    
-    /**
-     * Records a connection refused error.
-     * 
-     * @since 0.9.7
-     */
-    public void recordConnectionRefused() {
-        connectionRefusedCounter.increment();
-    }
-    
-    /**
-     * Records client-side queue wait time.
-     * 
-     * @param waitTimeNanos wait time in nanoseconds
-     * @since 0.9.7
-     */
-    public void recordClientQueueWait(long waitTimeNanos) {
-        clientQueueWaitTimer.record(waitTimeNanos, TimeUnit.NANOSECONDS);
-    }
-    
-    /**
      * Creates a snapshot of current metrics.
      * 
      * <p><strong>Performance Optimizations:</strong>
@@ -524,20 +391,6 @@ public final class MetricsCollector implements AutoCloseable {
         }
 
         long currentQueueSize = queueSizeHolder.get();
-        
-        // Get client metrics
-        // Note: queueOperationCount is tracked via clientQueueWaitTimer.count()
-        ClientMetrics clientMetrics = new ClientMetrics(
-            activeConnectionsHolder.get(),
-            idleConnectionsHolder.get(),
-            waitingConnectionsHolder.get(),
-            clientQueueDepthHolder.get(),
-            clientQueueWaitTimeNanos.get(),
-            clientQueueWaitTimer.count(), // Use timer count as queue operation count
-            (long) connectionTimeoutsCounter.count(),
-            (long) requestTimeoutsCounter.count(),
-            (long) connectionRefusedCounter.count()
-        );
 
         return new AggregatedMetrics(
             totalCount,
@@ -547,8 +400,7 @@ public final class MetricsCollector implements AutoCloseable {
             failureMap,
             elapsedMillis,
             currentQueueSize,
-            queueWaitMap,
-            clientMetrics
+            queueWaitMap
         );
     }
 

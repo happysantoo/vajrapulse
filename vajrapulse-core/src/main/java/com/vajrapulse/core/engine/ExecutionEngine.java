@@ -1,10 +1,9 @@
 package com.vajrapulse.core.engine;
 
-import com.vajrapulse.api.LoadPattern;
-import com.vajrapulse.api.PlatformThreads;
-import com.vajrapulse.api.TaskLifecycle;
-import com.vajrapulse.api.VirtualThreads;
-import com.vajrapulse.api.WarmupCooldownLoadPattern;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.task.PlatformThreads;
+import com.vajrapulse.api.task.TaskLifecycle;
+import com.vajrapulse.api.task.VirtualThreads;
 import com.vajrapulse.core.config.ConfigLoader;
 import com.vajrapulse.core.config.VajraPulseConfig;
 import com.vajrapulse.core.metrics.MetricsCollector;
@@ -14,7 +13,6 @@ import org.slf4j.LoggerFactory;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 
-import java.lang.ref.Cleaner;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -59,7 +57,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class ExecutionEngine implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(ExecutionEngine.class);
-    private static final Cleaner CLEANER = Cleaner.create();
     
     /**
      * Timeout for executor termination in close() method (seconds).
@@ -73,10 +70,9 @@ public final class ExecutionEngine implements AutoCloseable {
     private final String runId; // Correlates metrics/traces/logs
     private final VajraPulseConfig config;
     private final ShutdownManager shutdownManager;
+    private final boolean shutdownHookEnabled;
     private final java.util.concurrent.atomic.AtomicBoolean stopRequested = new java.util.concurrent.atomic.AtomicBoolean(false);
-    private final Cleaner.Cleanable cleanable; // Safety net for executor cleanup
-    private final com.vajrapulse.api.BackpressureHandler backpressureHandler; // Optional
-    private final double backpressureThreshold; // Default: 0.7
+    private final java.util.concurrent.atomic.AtomicBoolean executorShutdown = new java.util.concurrent.atomic.AtomicBoolean(false);
     
     // Queue depth tracking
     private final java.util.concurrent.atomic.AtomicLong pendingExecutions = new java.util.concurrent.atomic.AtomicLong(0);
@@ -120,92 +116,28 @@ public final class ExecutionEngine implements AutoCloseable {
      */
     private ExecutionEngine(Builder builder) {
         // Validate required parameters
-        if (builder.taskLifecycle == null) {
-            throw new IllegalArgumentException("Task lifecycle must not be null");
-        }
-        if (builder.loadPattern == null) {
-            throw new IllegalArgumentException("Load pattern must not be null");
-        }
-        if (builder.metricsCollector == null) {
-            throw new IllegalArgumentException("Metrics collector must not be null");
-        }
+        validateBuilder(builder);
         
         this.taskLifecycle = builder.taskLifecycle;
         this.loadPattern = builder.loadPattern;
         this.metricsCollector = builder.metricsCollector;
         this.runId = builder.runId != null ? builder.runId : deriveRunId(builder.metricsCollector);
         this.config = builder.config != null ? builder.config : ConfigLoader.load();
-        this.backpressureHandler = builder.backpressureHandler;
-        this.backpressureThreshold = builder.backpressureThreshold;
+        this.shutdownHookEnabled = builder.shutdownHookEnabled;
 
         // Determine thread strategy from annotations
         Class<?> taskClass = taskLifecycle.getClass();
         this.executor = createExecutor(taskClass);
         
-        // Register thread pool metrics
-        com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerExecutorMetrics(
-            executor, taskClass, metricsCollector.getRegistry(), runId);
-        
         this.shutdownManager = createShutdownManager(runId, metricsCollector);
-        shutdownManager.registerShutdownHook();
         
-        // Register Cleaner as safety net for executor cleanup
-        this.cleanable = CLEANER.register(this, new ExecutorCleanup(executor, runId));
-        
-        // Register adaptive pattern metrics if applicable
-        if (loadPattern instanceof com.vajrapulse.api.AdaptiveLoadPattern adaptivePattern) {
-            AdaptivePatternMetrics.register(adaptivePattern, metricsCollector.getRegistry(), runId);
+        // Only register shutdown hook if enabled (default: true for production, false for tests)
+        if (shutdownHookEnabled) {
+            shutdownManager.registerShutdownHook();
         }
         
-        // Register engine health metrics
-        var healthMetrics = com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerHealthMetrics(
-            metricsCollector.getRegistry(),
-            runId,
-            () -> engineState.getValue(),
-            startTimeMillis::get
-        );
-        this.lifecycleStartCounter = healthMetrics.lifecycleStartCounter();
-        this.lifecycleStopCounter = healthMetrics.lifecycleStopCounter();
-        this.lifecycleCompleteCounter = healthMetrics.lifecycleCompleteCounter();
-        this.uptimeTimer = healthMetrics.uptimeTimer();
-        
-        // Rate controller metrics will be registered in run() method when RateController is created
-    }
-    
-    /**
-     * Creates a new execution engine with automatic run ID generation.
-     * 
-     * @param taskLifecycle the task lifecycle to execute
-     * @param loadPattern the load pattern
-     * @param metricsCollector the metrics collector
-     * @deprecated Use {@link #builder()} instead. This constructor will be removed in 0.9.6.
-     */
-    @Deprecated(since = "0.9.5", forRemoval = true)
-    public ExecutionEngine(TaskLifecycle taskLifecycle, LoadPattern loadPattern, MetricsCollector metricsCollector) {
-        this(builder()
-                .withTask(taskLifecycle)
-                .withLoadPattern(loadPattern)
-                .withMetricsCollector(metricsCollector));
-    }
-    
-    /**
-     * Creates a new execution engine with explicit run ID and configuration.
-     * 
-     * @param taskLifecycle the task lifecycle to execute
-     * @param loadPattern the load pattern
-     * @param metricsCollector the metrics collector
-     * @param runId the run identifier for correlation
-     * @param config configuration, or null to load from default locations
-     * @deprecated Use {@link #builder()} instead. This constructor will be removed in 0.9.6.
-     */
-    @Deprecated(since = "0.9.5", forRemoval = true)
-    public ExecutionEngine(TaskLifecycle taskLifecycle, LoadPattern loadPattern, MetricsCollector metricsCollector, String runId, VajraPulseConfig config) {
-        this(builder()
-                .withTask(taskLifecycle)
-                .withLoadPattern(loadPattern)
-                .withMetricsCollector(metricsCollector)
-                .withRunId(runId)
-                .withConfig(config));
+        // Register all metrics in one place
+        registerMetrics(taskClass, metricsCollector.getRegistry(), runId);
     }
     
     /**
@@ -252,8 +184,7 @@ public final class ExecutionEngine implements AutoCloseable {
         private MetricsCollector metricsCollector;
         private String runId;
         private VajraPulseConfig config;
-        private com.vajrapulse.api.BackpressureHandler backpressureHandler;
-        private double backpressureThreshold = 0.7; // Default threshold
+        private boolean shutdownHookEnabled = true; // Default: enabled for production use
         
         private Builder() {
             // Private constructor - use ExecutionEngine.builder()
@@ -322,46 +253,38 @@ public final class ExecutionEngine implements AutoCloseable {
         }
         
         /**
-         * Sets the backpressure handler for request loss handling.
+         * Enables or disables JVM shutdown hook registration.
          * 
-         * <p>If not provided, requests will be queued normally (default behavior).
+         * <p>Shutdown hooks are used to handle SIGINT/SIGTERM signals (Ctrl+C, kill, etc.)
+         * for graceful shutdown in production environments. In test environments, shutdown
+         * hooks are typically not needed and can cause issues with test cleanup.
          * 
-         * <p>Example usage:
+         * <p>Default: {@code true} (enabled for production use)
+         * 
+         * <p>Example:
          * <pre>{@code
+         * // Production: hooks enabled (default)
          * ExecutionEngine engine = ExecutionEngine.builder()
          *     .withTask(task)
          *     .withLoadPattern(pattern)
          *     .withMetricsCollector(metrics)
-         *     .withBackpressureHandler(BackpressureHandlers.DROP)
-         *     .withBackpressureThreshold(0.7)
+         *     .build(); // Hooks enabled by default
+         * 
+         * // Tests: hooks disabled
+         * ExecutionEngine engine = ExecutionEngine.builder()
+         *     .withTask(task)
+         *     .withLoadPattern(pattern)
+         *     .withMetricsCollector(metrics)
+         *     .withShutdownHook(false) // Disable hooks for tests
          *     .build();
          * }</pre>
          * 
-         * @param backpressureHandler the backpressure handler (can be null)
+         * @param enabled true to enable shutdown hooks, false to disable
          * @return this builder
-         * @since 0.9.6
+         * @since 0.9.9
          */
-        public Builder withBackpressureHandler(com.vajrapulse.api.BackpressureHandler backpressureHandler) {
-            this.backpressureHandler = backpressureHandler;
-            return this;
-        }
-        
-        /**
-         * Sets the backpressure threshold for triggering handler.
-         * 
-         * <p>When backpressure level exceeds this threshold, the handler is invoked.
-         * Default is 0.7 (70% backpressure).
-         * 
-         * @param threshold backpressure threshold (0.0 to 1.0)
-         * @return this builder
-         * @throws IllegalArgumentException if threshold is not between 0.0 and 1.0
-         * @since 0.9.6
-         */
-        public Builder withBackpressureThreshold(double threshold) {
-            if (threshold < 0.0 || threshold > 1.0) {
-                throw new IllegalArgumentException("Backpressure threshold must be between 0.0 and 1.0, got: " + threshold);
-            }
-            this.backpressureThreshold = threshold;
+        public Builder withShutdownHook(boolean enabled) {
+            this.shutdownHookEnabled = enabled;
             return this;
         }
         
@@ -377,6 +300,24 @@ public final class ExecutionEngine implements AutoCloseable {
     }
     
 
+    /**
+     * Validates builder parameters.
+     * 
+     * @param builder the builder to validate
+     * @throws IllegalArgumentException if any required parameter is null
+     */
+    private static void validateBuilder(Builder builder) {
+        if (builder.taskLifecycle == null) {
+            throw new IllegalArgumentException("Task lifecycle must not be null");
+        }
+        if (builder.loadPattern == null) {
+            throw new IllegalArgumentException("Load pattern must not be null");
+        }
+        if (builder.metricsCollector == null) {
+            throw new IllegalArgumentException("Metrics collector must not be null");
+        }
+    }
+    
     private static String deriveRunId(MetricsCollector metricsCollector) {
         return (metricsCollector.getRunId() != null && !metricsCollector.getRunId().isBlank())
             ? metricsCollector.getRunId()
@@ -437,6 +378,49 @@ public final class ExecutionEngine implements AutoCloseable {
             })
             .build();
     }
+    
+    /**
+     * Registers all metrics for this execution engine.
+     * 
+     * <p>This method consolidates all metrics registration in one place:
+     * <ul>
+     *   <li>Executor metrics (thread pool statistics)</li>
+     *   <li>Engine health metrics (state, uptime, lifecycle events)</li>
+     *   <li>Adaptive pattern metrics (if applicable)</li>
+     * </ul>
+     * 
+     * <p>Rate controller metrics are registered separately in {@link #run()} when
+     * the RateController is created.
+     * 
+     * @param taskClass the task class for executor metrics
+     * @param registry the meter registry
+     * @param runId the run identifier for tagging
+     */
+    private void registerMetrics(Class<?> taskClass, io.micrometer.core.instrument.MeterRegistry registry, String runId) {
+        // Register executor metrics
+        com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerExecutorMetrics(
+            executor, taskClass, registry, runId);
+        
+        // Register engine health metrics
+        var healthMetrics = com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerHealthMetrics(
+            registry,
+            runId,
+            () -> engineState.getValue(),
+            startTimeMillis::get
+        );
+        this.lifecycleStartCounter = healthMetrics.lifecycleStartCounter();
+        this.lifecycleStopCounter = healthMetrics.lifecycleStopCounter();
+        this.lifecycleCompleteCounter = healthMetrics.lifecycleCompleteCounter();
+        this.uptimeTimer = healthMetrics.uptimeTimer();
+        
+        // Register adaptive pattern metrics if applicable
+        // Note: We still need instanceof here because AdaptivePatternMetrics.register()
+        // requires the AdaptiveLoadPattern instance and is in the core module.
+        // This is acceptable as it's isolated to this method.
+        if (loadPattern instanceof com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern adaptivePattern) {
+            AdaptivePatternMetrics.register(adaptivePattern, registry, runId);
+        }
+    }
 
     /**
      * Runs the load test with full lifecycle management.
@@ -476,8 +460,21 @@ public final class ExecutionEngine implements AutoCloseable {
             logger.info("Task initialization completed for runId={}", runId);
         } catch (Exception e) {
             logger.error("Task initialization failed for runId={}: {}", runId, e.getMessage(), e);
-            // Don't call teardown if init failed
-            shutdownManager.removeShutdownHook();
+            // Don't call teardown if init failed, but ensure executor is shut down
+            executorShutdown.set(true);
+            if (shutdownHookEnabled) {
+                shutdownManager.signalShutdownComplete();
+                shutdownManager.removeShutdownHook();
+            }
+            // Shutdown executor since run() won't complete normally
+            if (!executor.isShutdown()) {
+                executor.shutdown();
+                try {
+                    executor.shutdownNow(); // Force shutdown since no tasks were submitted
+                } catch (Exception ex) {
+                    logger.warn("Error during executor shutdown after init failure: {}", ex.getMessage());
+                }
+            }
             throw e;
         }
         
@@ -492,9 +489,6 @@ public final class ExecutionEngine implements AutoCloseable {
             long testDurationMillis = loadPattern.getDuration().toMillis();
             long iteration = 0;
             
-            // Check if load pattern supports warm-up/cool-down
-            boolean hasWarmupCooldown = loadPattern instanceof WarmupCooldownLoadPattern;
-            
             while (!stopRequested.get() && rateController.getElapsedMillis() < testDurationMillis) {
                 rateController.waitForNext();
                 
@@ -504,7 +498,7 @@ public final class ExecutionEngine implements AutoCloseable {
                 // 2. Elapsed time is significant (> 100ms) to ensure we're not breaking too early
                 // 3. TPS is 0.0 (pattern is complete)
                 // This prevents breaking on RampUpLoad which starts at 0.0, but still catches
-                // AdaptiveLoadPattern in RECOVERY phase which returns minimum TPS
+                // AdaptiveLoadPattern at minimum TPS (recovery behavior in RAMP_DOWN phase)
                 long elapsedMillis = rateController.getElapsedMillis();
                 double currentTps = rateController.getCurrentTps();
                 if (iteration >= 10 && elapsedMillis > 100 && currentTps <= 0.0) {
@@ -513,9 +507,8 @@ public final class ExecutionEngine implements AutoCloseable {
                     break;
                 }
                 
-                // Check if we should record metrics (only during steady-state phase)
-                boolean shouldRecordMetrics = !hasWarmupCooldown || 
-                    ((WarmupCooldownLoadPattern) loadPattern).shouldRecordMetrics(elapsedMillis);
+                // Check if we should record metrics (use interface method to avoid instanceof)
+                boolean shouldRecordMetrics = loadPattern.shouldRecordMetrics(elapsedMillis);
                 
                 long currentIteration = iteration++;
                 long queueStartNanos = System.nanoTime();
@@ -524,63 +517,8 @@ public final class ExecutionEngine implements AutoCloseable {
                 // Update queue size gauge
                 metricsCollector.updateQueueSize(pendingExecutions.get());
                 
-                // Check backpressure before submitting
-                if (backpressureHandler != null) {
-                    double backpressure = getBackpressureLevel();
-                    if (backpressure >= backpressureThreshold) {
-                        com.vajrapulse.api.BackpressureHandler.BackpressureContext context = 
-                            createBackpressureContext(backpressure);
-                        com.vajrapulse.api.BackpressureHandler.HandlingResult result = 
-                            backpressureHandler.handle(currentIteration, backpressure, context);
-                        
-                        switch (result) {
-                            case DROPPED:
-                                // Skip this request - don't submit
-                                pendingExecutions.decrementAndGet();
-                                metricsCollector.updateQueueSize(pendingExecutions.get());
-                                metricsCollector.recordDroppedRequest();
-                                logger.debug("Request {} dropped due to backpressure {} runId={}", 
-                                    currentIteration, String.format("%.2f", backpressure), runId);
-                                continue; // Skip to next iteration
-                                
-                            case REJECTED:
-                                // Fail immediately - record as failure
-                                pendingExecutions.decrementAndGet();
-                                metricsCollector.updateQueueSize(pendingExecutions.get());
-                                if (shouldRecordMetrics) {
-                                    metricsCollector.recordRejectedRequest();
-                                    metricsCollector.record(new ExecutionMetrics(
-                                        System.nanoTime(),
-                                        System.nanoTime(),
-                                        com.vajrapulse.api.TaskResult.failure(
-                                            new RuntimeException("Request rejected due to backpressure: " + String.format("%.2f", backpressure))),
-                                        currentIteration
-                                    ));
-                                }
-                                logger.debug("Request {} rejected due to backpressure {} runId={}", 
-                                    currentIteration, String.format("%.2f", backpressure), runId);
-                                continue; // Skip to next iteration
-                                
-                            case RETRY:
-                                // TODO: Implement retry mechanism
-                                // For now, queue it
-                                break;
-                                
-                            case DEGRADED:
-                                // TODO: Implement degradation mechanism
-                                // For now, queue it
-                                break;
-                                
-                            case QUEUED:
-                            case ACCEPTED:
-                            default:
-                                // Normal processing - submit to executor
-                                break;
-                        }
-                    }
-                }
-                
-                executor.submit(new ExecutionCallable(taskExecutor, metricsCollector, currentIteration, queueStartNanos, pendingExecutions, shouldRecordMetrics));
+                executor.submit(new ExecutionCallable(
+                    taskExecutor, metricsCollector, currentIteration, queueStartNanos, pendingExecutions, shouldRecordMetrics));
             }
             
             if (stopRequested.get()) {
@@ -603,6 +541,7 @@ public final class ExecutionEngine implements AutoCloseable {
             }
             
             // Graceful shutdown sequence
+            executorShutdown.set(true);
             boolean graceful = shutdownManager.awaitShutdown(executor);
             if (!graceful) {
                 logger.warn("Shutdown was not graceful for runId={}", runId);
@@ -624,11 +563,15 @@ public final class ExecutionEngine implements AutoCloseable {
     
     @Override
     public void close() {
-        shutdownManager.removeShutdownHook();
-        // Clean up the Cleaner registration
-        cleanable.clean();
+        // Signal shutdown completion and remove hook only if hooks were enabled
+        if (shutdownHookEnabled) {
+            shutdownManager.signalShutdownComplete();
+            shutdownManager.removeShutdownHook();
+        }
         
-        if (!executor.isShutdown()) {
+        // Shutdown executor only if run() didn't already shut it down
+        // This prevents redundant shutdown and infinite waits
+        if (!executorShutdown.get() && !executor.isShutdown()) {
             executor.shutdown();
             try {
                 if (!executor.awaitTermination(EXECUTOR_TERMINATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
@@ -672,166 +615,4 @@ public final class ExecutionEngine implements AutoCloseable {
         return pendingExecutions.get();
     }
     
-    /**
-     * Gets the current backpressure level.
-     * 
-     * <p>If the load pattern is an AdaptiveLoadPattern with a BackpressureProvider,
-     * returns the backpressure level from that provider. Otherwise returns 0.0.
-     * 
-     * @return backpressure level (0.0 to 1.0)
-     */
-    private double getBackpressureLevel() {
-        if (loadPattern instanceof com.vajrapulse.api.AdaptiveLoadPattern adaptivePattern) {
-            return adaptivePattern.getBackpressureLevel();
-        }
-        return 0.0;
-    }
-    
-    /**
-     * Creates a backpressure context for the handler.
-     * 
-     * @param backpressureLevel current backpressure level
-     * @return backpressure context
-     */
-    private com.vajrapulse.api.BackpressureHandler.BackpressureContext createBackpressureContext(double backpressureLevel) {
-        long queueDepth = pendingExecutions.get();
-        var snapshot = metricsCollector.snapshot();
-        return new com.vajrapulse.api.BackpressureHandler.BackpressureContext(
-            queueDepth,
-            0L, // Max queue depth (unbounded for virtual threads)
-            0L, // Active connections (not tracked here)
-            0L, // Max connections (not tracked here)
-            snapshot.failureRate(),
-            java.util.Map.of() // Custom metrics
-        );
-    }
-    
-    /**
-     * Callable for executing a task and recording metrics.
-     * Implemented as a concrete class to avoid lambda allocation in hot path.
-     */
-    private static final class ExecutionCallable implements Callable<Void> {
-        private final TaskExecutor taskExecutor;
-        private final MetricsCollector metricsCollector;
-        private final long iteration;
-        private final long queueStartNanos;
-        private final java.util.concurrent.atomic.AtomicLong pendingExecutions;
-        private final boolean shouldRecordMetrics;
-        
-        ExecutionCallable(TaskExecutor taskExecutor, MetricsCollector metricsCollector, long iteration, 
-                         long queueStartNanos, java.util.concurrent.atomic.AtomicLong pendingExecutions,
-                         boolean shouldRecordMetrics) {
-            this.taskExecutor = taskExecutor;
-            this.metricsCollector = metricsCollector;
-            this.iteration = iteration;
-            this.queueStartNanos = queueStartNanos;
-            this.pendingExecutions = pendingExecutions;
-            this.shouldRecordMetrics = shouldRecordMetrics;
-        }
-        
-        @Override
-        public Void call() {
-            // Record queue wait time (time from submission to actual execution start)
-            // Only record during steady-state phase
-            if (shouldRecordMetrics) {
-                long queueWaitNanos = System.nanoTime() - queueStartNanos;
-                metricsCollector.recordQueueWait(queueWaitNanos);
-            }
-            
-            // Decrement pending count when execution starts (before actual execution)
-            // This ensures queue size metric reflects only tasks waiting in queue,
-            // not tasks that have started executing
-            pendingExecutions.decrementAndGet();
-            metricsCollector.updateQueueSize(pendingExecutions.get());
-            
-            try {
-                ExecutionMetrics metrics = taskExecutor.executeWithMetrics(iteration);
-                // Only record metrics during steady-state phase (warm-up/cool-down excluded)
-                if (shouldRecordMetrics) {
-                    metricsCollector.record(metrics);
-                }
-            } finally {
-                // No cleanup needed - queue size already updated above
-            }
-            return null;
-        }
-    }
-
-    /**
-     * Convenience static helper to execute a task with a load pattern and metrics
-     * collection without manually managing the engine lifecycle.
-     * <p>Usage:
-     * <pre>{@code
-     * AggregatedMetrics metrics = ExecutionEngine.execute(task, loadPattern, collector);
-     * }</pre>
-     * @param taskLifecycle the task lifecycle to execute
-     * @param loadPattern the load pattern definition
-     * @param metricsCollector metrics collector instance
-     * @return aggregated metrics snapshot after execution
-     * @throws Exception if setup or cleanup fails
-     */
-    public static com.vajrapulse.core.metrics.AggregatedMetrics execute(
-            TaskLifecycle taskLifecycle,
-            LoadPattern loadPattern,
-            MetricsCollector metricsCollector) throws Exception {
-        try (ExecutionEngine engine = ExecutionEngine.builder()
-                .withTask(taskLifecycle)
-                .withLoadPattern(loadPattern)
-                .withMetricsCollector(metricsCollector)
-                .build()) {
-            engine.run();
-        }
-        return metricsCollector.snapshot();
-    }
-    
-    /**
-     * Cleanup action for executor service.
-     * 
-     * <p>This is called by the {@link Cleaner} API if the {@code ExecutionEngine} is not
-     * properly closed via {@link #close()}. The Cleaner API provides a safety net to ensure
-     * that resources are cleaned up even if the caller forgets to call {@code close()} or if
-     * an exception prevents the normal cleanup path.
-     * 
-     * <p><strong>When Cleaner Runs:</strong>
-     * <ul>
-     *   <li>The Cleaner runs when the {@code ExecutionEngine} instance becomes unreachable
-     *       and is eligible for garbage collection</li>
-     *   <li>The cleanup action runs in a separate thread managed by the Cleaner</li>
-     *   <li>There is no guarantee about when cleanup will occur - it depends on GC timing</li>
-     * </ul>
-     * 
-     * <p><strong>Best Practice:</strong> Always use try-with-resources or explicitly call
-     * {@link #close()} to ensure timely cleanup. Do not rely on the Cleaner as the primary
-     * cleanup mechanism.
-     * 
-     * <p><strong>Example:</strong>
-     * <pre>{@code
-     * try (ExecutionEngine engine = ExecutionEngine.builder()
-     *         .withTask(task)
-     *         .withLoadPattern(load)
-     *         .withMetricsCollector(collector)
-     *         .build()) {
-     *     engine.run();
-     * } // Engine automatically closed, Cleaner not invoked
-     * }</pre>
-     * 
-     * @since 0.9.0
-     */
-    private static final class ExecutorCleanup implements Runnable {
-        private final ExecutorService executor;
-        private final String runId;
-        
-        ExecutorCleanup(ExecutorService executor, String runId) {
-            this.executor = executor;
-            this.runId = runId;
-        }
-        
-        @Override
-        public void run() {
-            if (!executor.isShutdown()) {
-                logger.warn("Executor not closed via close() for runId={}, forcing shutdown via Cleaner", runId);
-                executor.shutdownNow();
-            }
-        }
-    }
 }

@@ -1,8 +1,8 @@
 package com.vajrapulse.core.engine
 
-import com.vajrapulse.api.LoadPattern
-import com.vajrapulse.api.TaskLifecycle
-import com.vajrapulse.api.TaskResult
+import com.vajrapulse.api.pattern.LoadPattern
+import com.vajrapulse.api.task.TaskLifecycle
+import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.core.metrics.MetricsCollector
 import com.vajrapulse.core.metrics.PeriodicMetricsReporter
 import com.vajrapulse.core.logging.StructuredLogger
@@ -34,7 +34,12 @@ class AdditionalCoreCoverageSpec extends Specification {
         def collector = MetricsCollector.createWithRunId('rid-static', [0.50d] as double[])
 
         when:
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
 
@@ -54,7 +59,12 @@ class AdditionalCoreCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when:
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.close() // exercise close path
 
         then:

@@ -2,7 +2,12 @@ package com.vajrapulse.core.engine
 
 import com.vajrapulse.core.metrics.MetricsCollector
 import spock.lang.Specification
+import spock.lang.Timeout
 
+import static org.awaitility.Awaitility.*
+import static java.util.concurrent.TimeUnit.*
+
+@Timeout(30)
 class MetricsProviderAdapterSpec extends Specification {
 
     def "should cache snapshot results"() {
@@ -14,7 +19,7 @@ class MetricsProviderAdapterSpec extends Specification {
         def metrics = new com.vajrapulse.core.engine.ExecutionMetrics(
             System.nanoTime(),
             System.nanoTime() + 1_000_000,
-            com.vajrapulse.api.TaskResult.success("ok"),
+            com.vajrapulse.api.task.TaskResult.success("ok"),
             0
         )
         collector.record(metrics)
@@ -48,7 +53,7 @@ class MetricsProviderAdapterSpec extends Specification {
         def metrics = new com.vajrapulse.core.engine.ExecutionMetrics(
             System.nanoTime(),
             System.nanoTime() + 1_000_000,
-            com.vajrapulse.api.TaskResult.failure(new RuntimeException("error")),
+            com.vajrapulse.api.task.TaskResult.failure(new RuntimeException("error")),
             0
         )
         collector.record(metrics)
@@ -70,21 +75,26 @@ class MetricsProviderAdapterSpec extends Specification {
             def successMetrics = new com.vajrapulse.core.engine.ExecutionMetrics(
                 System.nanoTime(),
                 System.nanoTime() + 1_000_000,
-                com.vajrapulse.api.TaskResult.success("ok"),
+                com.vajrapulse.api.task.TaskResult.success("ok"),
                 0
             )
             collector.record(successMetrics)
         }
         
-        // Wait a bit to create time separation
-        Thread.sleep(1100) // More than 1 second
+        // Wait for time separation (more than 1 second) to test recent window
+        def startTime = System.currentTimeMillis()
+        await().atMost(2, SECONDS)
+            .pollInterval(100, MILLISECONDS)
+            .until {
+                System.currentTimeMillis() - startTime >= 1100
+            }
         
         // Record failures in recent window
         3.times {
             def failureMetrics = new com.vajrapulse.core.engine.ExecutionMetrics(
                 System.nanoTime(),
                 System.nanoTime() + 1_000_000,
-                com.vajrapulse.api.TaskResult.failure(new RuntimeException("error")),
+                com.vajrapulse.api.task.TaskResult.failure(new RuntimeException("error")),
                 0
             )
             collector.record(failureMetrics)
@@ -109,7 +119,7 @@ class MetricsProviderAdapterSpec extends Specification {
         def metrics = new com.vajrapulse.core.engine.ExecutionMetrics(
             System.nanoTime(),
             System.nanoTime() + 1_000_000,
-            com.vajrapulse.api.TaskResult.failure(new RuntimeException("error")),
+            com.vajrapulse.api.task.TaskResult.failure(new RuntimeException("error")),
             0
         )
         collector.record(metrics)
@@ -135,6 +145,66 @@ class MetricsProviderAdapterSpec extends Specification {
         then: "should return all-time rate"
         rate == adapter.getFailureRate()
         rate2 == adapter.getFailureRate()
+    }
+    
+    def "should return failure count from metrics"() {
+        given: "a metrics collector with failures"
+        def collector = new MetricsCollector()
+        def adapter = new MetricsProviderAdapter(collector)
+        
+        // Record one success and two failures
+        def successMetrics = new com.vajrapulse.core.engine.ExecutionMetrics(
+            System.nanoTime(),
+            System.nanoTime() + 1_000_000,
+            com.vajrapulse.api.task.TaskResult.success("ok"),
+            0
+        )
+        collector.record(successMetrics)
+        
+        def failureMetrics1 = new com.vajrapulse.core.engine.ExecutionMetrics(
+            System.nanoTime(),
+            System.nanoTime() + 1_000_000,
+            com.vajrapulse.api.task.TaskResult.failure(new RuntimeException("error1")),
+            0
+        )
+        collector.record(failureMetrics1)
+        
+        def failureMetrics2 = new com.vajrapulse.core.engine.ExecutionMetrics(
+            System.nanoTime(),
+            System.nanoTime() + 1_000_000,
+            com.vajrapulse.api.task.TaskResult.failure(new RuntimeException("error2")),
+            0
+        )
+        collector.record(failureMetrics2)
+
+        when: "getting failure count"
+        def count = adapter.getFailureCount()
+
+        then: "failure count is 2"
+        count == 2
+    }
+    
+    def "should return zero when no failures"() {
+        given: "a metrics collector with only successes"
+        def collector = new MetricsCollector()
+        def adapter = new MetricsProviderAdapter(collector)
+        
+        // Record successes only
+        3.times {
+            def successMetrics = new com.vajrapulse.core.engine.ExecutionMetrics(
+                System.nanoTime(),
+                System.nanoTime() + 1_000_000,
+                com.vajrapulse.api.task.TaskResult.success("ok"),
+                0
+            )
+            collector.record(successMetrics)
+        }
+
+        when: "getting failure count"
+        def count = adapter.getFailureCount()
+
+        then: "failure count is zero"
+        count == 0
     }
 }
 

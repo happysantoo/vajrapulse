@@ -1,7 +1,10 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
+import com.vajrapulse.api.assertion.AssertionResult
 
+@Timeout(10)
 class AssertionResultSpec extends Specification {
 
     def "should create successful result"() {

@@ -1,16 +1,18 @@
 package com.vajrapulse.core.engine
 
-import com.vajrapulse.api.LoadPattern
-import com.vajrapulse.api.TaskLifecycle
-import com.vajrapulse.api.TaskResult
+import com.vajrapulse.api.pattern.LoadPattern
+import com.vajrapulse.api.task.TaskLifecycle
+import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.core.metrics.MetricsCollector
 import spock.lang.Specification
 import spock.lang.Timeout
 
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 @Timeout(10)
 class ExecutionEngineCoverageSpec extends Specification {
@@ -30,7 +32,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         def registry = collector.getRegistry()
 
         when: "creating and running engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         engine.close()
 
@@ -59,12 +66,22 @@ class ExecutionEngineCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running and checking shutdown"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
+        // Use proper synchronization for stopping engine
+        def stopLatch = new CountDownLatch(1)
         Thread.startVirtualThread {
             Thread.sleep(50)
             engine.stop()
+            stopLatch.countDown()
         }
         engine.run()
+        // Wait for stop to be invoked
+        assert stopLatch.await(1, TimeUnit.SECONDS) : "Stop should be invoked within 1 second"
         engine.close()
 
         then: "shutdown completed"
@@ -82,7 +99,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         engine.close()
 
@@ -101,7 +123,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
 
         then: "init exception is thrown"
@@ -122,7 +149,16 @@ class ExecutionEngineCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "using static execute method"
-        def metrics = ExecutionEngine.execute(task, load, collector)
+        def metrics
+        try (def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()) {
+            engine.run()
+            metrics = collector.snapshot()
+        }
 
         then: "metrics are returned"
         metrics.totalExecutions() > 0
@@ -139,7 +175,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "closing twice"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.close()
         engine.close() // Second close should be safe
 
@@ -156,7 +197,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         }
         def load = new ShortLoad(1.0, Duration.ofMillis(10))
         def collector = new MetricsCollector()
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         def interrupted = new java.util.concurrent.atomic.AtomicBoolean(false)
 
         when: "interrupting thread during close"
@@ -185,7 +231,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "getting queue depth"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         def depth = engine.getQueueDepth()
 
         then: "queue depth is accessible"
@@ -209,7 +260,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running with short duration"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         engine.close()
 
@@ -228,14 +284,24 @@ class ExecutionEngineCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "calling stop multiple times"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
+        // Use proper synchronization for stopping engine
+        def stopLatch = new CountDownLatch(1)
         Thread.startVirtualThread {
             Thread.sleep(50)
             engine.stop()
             engine.stop() // Second call should be idempotent
             engine.stop() // Third call should be idempotent
+            stopLatch.countDown()
         }
         engine.run()
+        // Wait for stop to be invoked
+        assert stopLatch.await(1, TimeUnit.SECONDS) : "Stop should be invoked within 1 second"
         engine.close()
 
         then: "no exception thrown"
@@ -254,7 +320,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         def registry = collector.getRegistry()
 
         when: "creating and running engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         engine.close()
 
@@ -290,8 +361,9 @@ class ExecutionEngineCoverageSpec extends Specification {
         def engine = ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(load)
-            .withMetricsCollector(collector)
-            .build()
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         def snapshot = collector.snapshot()
         engine.close()
@@ -315,8 +387,9 @@ class ExecutionEngineCoverageSpec extends Specification {
         ExecutionEngine.builder()
             .withTask(null)
             .withLoadPattern(load)
-            .withMetricsCollector(collector)
-            .build()
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
 
         then: "NullPointerException is thrown"
         thrown(NullPointerException)
@@ -325,8 +398,9 @@ class ExecutionEngineCoverageSpec extends Specification {
         ExecutionEngine.builder()
             .withTask(task)
             .withLoadPattern(null)
-            .withMetricsCollector(collector)
-            .build()
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
 
         then: "NullPointerException is thrown"
         thrown(NullPointerException)
@@ -336,6 +410,7 @@ class ExecutionEngineCoverageSpec extends Specification {
             .withTask(task)
             .withLoadPattern(load)
             .withMetricsCollector(null)
+            .withShutdownHook(false)
             .build()
 
         then: "NullPointerException is thrown"
@@ -354,15 +429,25 @@ class ExecutionEngineCoverageSpec extends Specification {
         def registry = collector.getRegistry()
 
         when: "creating engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         def stateBeforeRun = registry.find("vajrapulse.engine.state").gauge()?.value() ?: 0.0
 
         and: "running engine"
+        // Use proper synchronization for stopping engine
+        def stopLatch = new CountDownLatch(1)
         Thread.startVirtualThread {
             Thread.sleep(50)
             engine.stop()
+            stopLatch.countDown()
         }
         engine.run()
+        // Wait for stop to be invoked
+        assert stopLatch.await(1, TimeUnit.SECONDS) : "Stop should be invoked within 1 second"
         def stateAfterRun = registry.find("vajrapulse.engine.state").gauge()?.value() ?: 0.0
         engine.close()
 
@@ -384,7 +469,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         def registry = collector.getRegistry()
 
         when: "running engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         def uptimeBefore = registry.find("vajrapulse.engine.uptime.ms").gauge()?.value() ?: 0.0
         engine.run()
         def uptimeAfter = registry.find("vajrapulse.engine.uptime.ms").gauge()?.value() ?: 0.0
@@ -406,7 +496,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         def collector = new MetricsCollector()
         
         when: "creating engine and not closing it explicitly"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         
         // Don't call close() - let Cleaner handle it when engine is GC'd
@@ -440,7 +535,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running engine that throws exception"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         try {
             engine.run()
         } catch (RuntimeException e) {
@@ -464,7 +564,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running and closing engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         engine.close()
 
@@ -484,7 +589,12 @@ class ExecutionEngineCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "closing engine twice"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         engine.close()
         engine.close() // Second close should be safe (idempotent)

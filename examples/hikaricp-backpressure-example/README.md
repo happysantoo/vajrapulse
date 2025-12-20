@@ -48,17 +48,19 @@ HikariCpBackpressureProvider backpressureProvider =
     new HikariCpBackpressureProvider(dataSource, 0.8); // 80% utilization threshold
 
 // Use with AdaptiveLoadPattern
-AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
-    10.0,                          // Initial TPS
-    15.0,                          // Ramp increment
-    15.0,                          // Ramp decrement
-    Duration.ofSeconds(5),         // Ramp interval
-    200.0,                         // Max TPS
-    Duration.ofSeconds(30),        // Sustain duration
-    0.10,                          // Error threshold (10%)
-    metricsProvider,
-    backpressureProvider           // Backpressure provider
-);
+AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+    .initialTps(10.0)
+    .rampIncrement(15.0)
+    .rampDecrement(15.0)
+    .rampInterval(Duration.ofSeconds(5))
+    .maxTps(200.0)
+    .minTps(5.0)
+    .sustainDuration(Duration.ofSeconds(30))
+    .stableIntervalsRequired(3)
+    .metricsProvider(metricsProvider)
+    .backpressureProvider(backpressureProvider)
+    .decisionPolicy(new DefaultRampDecisionPolicy(0.10))  // 10% error threshold
+    .build();
 ```
 
 ## How It Works

@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
  * 
  * <p>Example usage:
  * <pre>{@code
- * MetricsPipeline.builder()
+ * LoadTestRunner.builder()
  *     .addExporter(new HtmlReportExporter(Path.of("reports/test-run.html")))
  *     .build()
  *     .run(task, loadPattern);

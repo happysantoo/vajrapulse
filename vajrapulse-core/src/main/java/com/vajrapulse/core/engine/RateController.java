@@ -1,6 +1,8 @@
 package com.vajrapulse.core.engine;
 
-import com.vajrapulse.api.LoadPattern;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.core.util.TimeConstants;
+import com.vajrapulse.core.util.TpsCalculator;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
@@ -40,17 +42,7 @@ public final class RateController {
      * Maximum sleep duration to allow loop condition to re-check.
      * 1 second in nanoseconds.
      */
-    private static final long MAX_SLEEP_NANOS = 1_000_000_000L; // 1 second
-    
-    /**
-     * Nanoseconds per second for time calculations.
-     */
-    private static final long NANOS_PER_SECOND = 1_000_000_000L;
-    
-    /**
-     * Nanoseconds per millisecond for time calculations.
-     */
-    private static final long NANOS_PER_MILLIS = 1_000_000L;
+    private static final long MAX_SLEEP_NANOS = TimeConstants.NANOS_PER_SECOND;
     
     /**
      * Cache TTL for elapsed time calculations (10ms).
@@ -113,25 +105,24 @@ public final class RateController {
         long currentCount = executionCount.incrementAndGet();
         long nowNanos = System.nanoTime();
         long elapsedNanos = getElapsedNanos(nowNanos);
-        long elapsedMillis = elapsedNanos / NANOS_PER_MILLIS;
+        long elapsedMillis = elapsedNanos / TimeConstants.NANOS_PER_MILLIS;
         
         double targetTps = loadPattern.calculateTps(elapsedMillis);
         if (targetTps <= 0) {
             return;
         }
         
-        // Calculate expected execution count based on elapsed time and target TPS
-        double elapsedSeconds = elapsedNanos / (double) NANOS_PER_SECOND;
-        long expectedCount = (long) (targetTps * elapsedSeconds);
+        // Calculate expected execution count using centralized utility
+        long expectedCount = TpsCalculator.calculateExpectedCount(targetTps, elapsedMillis);
         
         // If we're ahead of schedule, sleep
         if (currentCount > expectedCount) {
-            long nanosPerExecution = (long) (NANOS_PER_SECOND / targetTps);
+            long nanosPerExecution = (long) (TimeConstants.NANOS_PER_SECOND / targetTps);
             long targetNanos = testStartNanos + (currentCount * nanosPerExecution);
             long sleepNanos = targetNanos - nowNanos;
             
             // Cap sleep time to prevent sleeping past test duration
-            long remainingDurationNanos = (loadPattern.getDuration().toMillis() * NANOS_PER_MILLIS) - elapsedNanos;
+            long remainingDurationNanos = (loadPattern.getDuration().toMillis() * TimeConstants.NANOS_PER_MILLIS) - elapsedNanos;
             long cappedSleepNanos = Math.min(sleepNanos, Math.min(MAX_SLEEP_NANOS, remainingDurationNanos));
             
             if (cappedSleepNanos > 0 && remainingDurationNanos > 0) {
@@ -208,7 +199,7 @@ public final class RateController {
     public long getElapsedMillis() {
         long nowNanos = System.nanoTime();
         long elapsedNanos = getElapsedNanos(nowNanos);
-        return elapsedNanos / NANOS_PER_MILLIS;
+        return elapsedNanos / TimeConstants.NANOS_PER_MILLIS;
     }
     
     /**

@@ -1,10 +1,10 @@
 package com.vajrapulse.core.engine
 
-import com.vajrapulse.api.PlatformThreads
-import com.vajrapulse.api.VirtualThreads
-import com.vajrapulse.api.LoadPattern
-import com.vajrapulse.api.TaskLifecycle
-import com.vajrapulse.api.TaskResult
+import com.vajrapulse.api.task.PlatformThreads
+import com.vajrapulse.api.task.VirtualThreads
+import com.vajrapulse.api.pattern.LoadPattern
+import com.vajrapulse.api.task.TaskLifecycle
+import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.core.metrics.MetricsCollector
 import com.vajrapulse.core.tracing.Tracing
 import spock.lang.Specification
@@ -43,7 +43,12 @@ class BranchCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when:
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run(); engine.close()
 
         then:
@@ -57,7 +62,12 @@ class BranchCoverageSpec extends Specification {
         def collector = new MetricsCollector()
 
         when:
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run(); engine.close()
 
         then:

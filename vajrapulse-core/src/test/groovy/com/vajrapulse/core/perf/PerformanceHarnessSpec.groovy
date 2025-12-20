@@ -1,15 +1,17 @@
 package com.vajrapulse.core.perf
 
-import com.vajrapulse.api.StaticLoad
-import com.vajrapulse.api.TaskLifecycle
-import com.vajrapulse.api.TaskResult
-import com.vajrapulse.api.VirtualThreads
+import com.vajrapulse.api.pattern.StaticLoad
+import com.vajrapulse.api.task.TaskLifecycle
+import com.vajrapulse.api.task.TaskResult
+import com.vajrapulse.api.task.VirtualThreads
 import com.vajrapulse.core.engine.ExecutionEngine
 import com.vajrapulse.core.metrics.MetricsCollector
 import spock.lang.Specification
+import spock.lang.Timeout
 
 import java.time.Duration
 
+@Timeout(30)
 class PerformanceHarnessSpec extends Specification {
 
     @VirtualThreads
@@ -26,7 +28,12 @@ class PerformanceHarnessSpec extends Specification {
         def collector = MetricsCollector.createWithRunId("perf-test", new double[]{0.5})
 
         when:
-        try (def engine = new ExecutionEngine(new NoOpTask(), pattern, collector)) {
+        try (def engine = ExecutionEngine.builder()
+                .withTask(new NoOpTask())
+                .withLoadPattern(pattern)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()) {
             engine.run()
         }
         def snapshot = collector.snapshot()

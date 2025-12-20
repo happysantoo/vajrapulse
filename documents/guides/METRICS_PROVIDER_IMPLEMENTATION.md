@@ -28,6 +28,31 @@ public interface MetricsProvider {
      * @return total execution count
      */
     long getTotalExecutions();
+    
+    /**
+     * Gets the total number of failed executions.
+     * 
+     * <p>This method returns the absolute count of failures,
+     * which is useful for alerting on absolute failure thresholds
+     * and tracking failure trends over time.
+     * 
+     * @return total failure count
+     * @since 0.9.9
+     */
+    default long getFailureCount() {
+        return 0L;
+    }
+    
+    /**
+     * Gets the failure rate over a recent time window.
+     * 
+     * @param windowSeconds the time window in seconds
+     * @return failure rate as percentage (0.0-100.0) for the recent window
+     * @since 0.9.8
+     */
+    default double getRecentFailureRate(int windowSeconds) {
+        return getFailureRate();
+    }
 }
 ```
 

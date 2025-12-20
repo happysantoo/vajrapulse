@@ -1,9 +1,12 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
+import com.vajrapulse.api.pattern.SpikeLoad
 
 import java.time.Duration
 
+@Timeout(10)
 class SpikeLoadSpec extends Specification {
 
     def "spike load alternates base and spike rates"() {
@@ -29,7 +32,7 @@ class SpikeLoadSpec extends Specification {
 
         then:
         def e = thrown(IllegalArgumentException)
-        e.message.contains("spikeDuration must be < spikeInterval")
+        e.message.toLowerCase().contains("spike duration") && e.message.toLowerCase().contains("spike interval")
     }
 
     def "spike load validation rejects negative rates"() {

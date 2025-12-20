@@ -1,7 +1,9 @@
 package com.vajrapulse.core.metrics
 
 import spock.lang.Specification
+import spock.lang.Timeout
 
+@Timeout(10)
 class AggregatedMetricsSpec extends Specification {
 
     def "should calculate response TPS correctly"() {
@@ -14,8 +16,7 @@ class AggregatedMetricsSpec extends Specification {
             [:] as Map<Double, Double>,
             1000L,  // 1 second
             0L,     // queue size
-            [:] as Map<Double, Double>,  // queue wait percentiles
-            new ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         when: "calculating response TPS"
@@ -35,8 +36,7 @@ class AggregatedMetricsSpec extends Specification {
             [:] as Map<Double, Double>,
             1000L,  // elapsed time
             0L,     // queue size
-            [:] as Map<Double, Double>,  // queue wait percentiles
-            new ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         when: "calculating success TPS"
@@ -56,8 +56,7 @@ class AggregatedMetricsSpec extends Specification {
             [:] as Map<Double, Double>,
             1000L,  // elapsed time
             0L,     // queue size
-            [:] as Map<Double, Double>,  // queue wait percentiles
-            new ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         when: "calculating failure TPS"
@@ -77,8 +76,7 @@ class AggregatedMetricsSpec extends Specification {
             [:] as Map<Double, Double>,
             500L,  // 0.5 seconds
             0L,     // queue size
-            [:] as Map<Double, Double>,  // queue wait percentiles
-            new ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         when: "calculating response TPS"
@@ -98,8 +96,7 @@ class AggregatedMetricsSpec extends Specification {
             [:] as Map<Double, Double>,
             30500L,  // 30.5 seconds
             0L,     // queue size
-            [:] as Map<Double, Double>,  // queue wait percentiles
-            new ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         when: "calculating TPS values"
@@ -123,8 +120,7 @@ class AggregatedMetricsSpec extends Specification {
             [:] as Map<Double, Double>,
             1L,  // 1ms = 1000 TPS
             0L,     // queue size
-            [:] as Map<Double, Double>,  // queue wait percentiles
-            new ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         when: "calculating TPS"
@@ -144,8 +140,7 @@ class AggregatedMetricsSpec extends Specification {
             [:] as Map<Double, Double>,
             5000L,  // elapsed time
             0L,     // queue size
-            [:] as Map<Double, Double>,  // queue wait percentiles
-            new ClientMetrics()  // client metrics
+            [:] as Map<Double, Double>  // queue wait percentiles
         )
         
         when: "calculating rates"

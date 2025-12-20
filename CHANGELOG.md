@@ -13,6 +13,150 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - GraalVM native image validation
 - Scenario scripting DSL
 
+## [0.9.9] - 2025-12-14
+
+### 🎯 Release Highlights
+
+Version 0.9.9 focuses on **code quality improvements**, **architectural refactoring**, and **test reliability enhancements**. This release delivers significant improvements to maintainability, testability, and developer experience.
+
+**Key Improvements**:
+- ✅ **23.5% code reduction** in `AdaptiveLoadPattern` (1,275 → 975 lines)
+- ✅ **3.4% code reduction** in `ExecutionEngine` (640 → 618 lines)
+- ✅ **100% test timeout coverage** (62/62 test files)
+- ✅ **0% test flakiness** (validated across 10 consecutive runs)
+- ✅ **Polymorphism over type checking** (eliminated `instanceof` checks)
+- ✅ **Comprehensive test utilities** and best practices guide
+
+### Removed
+- **BackpressureHandlingResult.RETRY**: Removed incomplete retry handling result
+- **BackpressureHandlingResult.DEGRADED**: Removed incomplete degradation handling result
+- **BackpressureHandlers.retry()**: Removed incomplete retry handler factory method
+- **BackpressureHandlers.DEGRADE**: Removed incomplete degradation handler constant
+- **BackpressureHandler.handle() iteration parameter**: Removed unused iteration parameter from handler interface
+- **com.vajrapulse.core.backpressure package**: Removed package, classes moved to metrics package
+
+### Added
+- **Test Reliability Improvements**: Comprehensive test quality enhancements
+  - **100% Timeout Coverage**: All 62 test files now have `@Timeout` annotations
+  - **Test Utilities**: Created `TestExecutionHelper` and `TestMetricsHelper` for consistent test patterns
+  - **Test Best Practices Guide**: Comprehensive guide in `documents/guides/TEST_BEST_PRACTICES.md`
+  - **Reliability Validation**: 10 consecutive test runs with 100% pass rate, 0% flakiness
+- **Vortex 0.0.9 Integration**: Added vortex micro-batching library as dependency
+  - Integrated vortex 0.0.9 into BOM and core module
+  - Prepared foundation for potential future batching optimizations
+  - Documentation added in `documents/integrations/VORTEX_0.0.9_INTEGRATION.md`
+- **AdaptiveLoadPattern Architectural Refactoring**: Major simplification and maintainability improvements
+  - **State Simplification**: Split large `AdaptiveState` record into focused records (`CoreState`, `StabilityTracking`, `RecoveryTracking`)
+  - **Phase Machine Simplification**: Removed `RECOVERY` phase, merged recovery logic into `RAMP_DOWN` phase
+  - **Decision Logic Extraction**: Introduced `RampDecisionPolicy` interface with `DefaultRampDecisionPolicy` implementation
+  - **Configuration Consolidation**: Created `AdaptiveConfig` record to consolidate all configuration parameters
+  - **Builder Pattern**: Fluent API for constructing `AdaptiveLoadPattern` instances
+  - **Strategy Pattern**: Introduced `PhaseStrategy` interface with `RampUpStrategy`, `RampDownStrategy`, and `SustainStrategy` implementations
+  - **Event Notification**: Added `AdaptivePatternListener` interface for listening to phase transitions, TPS changes, stability detection, and recovery events
+  - **MetricsProvider Enhancement**: Added `getFailureCount()` method to track absolute failure count
+- **New APIs**:
+  - `AdaptiveConfig`: Configuration record with validation and defaults
+  - `RampDecisionPolicy`: Interface for making ramp decisions (ramp up, down, sustain, recover)
+  - `DefaultRampDecisionPolicy`: Default implementation with configurable thresholds
+  - `MetricsSnapshot`: Record for consistent metrics view for decision-making
+  - `PhaseStrategy`: Interface for phase-specific logic handling
+  - `RampUpStrategy`, `RampDownStrategy`, `SustainStrategy`: Strategy implementations for each phase
+  - `AdaptivePatternListener`: Interface for event notifications with event records (`PhaseTransitionEvent`, `TpsChangeEvent`, `StabilityDetectedEvent`, `RecoveryEvent`)
+- **ExecutionEngine Improvements**: Code quality and maintainability enhancements
+  - **Polymorphism**: Eliminated `instanceof` checks for `WarmupCooldownLoadPattern` using interface methods
+  - **Metrics Registration**: Consolidated into single `registerMetrics()` method
+  - **ExecutionCallable**: Extracted to top-level class for better organization
+  - **Code Reduction**: Reduced from 640 lines to 618 lines (3.4% reduction)
+
+### Changed
+- **BackpressureHandler interface**: Simplified `handle()` method signature
+  - Before: `handle(long iteration, double backpressureLevel, BackpressureContext context)`
+  - After: `handle(double backpressureLevel, BackpressureContext context)`
+- **ExecutionEngine**: Simplified backpressure handling
+  - Removed RETRY and DEGRADED cases (were incomplete with TODO comments)
+  - Now only handles: DROPPED, REJECTED, QUEUED, ACCEPTED
+  - Extracted backpressure handling logic into separate methods for better readability
+- **Package reorganization**: Moved backpressure classes to metrics package
+  - `com.vajrapulse.core.backpressure.BackpressureHandlers` → `com.vajrapulse.core.metrics.BackpressureHandlers`
+  - `com.vajrapulse.core.backpressure.CompositeBackpressureProvider` → `com.vajrapulse.core.metrics.CompositeBackpressureProvider`
+  - `com.vajrapulse.core.backpressure.QueueBackpressureProvider` → `com.vajrapulse.core.metrics.QueueBackpressureProvider`
+- **StepLoad**: Enhanced immutability
+  - Compact constructor now creates immutable list copy using `List.copyOf()`
+  - Prevents external modification of steps after construction
+  - Removed SpotBugs exclusion (issue fixed in code)
+- **AdaptiveLoadPattern**: Major architectural refactoring
+  - **Code Reduction**: Reduced from 1,275 lines to 975 lines (23.5% reduction)
+  - **Helper Methods**: Extracted decision logic into focused helper methods (`checkMaxTpsReached`, `decideRecovery`, `decideStabilityDuringRampDown`, `checkAfterSustainDuration`, `calculateStableCount`, `createInitialState`)
+  - **State Transitions**: Unified state transitions into single `transitionToPhase()` method
+  - **Builder Pattern**: Simplified builder with method chaining and extracted validation/config creation
+  - State is now composed of three focused records instead of one large record
+  - Phase machine simplified from 4 phases to 3 phases (RAMP_UP, RAMP_DOWN, SUSTAIN)
+  - Decision logic extracted to pluggable `RampDecisionPolicy` interface
+  - Configuration consolidated into `AdaptiveConfig` record
+  - Builder pattern provides fluent API for configuration
+  - Phase-specific logic moved to strategy classes
+  - Event notification system for external integration
+  - Deprecated constructors maintained for backward compatibility
+- **LoadPattern Interface**: Enhanced with polymorphism support
+  - Added `supportsWarmupCooldown()` default method for pattern capability detection
+  - Added `shouldRecordMetrics(long elapsedMillis)` default method for metrics recording control
+  - Enables polymorphism over `instanceof` checks for better extensibility
+- **MetricsProvider**: Enhanced with failure count tracking
+  - Added `getFailureCount()` method with default implementation
+  - `MetricsProviderAdapter` implements failure count tracking
+- **Examples and Worker**: Updated to use new builder pattern
+  - All examples updated to use `AdaptiveLoadPattern.builder()`
+  - Worker `LoadPatternFactory` updated to use builder pattern
+  - `HttpLoadTest` migrated from deprecated `Task` to `TaskLifecycle` interface
+
+### Fixed
+- Fixed deprecation warnings in examples and worker code
+- Improved code maintainability and testability through architectural improvements
+- Enhanced extensibility through strategy and policy patterns
+- **StepLoad immutability**: Fixed SpotBugs warning by creating immutable list copy in compact constructor
+- **SpotBugs exclusions**: Updated exclusion file with correct package names after reorganization
+- **Duplicate test files**: Removed duplicate test files after package reorganization
+- **SpotBugs build failures**: Fixed package name mismatches in exclusion file
+- **Test reliability**: Fixed test access to private fields, improved test patterns
+- **Test timeouts**: Added 100% timeout coverage to prevent hanging tests
+
+### Migration Guide
+
+**Backward Compatibility**: All deprecated constructors remain available. Existing code continues to work without changes.
+
+**Recommended Migration**:
+- Use `AdaptiveLoadPattern.builder()` for new code
+- Migrate from deprecated `Task` interface to `TaskLifecycle` interface
+- Consider implementing `AdaptivePatternListener` for event-driven integrations
+- Custom `RampDecisionPolicy` implementations can be provided for advanced use cases
+
+**Backpressure Simplification Migration**:
+- **If using RETRY/DEGRADED**: Remove or replace with QUEUE/REJECT strategies
+- **If using retry()**: Implement retry logic in task code or use QUEUE handler
+- **If implementing custom BackpressureHandler**: Update `handle()` method signature to remove `iteration` parameter
+- **If importing backpressure package**: Update imports from `com.vajrapulse.core.backpressure.*` to `com.vajrapulse.core.metrics.*`
+
+**Example Migration**:
+```java
+// Old (deprecated but still works)
+AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
+    100.0, 50.0, 100.0, Duration.ofSeconds(5),
+    500.0, Duration.ofSeconds(10), 0.01, metricsProvider
+);
+
+// New (recommended)
+AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+    .initialTps(100.0)
+    .rampIncrement(50.0)
+    .rampDecrement(100.0)
+    .rampInterval(Duration.ofSeconds(5))
+    .maxTps(500.0)
+    .sustainDuration(Duration.ofSeconds(10))
+    .errorThreshold(0.01)
+    .metricsProvider(metricsProvider)
+    .build();
+```
+
 ## [0.9.8] - 2025-12-05
 ### Added
 - **AdaptiveLoadPattern Recovery Enhancements**: Automatic recovery from low TPS

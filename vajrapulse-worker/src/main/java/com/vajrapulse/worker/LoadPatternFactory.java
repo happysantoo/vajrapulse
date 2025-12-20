@@ -1,14 +1,14 @@
 package com.vajrapulse.worker;
 
-import com.vajrapulse.api.AdaptiveLoadPattern;
-import com.vajrapulse.api.LoadPattern;
-import com.vajrapulse.api.MetricsProvider;
-import com.vajrapulse.api.RampUpLoad;
-import com.vajrapulse.api.RampUpToMaxLoad;
-import com.vajrapulse.api.SineWaveLoad;
-import com.vajrapulse.api.SpikeLoad;
-import com.vajrapulse.api.StaticLoad;
-import com.vajrapulse.api.StepLoad;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.metrics.MetricsProvider;
+import com.vajrapulse.api.pattern.RampUpLoad;
+import com.vajrapulse.api.pattern.RampUpToMaxLoad;
+import com.vajrapulse.api.pattern.SineWaveLoad;
+import com.vajrapulse.api.pattern.SpikeLoad;
+import com.vajrapulse.api.pattern.StaticLoad;
+import com.vajrapulse.api.pattern.StepLoad;
 import com.vajrapulse.core.engine.MetricsProviderAdapter;
 import com.vajrapulse.core.metrics.MetricsCollector;
 import org.slf4j.Logger;
@@ -143,16 +143,16 @@ public final class LoadPatternFactory {
                 
                 logger.debug("Creating adaptive load initialTps={} rampIncrement={} rampDecrement={} rampInterval={} maxTps={} sustainDuration={} errorThreshold={}",
                     adaptiveInitialTps, adaptiveRampIncrement, adaptiveRampDecrement, rampInterval, maxTps, sustainDuration, adaptiveErrorThreshold);
-                yield new AdaptiveLoadPattern(
-                    adaptiveInitialTps,
-                    adaptiveRampIncrement,
-                    adaptiveRampDecrement,
-                    rampInterval,
-                    maxTps,
-                    sustainDuration,
-                    adaptiveErrorThreshold,
-                    provider
-                );
+                yield AdaptiveLoadPattern.builder()
+                    .initialTps(adaptiveInitialTps)
+                    .rampIncrement(adaptiveRampIncrement)
+                    .rampDecrement(adaptiveRampDecrement)
+                    .rampInterval(rampInterval)
+                    .maxTps(maxTps)
+                    .sustainDuration(sustainDuration)
+                    .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(adaptiveErrorThreshold))
+                    .metricsProvider(provider)
+                    .build();
             }
             default -> throw new IllegalArgumentException(
                 "Unknown mode: " + mode + ". Valid modes: static, ramp, ramp-sustain, step, sine, spike, adaptive"

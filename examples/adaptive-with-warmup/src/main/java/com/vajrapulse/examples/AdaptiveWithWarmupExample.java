@@ -1,6 +1,11 @@
 package com.vajrapulse.examples;
 
-import com.vajrapulse.api.*;
+import com.vajrapulse.api.task.TaskLifecycle;
+import com.vajrapulse.api.task.TaskResult;
+import com.vajrapulse.api.task.VirtualThreads;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.WarmupCooldownLoadPattern;
 import com.vajrapulse.core.engine.ExecutionEngine;
 import com.vajrapulse.core.metrics.MetricsCollector;
 import com.vajrapulse.core.engine.MetricsProviderAdapter;
@@ -77,16 +82,18 @@ public class AdaptiveWithWarmupExample implements TaskLifecycle {
             var metricsProvider = new MetricsProviderAdapter(collector);
             
             // Create adaptive pattern
-            LoadPattern adaptivePattern = new AdaptiveLoadPattern(
-                20.0,                    // Initial TPS
-                10.0,                    // Ramp increment
-                20.0,                    // Ramp decrement
-                Duration.ofSeconds(5),   // Ramp interval
-                100.0,                   // Max TPS
-                Duration.ofSeconds(10),  // Sustain duration
-                0.05,                    // Error threshold (5% as ratio)
-                metricsProvider
-            );
+            LoadPattern adaptivePattern = AdaptiveLoadPattern.builder()
+                .initialTps(20.0)                    // Initial TPS
+                .rampIncrement(10.0)                 // Ramp increment
+                .rampDecrement(20.0)                  // Ramp decrement
+                .rampInterval(Duration.ofSeconds(5))  // Ramp interval
+                .maxTps(100.0)                        // Max TPS
+                .minTps(5.0)                          // Min TPS
+                .sustainDuration(Duration.ofSeconds(10)) // Sustain duration
+                .stableIntervalsRequired(3)           // Require 3 stable intervals
+                .metricsProvider(metricsProvider)
+                .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.05))  // 5% error threshold
+                .build();
             
             // Wrap with warm-up and cool-down
             LoadPattern pattern = new WarmupCooldownLoadPattern(

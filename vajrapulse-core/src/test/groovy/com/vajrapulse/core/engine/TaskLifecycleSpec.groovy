@@ -1,8 +1,8 @@
 package com.vajrapulse.core.engine
 
-import com.vajrapulse.api.LoadPattern
-import com.vajrapulse.api.TaskLifecycle
-import com.vajrapulse.api.TaskResult
+import com.vajrapulse.api.pattern.LoadPattern
+import com.vajrapulse.api.task.TaskLifecycle
+import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.core.metrics.MetricsCollector
 import spock.lang.Specification
 import spock.lang.Timeout
@@ -47,7 +47,12 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         engine.close()
 
@@ -76,7 +81,12 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when:
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         engine.close()
 
@@ -111,12 +121,20 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
 
         then: "init exception is propagated and teardown not called"
         thrown(RuntimeException)
         !teardownCalled
+        
+        cleanup:
+        engine?.close()
     }
 
     def "should call teardown even if execute throws exceptions"() {
@@ -139,7 +157,12 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         engine.close()
 
@@ -173,7 +196,12 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         engine.close()
 
@@ -210,7 +238,12 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         engine.close()
 
@@ -238,7 +271,12 @@ class TaskLifecycleSpec extends Specification {
         def collector = new MetricsCollector()
 
         when: "running the engine"
-        def engine = new ExecutionEngine(task, load, collector)
+        def engine = ExecutionEngine.builder()
+                .withTask(task)
+                .withLoadPattern(load)
+                .withMetricsCollector(collector)
+                .withShutdownHook(false)
+                .build()
         engine.run()
         engine.close()
 

@@ -1,9 +1,12 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
+import com.vajrapulse.api.pattern.StepLoad
 
 import java.time.Duration
 
+@Timeout(10)
 class StepLoadSpec extends Specification {
 
     def "step load computes correct rates across steps"() {
@@ -50,7 +53,7 @@ class StepLoadSpec extends Specification {
 
         then:
         def e = thrown(IllegalArgumentException)
-        e.message.contains("step rate")
+        e.message.toLowerCase().contains("step rate")
     }
 
     def "step load validation rejects zero duration"() {
@@ -61,6 +64,6 @@ class StepLoadSpec extends Specification {
 
         then:
         def e = thrown(IllegalArgumentException)
-        e.message.contains("step duration")
+        e.message.toLowerCase().contains("step duration")
     }
 }

@@ -21,7 +21,7 @@ import java.util.List;
  * 
  * <p>Example usage:
  * <pre>{@code
- * MetricsPipeline.builder()
+ * LoadTestRunner.builder()
  *     .addExporter(new CsvReportExporter(Path.of("reports/test-run.csv")))
  *     .build()
  *     .run(task, loadPattern);

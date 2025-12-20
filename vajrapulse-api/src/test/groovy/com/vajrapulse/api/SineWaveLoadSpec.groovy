@@ -1,9 +1,12 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
+import com.vajrapulse.api.pattern.SineWaveLoad
 
 import java.time.Duration
 
+@Timeout(10)
 class SineWaveLoadSpec extends Specification {
 
     def "sine wave produces expected oscillation values"() {

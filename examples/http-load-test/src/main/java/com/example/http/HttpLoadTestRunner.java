@@ -1,19 +1,18 @@
 package com.example.http;
 
-import com.vajrapulse.api.AdaptiveLoadPattern;
-import com.vajrapulse.api.LoadPattern;
-import com.vajrapulse.api.MetricsProvider;
-import com.vajrapulse.api.StaticLoad;
-import com.vajrapulse.api.StepLoad;
-import com.vajrapulse.api.SineWaveLoad;
-import com.vajrapulse.api.SpikeLoad;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.metrics.MetricsProvider;
+import com.vajrapulse.api.pattern.StaticLoad;
+import com.vajrapulse.api.pattern.StepLoad;
+import com.vajrapulse.api.pattern.SineWaveLoad;
+import com.vajrapulse.api.pattern.SpikeLoad;
 import com.vajrapulse.core.engine.MetricsProviderAdapter;
-import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.exporter.console.ConsoleMetricsExporter;
 import com.vajrapulse.exporter.report.HtmlReportExporter;
 import com.vajrapulse.exporter.report.JsonReportExporter;
 import com.vajrapulse.exporter.report.CsvReportExporter;
-import com.vajrapulse.worker.pipeline.MetricsPipeline;
+import com.vajrapulse.worker.pipeline.LoadTestRunner;
 
 import java.nio.file.Path;
 import java.time.Duration;
@@ -68,16 +67,18 @@ public final class HttpLoadTestRunner {
         if ("adaptive".equals(patternType)) {
             metricsCollector = com.vajrapulse.core.metrics.MetricsCollector.createWith(new double[]{0.50, 0.95, 0.99});
             MetricsProvider metricsProvider = new MetricsProviderAdapter(metricsCollector);
-            loadPattern = new AdaptiveLoadPattern(
-                100.0,  // Start at 100 TPS
-                50.0,   // Increase 50 TPS per interval
-                100.0,  // Decrease 100 TPS per interval when errors occur
-                Duration.ofSeconds(5),  // Check/adjust every 5 seconds
-                500.0,  // Max 500 TPS
-                Duration.ofSeconds(10), // Sustain at stable point for 10 seconds
-                0.01,   // 1% error rate threshold
-                metricsProvider
-            );
+            loadPattern = AdaptiveLoadPattern.builder()
+                .initialTps(100.0)                      // Start at 100 TPS
+                .rampIncrement(50.0)                   // Increase 50 TPS per interval
+                .rampDecrement(100.0)                   // Decrease 100 TPS per interval when errors occur
+                .rampInterval(Duration.ofSeconds(5))   // Check/adjust every 5 seconds
+                .maxTps(500.0)                         // Max 500 TPS
+                .minTps(10.0)                          // Min TPS
+                .sustainDuration(Duration.ofSeconds(10)) // Sustain at stable point for 10 seconds
+                .stableIntervalsRequired(3)            // Require 3 stable intervals
+                .metricsProvider(metricsProvider)
+                .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.01))  // 1% error rate threshold
+                .build();
         } else {
             loadPattern = switch (patternType) {
                 case "static" -> new StaticLoad(100.0, Duration.ofSeconds(30));
@@ -135,7 +136,7 @@ public final class HttpLoadTestRunner {
         
         // Pipeline automatically manages lifecycle
         // Add multiple exporters: console for live updates, reports for analysis
-        var pipelineBuilder = MetricsPipeline.builder()
+        var pipelineBuilder = LoadTestRunner.builder()
             .addExporter(new ConsoleMetricsExporter());
         
         // For adaptive pattern, pass registry to report exporters for phase visualization
@@ -153,7 +154,7 @@ public final class HttpLoadTestRunner {
                 .addExporter(new CsvReportExporter(csvReport));
         }
         
-        try (MetricsPipeline pipeline = pipelineBuilder
+        try (LoadTestRunner pipeline = pipelineBuilder
             .withPeriodic(Duration.ofSeconds(5))
             .withPercentiles(0.1,0.2,0.5,0.75,0.9,0.95,0.99)
             .build()) {

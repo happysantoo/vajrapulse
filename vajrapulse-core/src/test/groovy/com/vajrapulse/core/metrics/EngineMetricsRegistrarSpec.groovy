@@ -1,12 +1,15 @@
 package com.vajrapulse.core.metrics
 
-import com.vajrapulse.api.LoadPattern
-import com.vajrapulse.api.StaticLoad
-import com.vajrapulse.api.VirtualThreads
+import com.vajrapulse.api.pattern.LoadPattern
+import com.vajrapulse.api.pattern.StaticLoad
+import com.vajrapulse.api.task.VirtualThreads
 import com.vajrapulse.core.engine.RateController
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import spock.lang.Specification
+import spock.lang.Timeout
+
+@Timeout(10)
 
 import java.time.Duration
 import java.util.concurrent.ExecutorService

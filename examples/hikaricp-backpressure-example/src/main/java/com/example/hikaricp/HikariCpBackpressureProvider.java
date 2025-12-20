@@ -1,6 +1,6 @@
 package com.example.hikaricp;
 
-import com.vajrapulse.api.BackpressureProvider;
+import com.vajrapulse.api.backpressure.BackpressureProvider;
 
 /**
  * Example backpressure provider based on HikariCP connection pool metrics.
@@ -23,12 +23,19 @@ import com.vajrapulse.api.BackpressureProvider;
  *     0.8  // 80% utilization threshold
  * );
  * 
- * AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
- *     10.0, 15.0, 15.0, Duration.ofSeconds(5),
- *     200.0, Duration.ofSeconds(30), 0.10,
- *     metricsProvider,
- *     provider  // Adaptive pattern will respond to connection pool exhaustion
- * );
+ * AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+ *     .initialTps(10.0)
+ *     .rampIncrement(15.0)
+ *     .rampDecrement(15.0)
+ *     .rampInterval(Duration.ofSeconds(5))
+ *     .maxTps(200.0)
+ *     .minTps(5.0)
+ *     .sustainDuration(Duration.ofSeconds(30))
+ *     .stableIntervalsRequired(3)
+ *     .metricsProvider(metricsProvider)
+ *     .backpressureProvider(provider)  // Adaptive pattern will respond to connection pool exhaustion
+ *     .decisionPolicy(new DefaultRampDecisionPolicy(0.10))  // 10% error threshold
+ *     .build();
  * }</pre>
  * 
  * <p><strong>Dependencies Required:</strong>

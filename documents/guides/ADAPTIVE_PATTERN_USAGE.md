@@ -1,6 +1,6 @@
 # Adaptive Load Pattern Usage Guide
 
-**Version**: 0.9.5  
+**Version**: 0.9.9  
 **Status**: Usage Guide
 
 ---
@@ -22,7 +22,8 @@ This guide provides comprehensive examples and best practices for using adaptive
 ### Basic Example
 
 ```java
-import com.vajrapulse.api.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy;
 import com.vajrapulse.core.engine.MetricsProviderAdapter;
 import com.vajrapulse.core.metrics.MetricsCollector;
 import java.time.Duration;
@@ -34,16 +35,18 @@ MetricsCollector metrics = new MetricsCollector();
 MetricsProviderAdapter metricsProvider = new MetricsProviderAdapter(metrics);
 
 // Create adaptive pattern
-AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
-    100.0,                          // Start at 100 TPS
-    50.0,                           // Increase 50 TPS per interval
-    100.0,                          // Decrease 100 TPS per interval when errors occur
-    Duration.ofMinutes(1),          // Check/adjust every minute
-    5000.0,                         // Max 5000 TPS
-    Duration.ofMinutes(10),         // Sustain at stable point for 10 minutes
-    0.01,                           // 1% error rate threshold
-    metricsProvider                 // For feedback
-);
+AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+    .initialTps(100.0)                          // Start at 100 TPS
+    .rampIncrement(50.0)                        // Increase 50 TPS per interval
+    .rampDecrement(100.0)                       // Decrease 100 TPS per interval when errors occur
+    .rampInterval(Duration.ofMinutes(1))       // Check/adjust every minute
+    .maxTps(5000.0)                             // Max 5000 TPS
+    .minTps(10.0)                               // Min TPS
+    .sustainDuration(Duration.ofMinutes(10))    // Sustain at stable point for 10 minutes
+    .stableIntervalsRequired(3)                 // Require 3 stable intervals
+    .metricsProvider(metricsProvider)           // For feedback
+    .decisionPolicy(new DefaultRampDecisionPolicy(0.01))  // 1% error rate threshold
+    .build();
 
 // Use with ExecutionEngine
 ExecutionEngine engine = ExecutionEngine.builder()
@@ -254,24 +257,24 @@ Duration.ofMinutes(10)  // Standard (recommended)
 Duration.ofMinutes(30)  // Extended validation
 ```
 
-### errorThreshold
+### Decision Policy
 
-**Type**: `double`  
-**Required**: Yes  
-**Range**: 0.0 to 1.0
+**Type**: `RampDecisionPolicy`  
+**Required**: No (defaults to `DefaultRampDecisionPolicy` with 1% error threshold)
 
-Error rate threshold (as ratio, not percentage).
-
-**Recommendations**:
-- 0.01 (1%) for production systems
-- 0.05 (5%) for stress testing
-- 0.001 (0.1%) for high-reliability systems
+Decision policy for making ramp decisions. Configure thresholds via the policy:
 
 **Example**:
 ```java
-0.01   // 1% (recommended)
-0.05   // 5% (stress testing)
-0.001  // 0.1% (high reliability)
+// Default policy (1% error threshold)
+.decisionPolicy(new DefaultRampDecisionPolicy(0.01))
+
+// Custom thresholds
+.decisionPolicy(new DefaultRampDecisionPolicy(
+    0.01,   // Error threshold (1%)
+    0.3,    // Backpressure ramp up threshold
+    0.7     // Backpressure ramp down threshold
+))
 ```
 
 ---
@@ -281,7 +284,8 @@ Error rate threshold (as ratio, not percentage).
 ### Example 1: Finding Max TPS for API
 
 ```java
-import com.vajrapulse.api.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy;
 import com.vajrapulse.core.engine.ExecutionEngine;
 import com.vajrapulse.core.engine.MetricsProviderAdapter;
 import com.vajrapulse.core.metrics.MetricsCollector;
@@ -295,16 +299,18 @@ public class FindMaxApiTps {
         MetricsProviderAdapter provider = new MetricsProviderAdapter(metrics);
         
         // Create adaptive pattern
-        AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
-            50.0,                          // Start conservatively
-            25.0,                          // Increase 25 TPS per minute
-            50.0,                          // Decrease 50 TPS when errors occur
-            Duration.ofSeconds(30),        // Check every 30 seconds
-            Double.POSITIVE_INFINITY,      // No max limit
-            Duration.ofMinutes(5),         // Sustain for 5 minutes
-            0.01,                          // 1% error threshold
-            provider
-        );
+        AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+            .initialTps(50.0)                          // Start conservatively
+            .rampIncrement(25.0)                       // Increase 25 TPS per minute
+            .rampDecrement(50.0)                       // Decrease 50 TPS when errors occur
+            .rampInterval(Duration.ofSeconds(30))     // Check every 30 seconds
+            .maxTps(Double.POSITIVE_INFINITY)          // No max limit
+            .minTps(5.0)                               // Min TPS
+            .sustainDuration(Duration.ofMinutes(5))    // Sustain for 5 minutes
+            .stableIntervalsRequired(3)               // Require 3 stable intervals
+            .metricsProvider(provider)
+            .decisionPolicy(new DefaultRampDecisionPolicy(0.01))  // 1% error threshold
+            .build();
         
         // Run test
         ExecutionEngine engine = ExecutionEngine.builder()
@@ -328,32 +334,36 @@ public class FindMaxApiTps {
 
 ```java
 // Stress test with known capacity estimate
-AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
-    100.0,                          // Start at 100 TPS
-    100.0,                          // Aggressive ramp-up (+100/min)
-    200.0,                          // Quick recovery (-200/min)
-    Duration.ofSeconds(20),         // Fast adjustments (20s)
-    2000.0,                         // Max 2000 TPS (known limit)
-    Duration.ofMinutes(15),         // Extended sustain
-    0.05,                           // 5% error threshold (stress test)
-    metricsProvider
-);
+AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+    .initialTps(100.0)                          // Start at 100 TPS
+    .rampIncrement(100.0)                        // Aggressive ramp-up (+100/min)
+    .rampDecrement(200.0)                        // Quick recovery (-200/min)
+    .rampInterval(Duration.ofSeconds(20))        // Fast adjustments (20s)
+    .maxTps(2000.0)                              // Max 2000 TPS (known limit)
+    .minTps(10.0)                                // Min TPS
+    .sustainDuration(Duration.ofMinutes(15))     // Extended sustain
+    .stableIntervalsRequired(3)                  // Require 3 stable intervals
+    .metricsProvider(metricsProvider)
+    .decisionPolicy(new DefaultRampDecisionPolicy(0.05))  // 5% error threshold (stress test)
+    .build();
 ```
 
 ### Example 3: High Reliability System
 
 ```java
 // Very conservative for high-reliability system
-AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(
-    10.0,                           // Very conservative start
-    5.0,                            // Small increments
-    10.0,                           // Quick recovery
-    Duration.ofMinutes(2),         // Longer intervals
-    Double.POSITIVE_INFINITY,      // No limit
-    Duration.ofMinutes(30),         // Long validation
-    0.001,                          // 0.1% error threshold (very strict)
-    metricsProvider
-);
+AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
+    .initialTps(10.0)                           // Very conservative start
+    .rampIncrement(5.0)                          // Small increments
+    .rampDecrement(10.0)                          // Quick recovery
+    .rampInterval(Duration.ofMinutes(2))         // Longer intervals
+    .maxTps(Double.POSITIVE_INFINITY)            // No limit
+    .minTps(1.0)                                 // Min TPS
+    .sustainDuration(Duration.ofMinutes(30))      // Long validation
+    .stableIntervalsRequired(3)                  // Require 3 stable intervals
+    .metricsProvider(metricsProvider)
+    .decisionPolicy(new DefaultRampDecisionPolicy(0.001))  // 0.1% error threshold (very strict)
+    .build();
 ```
 
 ---
@@ -475,16 +485,18 @@ maxTps = 100.0;  // Artificially limits discovery
 Find max TPS quickly with aggressive ramping:
 
 ```java
-new AdaptiveLoadPattern(
-    100.0,                          // Start
-    100.0,                          // Large increments
-    200.0,                          // Quick recovery
-    Duration.ofSeconds(30),         // Fast adjustments
-    Double.POSITIVE_INFINITY,      // No limit
-    Duration.ofMinutes(5),         // Short sustain
-    0.01,                           // Standard threshold
-    metricsProvider
-);
+AdaptiveLoadPattern.builder()
+    .initialTps(100.0)                          // Start
+    .rampIncrement(100.0)                       // Large increments
+    .rampDecrement(200.0)                        // Quick recovery
+    .rampInterval(Duration.ofSeconds(30))        // Fast adjustments
+    .maxTps(Double.POSITIVE_INFINITY)            // No limit
+    .minTps(10.0)                                // Min TPS
+    .sustainDuration(Duration.ofMinutes(5))      // Short sustain
+    .stableIntervalsRequired(3)                  // Require 3 stable intervals
+    .metricsProvider(metricsProvider)
+    .decisionPolicy(new DefaultRampDecisionPolicy(0.01))  // Standard threshold
+    .build();
 ```
 
 ### Pattern 2: Precise Discovery
@@ -492,16 +504,18 @@ new AdaptiveLoadPattern(
 Find max TPS precisely with gradual ramping:
 
 ```java
-new AdaptiveLoadPattern(
-    50.0,                           // Conservative start
-    10.0,                           // Small increments
-    20.0,                           // Moderate recovery
-    Duration.ofMinutes(2),         // Longer intervals
-    Double.POSITIVE_INFINITY,      // No limit
-    Duration.ofMinutes(15),        // Extended sustain
-    0.01,                           // Standard threshold
-    metricsProvider
-);
+AdaptiveLoadPattern.builder()
+    .initialTps(50.0)                           // Conservative start
+    .rampIncrement(10.0)                        // Small increments
+    .rampDecrement(20.0)                         // Moderate recovery
+    .rampInterval(Duration.ofMinutes(2))        // Longer intervals
+    .maxTps(Double.POSITIVE_INFINITY)            // No limit
+    .minTps(5.0)                                 // Min TPS
+    .sustainDuration(Duration.ofMinutes(15))      // Extended sustain
+    .stableIntervalsRequired(3)                  // Require 3 stable intervals
+    .metricsProvider(metricsProvider)
+    .decisionPolicy(new DefaultRampDecisionPolicy(0.01))  // Standard threshold
+    .build();
 ```
 
 ### Pattern 3: Stress Testing
@@ -509,16 +523,18 @@ new AdaptiveLoadPattern(
 Test system under stress with higher error tolerance:
 
 ```java
-new AdaptiveLoadPattern(
-    200.0,                          // Higher start
-    50.0,                           // Moderate increments
-    100.0,                          // Quick recovery
-    Duration.ofSeconds(20),        // Fast adjustments
-    5000.0,                         // Known limit
-    Duration.ofMinutes(30),        // Extended sustain
-    0.05,                           // 5% threshold (stress)
-    metricsProvider
-);
+AdaptiveLoadPattern.builder()
+    .initialTps(200.0)                          // Higher start
+    .rampIncrement(50.0)                        // Moderate increments
+    .rampDecrement(100.0)                        // Quick recovery
+    .rampInterval(Duration.ofSeconds(20))        // Fast adjustments
+    .maxTps(5000.0)                              // Known limit
+    .minTps(10.0)                                // Min TPS
+    .sustainDuration(Duration.ofMinutes(30))     // Extended sustain
+    .stableIntervalsRequired(3)                  // Require 3 stable intervals
+    .metricsProvider(metricsProvider)
+    .decisionPolicy(new DefaultRampDecisionPolicy(0.05))  // 5% threshold (stress)
+    .build();
 ```
 
 ---
@@ -535,7 +551,7 @@ new AdaptiveLoadPattern(
 3. System fundamentally unstable
 
 **Solutions**:
-- Increase `errorThreshold` (e.g., 0.01 → 0.05)
+- Increase error threshold in decision policy (e.g., 0.01 → 0.05)
 - Increase `rampDecrement`
 - Check system health independently
 

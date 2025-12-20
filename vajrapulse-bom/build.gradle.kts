@@ -16,6 +16,9 @@ dependencies {
         api(project(":vajrapulse-exporter-opentelemetry"))
         api(project(":vajrapulse-exporter-report"))
         api(project(":vajrapulse-worker"))
+        
+        // External dependencies
+        api("com.vajrapulse:vortex:0.0.9")
     }
 }
 

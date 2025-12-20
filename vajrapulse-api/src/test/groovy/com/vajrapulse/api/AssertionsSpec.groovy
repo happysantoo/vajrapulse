@@ -1,8 +1,13 @@
 package com.vajrapulse.api
 
 import spock.lang.Specification
+import spock.lang.Timeout
+import com.vajrapulse.api.metrics.Metrics
+import com.vajrapulse.api.assertion.Assertion
+import com.vajrapulse.api.assertion.Assertions
 import java.time.Duration
 
+@Timeout(10)
 class AssertionsSpec extends Specification {
 
     def "should validate latency assertion passes when below threshold"() {
@@ -317,7 +322,7 @@ class AssertionsSpec extends Specification {
 
     def "should reject null assertions array"() {
         when:
-        Assertions.all((Assertion[]) null)
+        Assertions.all(null as Assertion[])
 
         then:
         thrown(IllegalArgumentException)

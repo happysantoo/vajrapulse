@@ -11,7 +11,7 @@ plugins {
 allprojects {
     // Artifact coordinates moved to 'com.vajrapulse' for 0.9 release alignment.
     group = "com.vajrapulse"
-    version = "0.9.8"
+    version = "0.9.9"
 
     repositories {
         mavenCentral()
@@ -32,12 +32,6 @@ subprojects {
     }
 
     apply(plugin = "java")
-    apply(plugin = "java-library")
-    apply(plugin = "groovy")
-    apply(plugin = "jacoco")
-    apply(plugin = "com.github.spotbugs")
-    apply(plugin = "maven-publish")
-    apply(plugin = "signing")
 
     java {
         toolchain {
@@ -74,154 +68,167 @@ subprojects {
         }
     }
 
-    // Configure coverage verification: enforce ≥90% for tested modules
-    tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
-        dependsOn(tasks.named("compileJava"))
-        // Include Groovy compilation if present (Spock tests / Groovy sources)
-        tasks.findByName("compileGroovy")?.let { dependsOn(it) }
-        dependsOn(tasks.named("test"))
-        executionData.setFrom(files(layout.buildDirectory.dir("jacoco/test.exec")))
-        val fileFilter = listOf("**/module-info.class")
-        classDirectories.setFrom(
-            files(project.layout.buildDirectory.dir("classes"))
-                .asFileTree.matching { exclude(fileFilter) }
-        )
-        sourceDirectories.setFrom(files("src/main/java", "src/main/groovy"))
-        // Enforce 90% line coverage for core, api, exporter modules
-        if (project.path in listOf(":vajrapulse-core", ":vajrapulse-api", ":vajrapulse-exporter-console", ":vajrapulse-exporter-opentelemetry", ":vajrapulse-exporter-report")) {
-            violationRules {
-                rule {
-                    element = "BUNDLE"
-                    limit {
-                        counter = "LINE"
-                        value = "COVEREDRATIO"
-                        minimum = BigDecimal("0.90")
+    // Configuration for PRODUCT modules only (excludes examples)
+    if (!project.path.startsWith(":examples")) {
+        apply(plugin = "java-library")
+        apply(plugin = "groovy")
+        apply(plugin = "jacoco")
+        apply(plugin = "com.github.spotbugs")
+        apply(plugin = "maven-publish")
+        apply(plugin = "signing")
+
+        // Configure coverage verification: enforce ≥90% for tested modules
+        tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
+            dependsOn(tasks.named("compileJava"))
+            // Include Groovy compilation if present (Spock tests / Groovy sources)
+            tasks.findByName("compileGroovy")?.let { dependsOn(it) }
+            dependsOn(tasks.named("test"))
+            executionData.setFrom(files(layout.buildDirectory.dir("jacoco/test.exec")))
+            val fileFilter = listOf("**/module-info.class")
+            classDirectories.setFrom(
+                files(project.layout.buildDirectory.dir("classes"))
+                    .asFileTree.matching { exclude(fileFilter) }
+            )
+            sourceDirectories.setFrom(files("src/main/java", "src/main/groovy"))
+            // Enforce 90% line coverage for core, api, exporter modules
+            if (project.path in listOf(":vajrapulse-core", ":vajrapulse-api", ":vajrapulse-exporter-console", ":vajrapulse-exporter-opentelemetry", ":vajrapulse-exporter-report")) {
+                violationRules {
+                    rule {
+                        element = "BUNDLE"
+                        limit {
+                            counter = "LINE"
+                            value = "COVEREDRATIO"
+                            minimum = BigDecimal("0.90")
+                        }
                     }
                 }
             }
         }
-    }
 
-    tasks.withType<Test> {
-        useJUnitPlatform()
-        testLogging {
-            events("passed", "skipped", "failed")
+        tasks.withType<Test> {
+            useJUnitPlatform()
+            testLogging {
+                events("passed", "skipped", "failed")
+            }
+            // Disable parallel execution to avoid shutdown hook and ExecutionEngine race conditions
+            // Each ExecutionEngine manages its own lifecycle, but parallel execution can cause
+            // issues with JVM shutdown hook registry and thread synchronization
+            maxParallelForks = 1
+            // Generate coverage report and enforce threshold after tests
+            finalizedBy(tasks.named("jacocoTestReport"), tasks.named("jacocoTestCoverageVerification"))
         }
-        // Generate coverage report and enforce threshold after tests
-        finalizedBy(tasks.named("jacocoTestReport"), tasks.named("jacocoTestCoverageVerification"))
-    }
 
-    // Configure existing Jacoco reporting task per subproject
-    tasks.named<JacocoReport>("jacocoTestReport") {
-        dependsOn(tasks.named("test"))
-        reports {
-            xml.required.set(true)
-            html.required.set(true)
+        // Configure existing Jacoco reporting task per subproject
+        tasks.named<JacocoReport>("jacocoTestReport") {
+            dependsOn(tasks.named("test"))
+            reports {
+                xml.required.set(true)
+                html.required.set(true)
+            }
+            val fileFilter = listOf("**/module-info.class")
+            classDirectories.setFrom(
+                files(classDirectories.files.map { dir ->
+                    fileTree(dir) { exclude(fileFilter) }
+                })
+            )
+            // Default source directories (Groovy may not exist in all modules)
+            sourceDirectories.setFrom(files("src/main/java", "src/main/groovy"))
+            executionData.setFrom(files(layout.buildDirectory.dir("jacoco/test.exec")))
         }
-        val fileFilter = listOf("**/module-info.class")
-        classDirectories.setFrom(
-            files(classDirectories.files.map { dir ->
-                fileTree(dir) { exclude(fileFilter) }
-            })
+
+        // Configure SpotBugs for static code analysis
+        tasks.withType<com.github.spotbugs.snom.SpotBugsTask> {
+            // Skip examples from static analysis
+            enabled = !project.path.startsWith(":examples")
+            
+            // Set exclusion filter
+            excludeFilter = file("${rootProject.projectDir}/spotbugs-exclude.xml")
+            
+            // Configure reports
+            reports {
+                create("html") {
+                    required = true
+                }
+            }
+            
+            // Don't fail build on findings - generate report for review instead
+            // Developers should review and fix issues before committing
+            ignoreFailures = false  // Set to true if you want to allow builds with findings
+        }
+        
+        // Disable spotbugsTest task - we only analyze main source code
+        // Test code (Spock/Groovy) has different patterns that trigger false positives
+        tasks.named("spotbugsTest") {
+            enabled = false
+        }
+        
+        // Ensure 'check' depends on coverage verification and static analysis for CI gating
+        tasks.named("check") {
+            dependsOn(tasks.named("jacocoTestCoverageVerification"))
+            // Note: spotbugsMain will fail if issues found - this enforces code quality
+            dependsOn(tasks.named("spotbugsMain"))
+        }
+
+        // Simplified publishing/signing for selected modules (BOM, API, core, exporters, worker)
+        val publishable = setOf(
+            "vajrapulse-bom",
+            "vajrapulse-api",
+            "vajrapulse-core",
+            "vajrapulse-exporter-console",
+            "vajrapulse-exporter-opentelemetry",
+            "vajrapulse-exporter-report",
+            "vajrapulse-worker"
         )
-        // Default source directories (Groovy may not exist in all modules)
-        sourceDirectories.setFrom(files("src/main/java", "src/main/groovy"))
-        executionData.setFrom(files(layout.buildDirectory.dir("jacoco/test.exec")))
-    }
+        if (project.name in publishable) {
+            java { withSourcesJar(); withJavadocJar() }
 
-    // Configure SpotBugs for static code analysis
-    tasks.withType<com.github.spotbugs.snom.SpotBugsTask> {
-        // Skip examples from static analysis
-        enabled = !project.path.startsWith(":examples")
-        
-        // Set exclusion filter
-        excludeFilter = file("${rootProject.projectDir}/spotbugs-exclude.xml")
-        
-        // Configure reports
-        reports {
-            create("html") {
-                required = true
+            // Include LICENSE in all JAR files (main, sources, javadoc)
+            tasks.withType<Jar> {
+                from(rootProject.file("LICENSE")) {
+                    into("META-INF")
+                }
             }
-        }
-        
-        // Don't fail build on findings - generate report for review instead
-        // Developers should review and fix issues before committing
-        ignoreFailures = false  // Set to true if you want to allow builds with findings
-    }
-    
-    // Disable spotbugsTest task - we only analyze main source code
-    // Test code (Spock/Groovy) has different patterns that trigger false positives
-    tasks.named("spotbugsTest") {
-        enabled = false
-    }
-    
-    // Ensure 'check' depends on coverage verification and static analysis for CI gating
-    tasks.named("check") {
-        dependsOn(tasks.named("jacocoTestCoverageVerification"))
-        // Note: spotbugsMain will fail if issues found - this enforces code quality
-        dependsOn(tasks.named("spotbugsMain"))
-    }
 
-    // Simplified publishing/signing for selected modules (BOM, API, core, exporters, worker)
-    val publishable = setOf(
-        "vajrapulse-bom",
-        "vajrapulse-api",
-        "vajrapulse-core",
-        "vajrapulse-exporter-console",
-        "vajrapulse-exporter-opentelemetry",
-        "vajrapulse-exporter-report",
-        "vajrapulse-worker"
-    )
-    if (project.name in publishable) {
-
-        java { withSourcesJar(); withJavadocJar() }
-
-        // Include LICENSE in all JAR files (main, sources, javadoc)
-        tasks.withType<Jar> {
-            from(rootProject.file("LICENSE")) {
-                into("META-INF")
-            }
-        }
-
-        publishing {
-            publications {
-                create<MavenPublication>("mavenJava") {
-                    from(components["java"])
-                    pom {
-                        name.set(project.name)
-                        description.set("VajraPulse module ${project.name} (pre-1.0 load testing framework leveraging Java 21 virtual threads)")
-                        url.set("https://github.com/happysantoo/vajrapulse")
-                        licenses {
-                            license {
-                                name.set("Apache License, Version 2.0")
-                                url.set("https://www.apache.org/licenses/LICENSE-2.0")
-                            }
-                        }
-                        scm {
+            publishing {
+                publications {
+                    create<MavenPublication>("mavenJava") {
+                        from(components["java"])
+                        pom {
+                            name.set(project.name)
+                            description.set("VajraPulse module ${project.name} (pre-1.0 load testing framework leveraging Java 21 virtual threads)")
                             url.set("https://github.com/happysantoo/vajrapulse")
-                            connection.set("scm:git:git://github.com/happysantoo/vajrapulse.git")
-                            developerConnection.set("scm:git:ssh://github.com:happysantoo/vajrapulse.git")
-                        }
-                        developers {
-                            developer {
-                                id.set("happysantoo")
-                                name.set("Santhosh Kuppusamy")
-                                url.set("https://github.com/happysantoo")
+                            licenses {
+                                license {
+                                    name.set("Apache License, Version 2.0")
+                                    url.set("https://www.apache.org/licenses/LICENSE-2.0")
+                                }
+                            }
+                            scm {
+                                url.set("https://github.com/happysantoo/vajrapulse")
+                                connection.set("scm:git:git://github.com/happysantoo/vajrapulse.git")
+                                developerConnection.set("scm:git:ssh://github.com:happysantoo/vajrapulse.git")
+                            }
+                            developers {
+                                developer {
+                                    id.set("happysantoo")
+                                    name.set("Santhosh Kuppusamy")
+                                    url.set("https://github.com/happysantoo")
+                                }
                             }
                         }
                     }
                 }
+                // No repositories: JReleaser handles bundle + portal upload.
             }
-            // No repositories: JReleaser handles bundle + portal upload.
-        }
 
-        // Configure signing for Maven Central compliance
-        signing {
-            // Use in-memory ASCII-armored key from gradle.properties
-            val signingKey: String? by project
-            val signingPassword: String? by project
-            useInMemoryPgpKeys(signingKey, signingPassword)
-            sign(publishing.publications["mavenJava"])
+            // Configure signing for Maven Central compliance
+            signing {
+                // Use in-memory ASCII-armored key from gradle.properties
+                val signingKey: String? by project
+                val signingPassword: String? by project
+                useInMemoryPgpKeys(signingKey, signingPassword)
+                sign(publishing.publications["mavenJava"])
+            }
         }
     }
 }

@@ -2,7 +2,7 @@ package com.vajrapulse.exporter.otel;
 
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.core.metrics.MetricsExporter;
-import com.vajrapulse.api.TaskIdentity;
+import com.vajrapulse.api.task.TaskIdentity;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.metrics.Meter;
@@ -42,7 +42,7 @@ import java.util.concurrent.TimeUnit;
  *     ))
  *     .build();
  * 
- * MetricsPipeline.builder()
+ * LoadTestRunner.builder()
  *     .addExporter(exporter)
  *     .withPeriodic(Duration.ofSeconds(10))
  *     .build()

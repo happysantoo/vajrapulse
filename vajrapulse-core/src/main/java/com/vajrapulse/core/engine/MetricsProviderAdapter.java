@@ -1,46 +1,50 @@
 package com.vajrapulse.core.engine;
 
-import com.vajrapulse.api.MetricsProvider;
+import com.vajrapulse.api.metrics.MetricsProvider;
+import com.vajrapulse.core.metrics.CachedMetricsProvider;
 import com.vajrapulse.core.metrics.MetricsCollector;
 
 import java.time.Duration;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
- * Adapter that makes MetricsCollector implement MetricsProvider interface with caching.
+ * Adapter that makes MetricsCollector implement MetricsProvider interface with
+ * caching.
  * 
- * <p>This allows AdaptiveLoadPattern to work with MetricsCollector
+ * <p>
+ * This allows AdaptiveLoadPattern to work with MetricsCollector
  * without creating a dependency from vajrapulse-api to vajrapulse-core.
  * 
- * <p>This adapter uses caching internally to avoid expensive snapshot operations
- * on every metrics query. The cache has a default TTL of 100ms, which is optimal
- * for high-frequency access patterns like adaptive load patterns.
+ * <p>
+ * This adapter uses {@link CachedMetricsProvider} internally to avoid expensive
+ * snapshot operations on every metrics query. The cache has a default TTL of
+ * 100ms,
+ * which is optimal for high-frequency access patterns like adaptive load
+ * patterns.
  * 
- * <p><strong>Implementation Note:</strong> This adapter directly implements MetricsProvider
- * with internal caching. The cache ensures that snapshot() is called at most once per
- * cache refresh period, so both {@code getFailureRate()} and {@code getTotalExecutions()}
- * use the same snapshot when the cache is refreshed.
+ * <p>
+ * <strong>Implementation Note:</strong> This adapter maintains a sliding window
+ * of
+ * metric snapshots to calculate recent failure rates accurately.
  * 
  * @since 0.9.5
  */
 public final class MetricsProviderAdapter implements MetricsProvider {
-    
+
     private static final Duration DEFAULT_CACHE_TTL = Duration.ofMillis(100);
-    private static final long DEFAULT_CACHE_TTL_NANOS = DEFAULT_CACHE_TTL.toNanos();
-    
+    private static final long HISTORY_RETENTION_MS = 60000; // Keep 60 seconds of history
+
+    private final MetricsProvider cachedProvider;
     private final MetricsCollector metricsCollector;
-    private final long ttlNanos;
-    
-    // Cached snapshot with timestamp
-    private volatile CachedSnapshot cached;
-    private final AtomicLong cacheTimeNanos = new AtomicLong(0);
-    
-    // Recent window tracking: store previous snapshot for time-windowed calculations
-    private final AtomicReference<WindowSnapshot> previousSnapshot = new AtomicReference<>();
-    
+
+    // History for windowed calculations
+    private final Deque<WindowSnapshot> history = new ConcurrentLinkedDeque<>();
+
     /**
-     * Creates an adapter for the given metrics collector with default caching (100ms TTL).
+     * Creates an adapter for the given metrics collector with default caching
+     * (100ms TTL).
      * 
      * @param metricsCollector the metrics collector to adapt
      * @throws IllegalArgumentException if metricsCollector is null
@@ -48,13 +52,14 @@ public final class MetricsProviderAdapter implements MetricsProvider {
     public MetricsProviderAdapter(MetricsCollector metricsCollector) {
         this(metricsCollector, DEFAULT_CACHE_TTL);
     }
-    
+
     /**
      * Creates an adapter for the given metrics collector with specified cache TTL.
      * 
      * @param metricsCollector the metrics collector to adapt
-     * @param ttl the time-to-live for cached values
-     * @throws IllegalArgumentException if metricsCollector is null or ttl is null/negative
+     * @param ttl              the time-to-live for cached values
+     * @throws IllegalArgumentException if metricsCollector is null or ttl is
+     *                                  null/negative
      */
     public MetricsProviderAdapter(MetricsCollector metricsCollector, Duration ttl) {
         if (metricsCollector == null) {
@@ -64,132 +69,148 @@ public final class MetricsProviderAdapter implements MetricsProvider {
             throw new IllegalArgumentException("TTL must be positive: " + ttl);
         }
         this.metricsCollector = metricsCollector;
-        this.ttlNanos = ttl.toNanos();
+        // Create base provider (adapts MetricsCollector to MetricsProvider)
+        MetricsProvider baseProvider = new BaseMetricsProvider(metricsCollector);
+        // Wrap with caching
+        this.cachedProvider = new CachedMetricsProvider(baseProvider, ttl);
     }
-    
+
     @Override
     public double getFailureRate() {
-        return getCachedSnapshot().failureRate();
+        return cachedProvider.getFailureRate();
     }
-    
+
     @Override
     public long getTotalExecutions() {
-        return getCachedSnapshot().totalExecutions();
+        return cachedProvider.getTotalExecutions();
     }
-    
+
+    @Override
+    public long getFailureCount() {
+        return cachedProvider.getFailureCount();
+    }
+
     @Override
     public double getRecentFailureRate(int windowSeconds) {
         if (windowSeconds <= 0) {
-            // Invalid window, return all-time rate
             return getFailureRate();
         }
-        
-        long windowMillis = windowSeconds * 1000L;
-        
-        // Get current snapshot
-        var currentSnapshot = metricsCollector.snapshot();
+
         long currentTime = System.currentTimeMillis();
+        var currentSnapshot = metricsCollector.snapshot();
         long currentTotal = currentSnapshot.totalExecutions();
         long currentFailures = currentSnapshot.failureCount();
-        
-        // Get previous snapshot
-        WindowSnapshot previous = previousSnapshot.get();
-        
-        // Update previous snapshot if needed (refresh every second to track recent changes)
-        if (previous == null || (currentTime - previous.timestampMillis()) >= 1000) {
-            previousSnapshot.set(new WindowSnapshot(currentTime, currentTotal, currentFailures));
-            previous = previousSnapshot.get();
+
+        // Add current snapshot to history
+        WindowSnapshot newSnapshot = new WindowSnapshot(currentTime, currentTotal, currentFailures);
+        history.addLast(newSnapshot);
+
+        // Prune old history (older than retention policy)
+        long retentionCutoff = currentTime - HISTORY_RETENTION_MS;
+        while (!history.isEmpty() && history.peekFirst().timestampMillis() < retentionCutoff) {
+            history.removeFirst();
         }
-        
-        // Calculate time difference
-        long timeDiff = currentTime - previous.timestampMillis();
-        
-        // If window is larger than available history, fall back to all-time rate
-        if (timeDiff < windowMillis) {
-            // Not enough history, use all-time rate
-            return currentSnapshot.failureRate();
-        }
-        
-        // Calculate failure rate from the difference
-        long totalDiff = currentTotal - previous.totalExecutions();
-        long failureDiff = currentFailures - previous.failureCount();
-        
-        if (totalDiff == 0) {
-            return 0.0;  // No executions in window
-        }
-        
-        // Calculate failure rate for the window
-        return (failureDiff * 100.0) / totalDiff;
-    }
-    
-    /**
-     * Gets a cached snapshot, refreshing if expired.
-     * 
-     * <p>This method ensures that both getFailureRate() and getTotalExecutions()
-     * use the same cached snapshot, avoiding multiple calls to snapshot().
-     * 
-     * <p><strong>Thread Safety:</strong> This method uses double-check locking with
-     * proper memory ordering guarantees:
-     * <ul>
-     *   <li>AtomicLong for cacheTimeNanos ensures atomic reads with proper ordering</li>
-     *   <li>Volatile for cached snapshot ensures visibility across threads</li>
-     *   <li>Synchronized block prevents concurrent cache refreshes</li>
-     *   <li>Double-check pattern minimizes synchronization overhead</li>
-     * </ul>
-     * 
-     * @return cached snapshot
-     */
-    private CachedSnapshot getCachedSnapshot() {
-        long now = System.nanoTime();
-        CachedSnapshot snapshot = this.cached; // Volatile read
-        
-        // Read cacheTimeNanos atomically to get proper memory ordering
-        long cachedTime = cacheTimeNanos.get(); // Atomic read with memory ordering
-        
-        // Check if cache is valid (fast path - no synchronization)
-        if (snapshot == null || (now - cachedTime) > ttlNanos) {
-            // Synchronize to prevent multiple threads from refreshing simultaneously
-            synchronized (this) {
-                // Double-check after acquiring lock - re-read both values
-                snapshot = this.cached; // Volatile read inside synchronized
-                cachedTime = cacheTimeNanos.get(); // Atomic read inside synchronized
-                
-                if (snapshot == null || (now - cachedTime) > ttlNanos) {
-                    // Refresh cache - call snapshot() once and cache both values
-                    var aggregatedMetrics = metricsCollector.snapshot();
-                    snapshot = new CachedSnapshot(
-                        aggregatedMetrics.failureRate(),
-                        aggregatedMetrics.totalExecutions()
-                    );
-                    
-                    // Write both values with proper ordering
-                    // Write timestamp first (atomic with memory ordering)
-                    long freshTimestamp = System.nanoTime();
-                    cacheTimeNanos.set(freshTimestamp); // Atomic write with memory ordering
-                    // Then write snapshot (volatile write ensures visibility)
-                    this.cached = snapshot; // Volatile write
-                } else {
-                    // Another thread refreshed it, use the cached value
-                    snapshot = this.cached; // Volatile read
-                }
+
+        // Find the snapshot that is at least windowSeconds ago
+        long windowCutoff = currentTime - (windowSeconds * 1000L);
+        WindowSnapshot baseline = null;
+
+        // Iterate backwards finding the first snapshot <= windowCutoff
+        // Actually best to iterate forward or pick the one closest to windowCutoff?
+        // We want the snapshot that represents the "start" of the window.
+        // So we want a snapshot with timestamp <= windowCutoff.
+        // The one closest to windowCutoff from the LEFT (older side) or RIGHT?
+        // Ideally we want (Current - Baseline) ~ Window.
+        // So Baseline ~ Current - Window.
+
+        Iterator<WindowSnapshot> it = history.iterator();
+        while (it.hasNext()) {
+            WindowSnapshot snap = it.next();
+            if (snap.timestampMillis() <= windowCutoff) {
+                baseline = snap;
+                // Keep looking? The snapshots are ordered by time (ascending).
+                // The first one we find might be VERY old if we have gaps.
+                // But we want the one closest to windowCutoff but <= windowCutoff.
+                // Since they are ascending, 'snap' is older than next 'snap'.
+                // If snap <= windowCutoff, it's a candidate.
+                // The next one might also be <= windowCutoff.
+                // We want the LATEST snapshot that is <= windowCutoff (closest to the edge).
+            } else {
+                // snap.timestamp > windowCutoff.
+                // Stop, because all subsequent will be > windowCutoff.
+                break;
             }
         }
-        
-        return snapshot;
+
+        // If we found no baseline (all snapshots are newer than window),
+        // fallback to the oldest available if it's "reasonably" close?
+        // Or just fallback to all-time (metrics behavior).
+        // If oldest is newer than window, it means we don't have full window history.
+        // Default behavior: return accumulated stats since oldest?
+        // Or all-time.
+
+        if (baseline == null) {
+            // Check oldest
+            if (!history.isEmpty()) {
+                baseline = history.peekFirst();
+                // If even the oldest is too new, we can calculate rate based on what we have
+                // (Partial window). This is often better than all-time.
+            } else {
+                return currentSnapshot.failureRate(); // Should not happen as we just added one
+            }
+        }
+
+        // Evaluate effective window duration
+        long timeDiff = currentTime - baseline.timestampMillis();
+
+        // If the effective window is too small (e.g. < 1s), statistics are noisy.
+        // But if that's all we have, we use it.
+        // Exception: if just started, timeDiff might be 0.
+        if (timeDiff < 100) {
+            return currentSnapshot.failureRate();
+        }
+
+        // Calculate rate over the window
+        long totalDiff = currentTotal - baseline.totalExecutions();
+        long failureDiff = currentFailures - baseline.failureCount();
+
+        if (totalDiff == 0) {
+            return 0.0;
+        }
+
+        return (failureDiff * 100.0) / totalDiff;
     }
-    
+
     /**
-     * Cached snapshot of metrics.
+     * Base provider that adapts MetricsCollector to MetricsProvider without
+     * caching.
      */
-    private record CachedSnapshot(double failureRate, long totalExecutions) {}
-    
+    private static final class BaseMetricsProvider implements MetricsProvider {
+        private final MetricsCollector metricsCollector;
+
+        BaseMetricsProvider(MetricsCollector metricsCollector) {
+            this.metricsCollector = metricsCollector;
+        }
+
+        @Override
+        public double getFailureRate() {
+            return metricsCollector.snapshot().failureRate();
+        }
+
+        @Override
+        public long getTotalExecutions() {
+            return metricsCollector.snapshot().totalExecutions();
+        }
+
+        @Override
+        public long getFailureCount() {
+            return metricsCollector.snapshot().failureCount();
+        }
+    }
+
     /**
      * Snapshot for time-windowed calculations.
-     * 
-     * @param timestampMillis timestamp when snapshot was taken
-     * @param totalExecutions total executions at this time
-     * @param failureCount failure count at this time
      */
-    private record WindowSnapshot(long timestampMillis, long totalExecutions, long failureCount) {}
+    private record WindowSnapshot(long timestampMillis, long totalExecutions, long failureCount) {
+    }
 }
-

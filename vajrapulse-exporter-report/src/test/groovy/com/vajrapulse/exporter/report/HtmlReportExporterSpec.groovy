@@ -28,7 +28,6 @@ class HtmlReportExporterSpec extends Specification {
             30_000L,
             10L,
             [0.5d: 2_000_000.0d, 0.95d: 15_000_000.0d],
-            new com.vajrapulse.core.metrics.ClientMetrics()
         )
         
         when:
@@ -52,7 +51,7 @@ class HtmlReportExporterSpec extends Specification {
         given:
         def outputPath = tempDir.resolve("subdir/report.html")
         def exporter = new HtmlReportExporter(outputPath)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
         
         when:
         exporter.export("Test", metrics)
@@ -66,7 +65,7 @@ class HtmlReportExporterSpec extends Specification {
         given:
         def outputPath = tempDir.resolve("test.html")
         def exporter = new HtmlReportExporter(outputPath)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
         
         when:
         exporter.export("Test <script>alert('xss')</script>", metrics)
@@ -81,7 +80,7 @@ class HtmlReportExporterSpec extends Specification {
         given:
         def outputPath = tempDir.resolve("empty.html")
         def exporter = new HtmlReportExporter(outputPath)
-        def metrics = new AggregatedMetrics(0L, 0L, 0L, [:], [:], 0L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
+        def metrics = new AggregatedMetrics(0L, 0L, 0L, [:], [:], 0L, 0L, [:])
         
         when:
         exporter.export("Empty", metrics)
@@ -99,7 +98,7 @@ class HtmlReportExporterSpec extends Specification {
         def outputPath = tempDir.resolve("adaptive.html")
         def registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry()
         def exporter = new HtmlReportExporter(outputPath, registry)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
         
         // Register adaptive pattern metrics
         io.micrometer.core.instrument.Gauge.builder("vajrapulse.adaptive.phase", { -> 2.0 }).register(registry)
@@ -125,7 +124,7 @@ class HtmlReportExporterSpec extends Specification {
         def outputPath = tempDir.resolve("no-adaptive.html")
         def registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry()
         def exporter = new HtmlReportExporter(outputPath, registry)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics())
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
         
         when:
         exporter.export("No Adaptive", metrics)
@@ -139,7 +138,7 @@ class HtmlReportExporterSpec extends Specification {
         given:
         def outputPath = tempDir.resolve("duration.html")
         def exporter = new HtmlReportExporter(outputPath)
-        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 500L, 0L, [:], new com.vajrapulse.core.metrics.ClientMetrics()) // 500ms
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 500L, 0L, [:]) // 500ms
         
         when:
         exporter.export("Duration Test", metrics)
