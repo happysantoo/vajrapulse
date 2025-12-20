@@ -18,16 +18,18 @@
 
 ## 🆕 What's New in 0.9.9
 
-Version 0.9.9 focuses on **code quality improvements**, **architectural refactoring**, and **test reliability enhancements**:
+Version 0.9.9 delivers **significant code quality improvements** and **architectural refactoring**:
 
-- ✅ **23.5% code reduction** in `AdaptiveLoadPattern` (1,275 → 975 lines)
-- ✅ **3.4% code reduction** in `ExecutionEngine` (640 → 618 lines)
-- ✅ **100% test timeout coverage** (62/62 test files)
-- ✅ **0% test flakiness** (validated across 10 consecutive runs)
-- ✅ **Polymorphism over type checking** (eliminated `instanceof` checks)
-- ✅ **Comprehensive test utilities** and best practices guide
+- ✅ **23.5% code reduction** in `AdaptiveLoadPattern` (1,275 → 975 lines) - improved maintainability
+- ✅ **3.4% code reduction** in `ExecutionEngine` (640 → 618 lines) - better organization
+- ✅ **100% test timeout coverage** (62/62 test files) - prevents hanging tests
+- ✅ **0% test flakiness** (validated across 10 consecutive runs) - excellent reliability
+- ✅ **Polymorphism over type checking** - eliminated `instanceof` checks for better extensibility
+- ✅ **Comprehensive test utilities** - `TestExecutionHelper` and `TestMetricsHelper` for consistent patterns
+- ✅ **Builder pattern improvements** - simplified `AdaptiveLoadPattern` builder with method chaining
+- ✅ **Enhanced LoadPattern interface** - new methods for polymorphism support
 
-See [CHANGELOG.md](CHANGELOG.md#099---2025-12-14) for complete release notes.
+See [CHANGELOG.md](CHANGELOG.md#099---2025-12-14) for complete release notes and migration guide.
 
 ---
 
@@ -41,10 +43,11 @@ See [CHANGELOG.md](CHANGELOG.md#099---2025-12-14) for complete release notes.
 - 🎯 **Simple API**: Implement one interface (`TaskLifecycle`) and you're ready to test
 - 📊 **Rich Metrics**: Built-in latency percentiles, queue depth tracking, client-side metrics, and OpenTelemetry support
 - 🔄 **Flexible Patterns**: 7 load patterns (static, ramp, step, spike, sine, ramp-sustain, adaptive) with warm-up/cool-down support
-- 🧩 **Adaptive Intelligence**: Self-tuning adaptive pattern with event notifications and pluggable decision policies
+- 🧩 **Adaptive Intelligence**: Self-tuning adaptive pattern with event notifications and pluggable decision policies (improved in 0.9.9)
 - ✅ **Assertion Framework**: Built-in assertions for latency, error rate, throughput, and success rate validation
 - 📦 **Minimal Dependencies**: ~1.6MB fat JAR, zero-dependency API module
 - 🚀 **Production Ready**: OpenTelemetry integration, comprehensive metrics, graceful shutdown
+- 🏗️ **Well-Architected**: Clean code organization, polymorphism-based design, excellent test coverage (0.9.9)
 
 > 📊 **Want to see how VajraPulse compares to JMeter, Gatling, and BlazeMeter?** Check out our [comprehensive comparison guide](COMPARISON.md) covering architecture, performance, enterprise scalability, and real-world use cases.
 
@@ -145,15 +148,23 @@ java -jar vajrapulse-worker-0.9.9-all.jar \
 import com.vajrapulse.core.engine.ExecutionEngine;
 import com.vajrapulse.core.metrics.MetricsCollector;
 import com.vajrapulse.api.*;
+import java.time.Duration;
 
 TaskLifecycle task = new ApiLoadTest();
 LoadPattern pattern = new StaticLoad(100.0, Duration.ofMinutes(5));
 MetricsCollector collector = new MetricsCollector();
 
-AggregatedMetrics metrics = ExecutionEngine.execute(task, pattern, collector);
-
-System.out.println("Success Rate: " + metrics.successRate() + "%");
-System.out.println("P95 Latency: " + metrics.successPercentiles().get(0.95) + " ms");
+try (ExecutionEngine engine = ExecutionEngine.builder()
+        .withTask(task)
+        .withLoadPattern(pattern)
+        .withMetricsCollector(collector)
+        .build()) {
+    engine.run();
+    
+    AggregatedMetrics metrics = collector.snapshot();
+    System.out.println("Success Rate: " + metrics.successRate() + "%");
+    System.out.println("P95 Latency: " + metrics.successPercentiles().get(0.95) + " ms");
+}
 ```
 
 ---
@@ -218,7 +229,7 @@ Built-in metrics collection with Micrometer:
 - **Queue Depth Tracking**: Monitor pending executions
 - **Client-Side Metrics**: Connection pool metrics, queue depth, timeouts
 - **TPS Metrics**: Request TPS, Success TPS, Failure TPS
-- **Failure Count**: Absolute failure count tracking (new in 0.9.9)
+- **Failure Count**: Absolute failure count tracking (enhanced in 0.9.9)
 - **OpenTelemetry Export**: Full OTLP support for integration with observability platforms
 
 **Example Output:**
@@ -310,11 +321,13 @@ if (result.failed()) {
 - `vajrapulse-api` has **zero external dependencies**
 - Clean separation of concerns
 - Easy to extend and integrate
+- Enhanced with polymorphism support in 0.9.9
 
 **Minimal Core:**
 - Only Micrometer and SLF4J as dependencies
 - ~150 KB core module
 - ~1.6 MB fat JAR (all-in-one)
+- Improved code organization in 0.9.9
 
 ---
 
@@ -541,18 +554,19 @@ Smooth oscillation around a mean. Reveals latency drift and GC sensitivity.
 
 ### Adaptive Load Pattern
 
-The adaptive load pattern automatically finds the maximum sustainable TPS by dynamically adjusting based on error rates, backpressure, and system conditions.
+The adaptive load pattern automatically finds the maximum sustainable TPS by dynamically adjusting based on error rates, backpressure, and system conditions. **Significantly improved in 0.9.9** with better code organization and maintainability.
 
 **Key Features:**
 - **Automatic Ramp-Up**: Increases TPS until errors occur
 - **Intelligent Ramp-Down**: Decreases TPS to find stable operating point
 - **Stability Detection**: Detects and sustains at optimal TPS levels (not just MAX_TPS)
-- **Automatic Recovery**: Recovers from low TPS when conditions improve
+- **Automatic Recovery**: Recovers from low TPS when conditions improve (uses recent window failure rate)
 - **Event Notifications**: Listen to phase transitions, TPS changes, and stability events
-- **Pluggable Policies**: Custom decision logic via `RampDecisionPolicy`
+- **Pluggable Policies**: Custom decision logic via `RampDecisionPolicy` interface
 - **Continuous Operation**: Never gets stuck - continuously adapts to changing conditions
+- **Backpressure Integration**: Responds to backpressure signals from queues, connection pools, etc.
 
-**Using the Builder Pattern (Recommended):**
+**Using the Builder Pattern (Recommended in 0.9.9):**
 
 ```java
 MetricsCollector metrics = new MetricsCollector();
@@ -566,13 +580,14 @@ AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
     .maxTps(1000.0)                          // Max 1000 TPS
     .minTps(10.0)                            // Min 10 TPS
     .sustainDuration(Duration.ofSeconds(30)) // Sustain at stable point for 30 seconds
-    .errorThreshold(0.01)                     // 1% error rate threshold
-    .backpressureRampUpThreshold(0.3)        // Ramp up if backpressure < 30%
-    .backpressureRampDownThreshold(0.7)      // Ramp down if backpressure > 70%
+    .errorThreshold(0.01)                    // 1% error rate threshold
+    .backpressureRampUpThreshold(0.3)       // Ramp up if backpressure < 30%
+    .backpressureRampDownThreshold(0.7)     // Ramp down if backpressure > 70%
     .stableIntervalsRequired(3)              // Require 3 stable intervals
     .tpsTolerance(50.0)                      // TPS tolerance for stability
-    .recoveryTpsRatio(0.5)                   // Recovery at 50% of last known good TPS
-    .metricsProvider(provider)                // Metrics provider for feedback
+    .recoveryTpsRatio(0.5)                  // Recovery at 50% of last known good TPS
+    .metricsProvider(provider)               // Metrics provider for feedback
+    .backpressureProvider(backpressureProvider) // Optional: backpressure signals
     .listener(new AdaptivePatternListener() { // Optional: event notifications
         @Override
         public void onPhaseTransition(PhaseTransitionEvent event) {
@@ -588,39 +603,12 @@ AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
         public void onStabilityDetected(StabilityDetectedEvent event) {
             System.out.println("Stable TPS detected: " + event.stableTps());
         }
+        
+        @Override
+        public void onRecovery(RecoveryEvent event) {
+            System.out.println("Recovery: " + event.recoveryTps() + " TPS");
+        }
     })
-    .build();
-```
-
-**Using Configuration Object:**
-
-```java
-AdaptiveConfig config = new AdaptiveConfig(
-    100.0,                      // initialTps
-    50.0,                       // rampIncrement
-    100.0,                      // rampDecrement
-    Duration.ofSeconds(10),     // rampInterval
-    1000.0,                     // maxTps
-    10.0,                       // minTps
-    Duration.ofSeconds(30),     // sustainDuration
-    0.01,                       // errorThreshold
-    0.3,                        // backpressureRampUpThreshold
-    0.7,                        // backpressureRampDownThreshold
-    3,                          // stableIntervalsRequired
-    50.0,                       // tpsTolerance
-    0.5                         // recoveryTpsRatio
-);
-
-AdaptiveLoadPattern pattern = new AdaptiveLoadPattern(config, metricsProvider);
-```
-
-**Using Defaults:**
-
-```java
-AdaptiveConfig config = AdaptiveConfig.defaults(); // Sensible defaults
-AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
-    .config(config)
-    .metricsProvider(metricsProvider)
     .build();
 ```
 
@@ -640,11 +628,21 @@ RampDecisionPolicy customPolicy = new RampDecisionPolicy() {
         return metrics.failureRate() > 0.01 || metrics.backpressure() > 0.8;
     }
     
-    // ... implement other methods
+    @Override
+    public boolean shouldSustain(MetricsSnapshot metrics) {
+        // Custom logic for sustaining
+        return metrics.failureRate() < 0.01 && metrics.backpressure() < 0.5;
+    }
+    
+    @Override
+    public boolean shouldRecover(MetricsSnapshot metrics) {
+        // Custom logic for recovery
+        return metrics.recentFailureRate() < 0.01; // Use recent window
+    }
 };
 
 AdaptiveLoadPattern pattern = AdaptiveLoadPattern.builder()
-    .metricsProvider(metricsProvider)
+    .metricsProvider(provider)
     .decisionPolicy(customPolicy) // Use custom policy
     .build();
 ```
@@ -680,6 +678,13 @@ pattern.listener(new AdaptivePatternListener() {
 });
 ```
 
+**0.9.9 Improvements:**
+- ✅ **23.5% code reduction** - easier to understand and maintain
+- ✅ **Better organization** - helper methods extracted for clarity
+- ✅ **Simplified builder** - method chaining for better developer experience
+- ✅ **Unified state transitions** - single `transitionToPhase()` method
+- ✅ **Enhanced testability** - helper methods can be tested independently
+
 ### Warm-up/Cool-down Phases
 Add warm-up and cool-down phases to any load pattern for accurate baseline measurements.
 
@@ -697,6 +702,8 @@ LoadPattern pattern = new WarmupCooldownLoadPattern(
 - Clean separation between initialization and measurement
 - No warm-up artifacts in metrics
 - Graceful shutdown with cool-down phase
+
+**0.9.9 Enhancement**: The `LoadPattern` interface now includes `supportsWarmupCooldown()` and `shouldRecordMetrics()` methods, enabling polymorphism over type checking.
 
 ---
 
@@ -723,6 +730,7 @@ LoadPattern pattern = new WarmupCooldownLoadPattern(
 │         └───▶│  Exporters                 │              │
 │              │  - Console                 │              │
 │              │  - OpenTelemetry           │              │
+│              │  - Report                 │              │
 │              └───────────────────────────┘              │
 │                                                           │
 └─────────────────────────────────────────────────────────┘
@@ -731,11 +739,21 @@ LoadPattern pattern = new WarmupCooldownLoadPattern(
 ### Modules
 
 - **`vajrapulse-api`** - Zero-dependency public API (TaskLifecycle, LoadPattern, annotations)
+  - Enhanced in 0.9.9 with polymorphism support methods
 - **`vajrapulse-core`** - Execution engine, metrics collection, rate control
+  - Improved in 0.9.9 with better code organization (3.4% reduction)
 - **`vajrapulse-worker`** - CLI application with fat JAR
 - **`vajrapulse-exporter-console`** - Human-readable console output
 - **`vajrapulse-exporter-opentelemetry`** - OTLP metrics and tracing export
+- **`vajrapulse-exporter-report`** - HTML report generation
 - **`vajrapulse-bom`** - Bill of Materials for dependency management
+
+### Architecture Improvements in 0.9.9
+
+- ✅ **Polymorphism over Type Checking**: Interface methods replace `instanceof` checks
+- ✅ **Better Code Organization**: Extracted helper methods and top-level classes
+- ✅ **Consolidated Metrics Registration**: Single method for all metrics
+- ✅ **Improved Separation of Concerns**: Clear boundaries between components
 
 ---
 
@@ -784,8 +802,23 @@ Compatible with:
 - `vajrapulse.execution.queue.wait_time` - Queue wait time histogram
 - `vajrapulse.request.tps` - Request TPS gauge
 - `vajrapulse.response.tps` - Response TPS gauge
+- `vajrapulse.adaptive.tps` - Adaptive pattern current TPS (if using adaptive pattern)
+- `vajrapulse.adaptive.phase` - Adaptive pattern current phase (if using adaptive pattern)
 
 All metrics are tagged with `run_id` for test correlation.
+
+---
+
+## Code Quality (0.9.9)
+
+Version 0.9.9 delivers significant code quality improvements:
+
+- ✅ **Test Coverage**: ≥90% for all modules
+- ✅ **Test Reliability**: 100% timeout coverage, 0% flakiness (validated)
+- ✅ **Static Analysis**: SpotBugs passes with no issues
+- ✅ **Code Organization**: Improved maintainability and readability
+- ✅ **Documentation**: Complete JavaDoc on all public APIs
+- ✅ **Best Practices**: Comprehensive test best practices guide
 
 ---
 
@@ -795,7 +828,10 @@ See the `examples/` directory for complete working examples:
 
 - **`http-load-test`** - HTTP API load testing with OpenTelemetry export
 - **`adaptive-load-test`** - Adaptive load pattern demonstration
+- **`adaptive-with-warmup`** - Adaptive pattern with warm-up/cool-down
 - More examples coming soon
+
+All examples updated to use 0.9.9 APIs (builder pattern, TaskLifecycle interface).
 
 ---
 
@@ -806,9 +842,34 @@ See the `examples/` directory for complete working examples:
 
 ---
 
+## Breaking Changes in 0.9.9
+
+Version 0.9.9 includes some breaking changes (pre-1.0 release):
+
+### Removed Incomplete Features
+- `BackpressureHandlingResult.RETRY` - Removed (was incomplete)
+- `BackpressureHandlingResult.DEGRADED` - Removed (was incomplete)
+- `BackpressureHandlers.retry()` - Removed (was incomplete)
+- `BackpressureHandlers.DEGRADE` - Removed (was incomplete)
+
+### Interface Changes
+- `BackpressureHandler.handle()` - Removed `iteration` parameter
+  - Before: `handle(long iteration, double backpressureLevel, BackpressureContext context)`
+  - After: `handle(double backpressureLevel, BackpressureContext context)`
+
+### Package Reorganization
+- `com.vajrapulse.core.backpressure.*` → `com.vajrapulse.core.metrics.*`
+  - All backpressure classes moved to metrics package
+
+**Migration Guide**: See [CHANGELOG.md](CHANGELOG.md#099---2025-12-14) for detailed migration instructions.
+
+---
+
 ## Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+**For Contributors**: Check out the [Test Best Practices Guide](documents/guides/TEST_BEST_PRACTICES.md) for writing reliable tests.
 
 ---
 
@@ -837,3 +898,12 @@ Built with:
 <p align="center">
   <em>Pre-1.0: Breaking changes may occur as we refine the API</em>
 </p>
+
+---
+
+## Additional Resources
+
+- [CHANGELOG.md](CHANGELOG.md) - Complete release history
+- [COMPARISON.md](COMPARISON.md) - Comparison with JMeter, Gatling, BlazeMeter
+- [Test Best Practices](documents/guides/TEST_BEST_PRACTICES.md) - Comprehensive testing guide
+- [Release 0.9.9 Detailed Notes](documents/releases/RELEASE_0.9.9_DETAILED_NOTES.md) - Detailed release notes
