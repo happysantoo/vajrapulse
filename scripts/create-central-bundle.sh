@@ -2,6 +2,7 @@
 set -euo pipefail
 
 VERSION="${1:-0.9.0}"
+BUNDLE_PATH="${2:-/tmp/vajrapulse-${VERSION}-central.zip}"
 GROUP_PATH="com/vajrapulse"
 MODULES=(vajrapulse-bom vajrapulse-api vajrapulse-core vajrapulse-exporter-console vajrapulse-exporter-opentelemetry vajrapulse-exporter-report vajrapulse-worker)
 REPO_ROOT="${HOME}/.m2/repository"
@@ -65,7 +66,7 @@ for mod in "${MODULES[@]}"; do
   done
 done
 
-OUT="/tmp/vajrapulse-${VERSION}-central.zip"
+OUT="${BUNDLE_PATH}"
 echo "[central-bundle] Creating zip ${OUT}";
 rm -f "${OUT}"
 cd "${REPO_ROOT}";
@@ -79,4 +80,4 @@ done
 zip -r "${OUT}" "${ZIP_ARGS[@]}" >/dev/null
 echo "[central-bundle] Bundle ready: ${OUT}"
 echo "Upload command example:";
-echo "curl -u \"$mavenCentralUsername:$mavenCentralPassword\" -F bundle=@${OUT} \"https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC\""
+echo "curl -u \"\${mavenCentralUsername}:\${mavenCentralPassword}\" -F bundle=@${OUT} \"https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC\""
