@@ -4,6 +4,7 @@ import com.vajrapulse.api.metrics.MetricsProvider;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Caches metrics provider results to reduce expensive snapshot operations.
@@ -31,11 +32,12 @@ public final class CachedMetricsProvider implements MetricsProvider {
     private final MetricsProvider delegate;
     private final long ttlNanos;
     
-    // Cached snapshot with timestamp
-    // Using volatile for snapshot to ensure visibility across threads
-    private volatile CachedSnapshot cached;
+    // Cached snapshot with timestamp - using AtomicReference for lock-free updates
+    private final AtomicReference<CachedSnapshot> cached = new AtomicReference<>();
     // Using AtomicLong for timestamp to ensure atomic reads and proper memory ordering
     private final AtomicLong cacheTimeNanos = new AtomicLong(0);
+    // Flag to prevent concurrent cache refreshes (lock-free coordination)
+    private final AtomicLong refreshInProgress = new AtomicLong(0);
     
     /**
      * Creates a cached metrics provider with default TTL (100ms).
@@ -86,48 +88,73 @@ public final class CachedMetricsProvider implements MetricsProvider {
      * <p>This method ensures that getFailureRate(), getTotalExecutions(), and
      * getFailureCount() use the same cached snapshot, avoiding multiple calls to the delegate.
      * 
-     * <p><strong>Thread Safety:</strong> This method uses double-check locking with
-     * proper memory ordering guarantees:
+     * <p><strong>Thread Safety:</strong> This method uses a lock-free approach with
+     * compare-and-swap operations and a refresh coordination flag:
      * <ul>
+     *   <li>AtomicReference for cached snapshot ensures atomic updates</li>
      *   <li>AtomicLong for cacheTimeNanos ensures atomic reads with proper ordering</li>
-     *   <li>Volatile for cached snapshot ensures visibility across threads</li>
-     *   <li>Synchronized block prevents concurrent cache refreshes</li>
-     *   <li>Double-check pattern minimizes synchronization overhead</li>
+     *   <li>AtomicLong refreshInProgress coordinates cache refreshes</li>
+     *   <li>Compare-and-swap prevents concurrent cache refreshes without blocking</li>
+     *   <li>Double-check pattern minimizes expensive delegate calls</li>
      * </ul>
      * 
      * @return cached snapshot
      */
     private CachedSnapshot getCachedSnapshot() {
         long now = System.nanoTime();
-        CachedSnapshot snapshot = this.cached; // Volatile read
+        CachedSnapshot snapshot = cached.get(); // Atomic read
         
         // Read cacheTimeNanos atomically to get proper memory ordering
         long cachedTime = cacheTimeNanos.get(); // Atomic read with memory ordering
         
         // Check if cache is valid (fast path - no synchronization)
         if (snapshot == null || (now - cachedTime) > ttlNanos) {
-            // Synchronize to prevent multiple threads from refreshing simultaneously
-            synchronized (this) {
-                // Double-check after acquiring lock - re-read both values
-                snapshot = this.cached; // Volatile read inside synchronized
-                cachedTime = cacheTimeNanos.get(); // Atomic read inside synchronized
-                
-                if (snapshot == null || (now - cachedTime) > ttlNanos) {
-                    // Refresh cache - call delegate methods once
-                    double failureRate = delegate.getFailureRate();
-                    long totalExecutions = delegate.getTotalExecutions();
-                    long failureCount = delegate.getFailureCount();
-                    snapshot = new CachedSnapshot(failureRate, totalExecutions, failureCount);
+            // Try to become the refresh coordinator (lock-free)
+            long expected = 0;
+            if (refreshInProgress.compareAndSet(expected, now)) {
+                // We're the coordinator - refresh the cache
+                try {
+                    // Re-check cache (another thread might have refreshed while we were waiting)
+                    CachedSnapshot current = cached.get();
+                    cachedTime = cacheTimeNanos.get();
                     
-                    // Write both values with proper ordering
-                    // Write timestamp first (atomic with memory ordering)
-                    long freshTimestamp = System.nanoTime();
-                    cacheTimeNanos.set(freshTimestamp); // Atomic write with memory ordering
-                    // Then write snapshot (volatile write ensures visibility)
-                    this.cached = snapshot; // Volatile write
-                } else {
-                    // Another thread refreshed it, use the cached value
-                    snapshot = this.cached; // Volatile read
+                    if (current == null || (now - cachedTime) > ttlNanos) {
+                        // Refresh cache - call delegate methods once
+                        double failureRate = delegate.getFailureRate();
+                        long totalExecutions = delegate.getTotalExecutions();
+                        long failureCount = delegate.getFailureCount();
+                        CachedSnapshot newSnapshot = new CachedSnapshot(failureRate, totalExecutions, failureCount);
+                        
+                        // Update cache atomically
+                        cached.set(newSnapshot); // Atomic write
+                        cacheTimeNanos.set(now); // Atomic write with memory ordering
+                        snapshot = newSnapshot;
+                    } else {
+                        // Cache was refreshed by another coordinator
+                        snapshot = current;
+                    }
+                } finally {
+                    // Release coordination flag
+                    refreshInProgress.set(0);
+                }
+            } else {
+                // Another thread is coordinating refresh - spin-wait briefly then read
+                // Use a short spin loop to avoid blocking (lock-free retry)
+                int spins = 0;
+                while (spins < 100 && refreshInProgress.get() != 0) {
+                    Thread.onSpinWait(); // CPU-friendly spin wait
+                    spins++;
+                }
+                
+                // Read the refreshed cache value
+                snapshot = cached.get(); // Atomic read
+                cachedTime = cacheTimeNanos.get();
+                
+                // If still expired after waiting, the coordinator should have refreshed it
+                // If not, we'll get a slightly stale value which is acceptable for performance
+                if (snapshot == null || (now - cachedTime) > ttlNanos) {
+                    // Final attempt - coordinator should be done by now
+                    snapshot = cached.get();
                 }
             }
         }

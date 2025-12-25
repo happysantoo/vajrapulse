@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package com.example.grpc;
+
+option java_multiple_files = true;
+option java_package = "com.example.grpc.proto";
+option java_outer_classname = "ExampleProto";
+
+// Example service for load testing
+service ExampleService {
+  // Unary RPC - simple request/response
+  rpc UnaryCall (Request) returns (Response);
+  
+  // Server streaming - server sends multiple responses
+  rpc ServerStreaming (Request) returns (stream Response);
+  
+  // Client streaming - client sends multiple requests
+  rpc ClientStreaming (stream Request) returns (Response);
+  
+  // Bidirectional streaming - both sides stream
+  rpc BidirectionalStreaming (stream Request) returns (stream Response);
+}
+
+message Request {
+  int32 id = 1;
+  string message = 2;
+  int64 timestamp = 3;
+}
+
+message Response {
+  int32 id = 1;
+  string message = 2;
+  int64 timestamp = 3;
+  bool success = 4;
+}

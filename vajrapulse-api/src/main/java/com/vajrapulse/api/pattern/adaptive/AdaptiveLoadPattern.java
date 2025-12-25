@@ -205,7 +205,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                 "Errors/backpressure detected");
         }
         
-        // Check if max TPS reached (before or after increment)
+        // Check if max TPS reached
         AdjustmentDecision maxTpsDecision = checkMaxTpsReached(current.currentTps());
         if (maxTpsDecision != null) {
             return maxTpsDecision;
@@ -216,18 +216,30 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             return decision(AdaptivePhase.SUSTAIN, current.currentTps(), "Stability detected");
         }
         
-        // Continue ramping up
+        // Continue ramping up or hold
+        return decideRampUpContinuation(current, metrics);
+    }
+    
+    /**
+     * Decides whether to continue ramping up or hold current TPS.
+     * 
+     * @param current current state
+     * @param metrics current metrics
+     * @return decision to ramp up or hold
+     */
+    private AdjustmentDecision decideRampUpContinuation(
+            AdaptiveState current,
+            MetricsSnapshot metrics) {
+        
         if (decisionPolicy.shouldRampUp(metrics)) {
             double newTps = calculateRampUpTps(current.currentTps());
-            // Check if new TPS reaches max
-            AdjustmentDecision newMaxTpsDecision = checkMaxTpsReached(newTps);
-            if (newMaxTpsDecision != null) {
-                return newMaxTpsDecision;
+            AdjustmentDecision maxTpsDecision = checkMaxTpsReached(newTps);
+            if (maxTpsDecision != null) {
+                return maxTpsDecision;
             }
             return decision(AdaptivePhase.RAMP_UP, newTps, "Conditions good, ramping up");
         }
         
-        // Hold current TPS
         return decision(AdaptivePhase.RAMP_UP, current.currentTps(), "Moderate backpressure, holding");
     }
     

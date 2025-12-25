@@ -11,7 +11,7 @@ plugins {
 allprojects {
     // Artifact coordinates moved to 'com.vajrapulse' for 0.9 release alignment.
     group = "com.vajrapulse"
-    version = "0.9.9"
+    version = "0.9.10"
 
     repositories {
         mavenCentral()
@@ -138,8 +138,8 @@ subprojects {
 
         // Configure SpotBugs for static code analysis
         tasks.withType<com.github.spotbugs.snom.SpotBugsTask> {
-            // Skip examples from static analysis
-            enabled = !project.path.startsWith(":examples")
+            // Skip examples and benchmarks from static analysis (not production code)
+            enabled = !project.path.startsWith(":examples") && project.path != ":benchmarks"
             
             // Set exclusion filter
             excludeFilter = file("${rootProject.projectDir}/spotbugs-exclude.xml")
