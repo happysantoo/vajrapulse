@@ -255,12 +255,24 @@ public final class AdaptivePatternMetrics {
     }
     
     /**
-     * Removes the tracker for a pattern (for cleanup/testing).
+     * Unregisters metrics for an adaptive load pattern and removes its tracker.
      * 
-     * @param pattern the pattern to remove tracking for
+     * <p>This method should be called when a pattern is no longer in use to prevent
+     * memory leaks. The tracker and all associated metrics are removed from the
+     * static map, allowing the pattern instance to be garbage collected.
+     * 
+     * <p><strong>Lifecycle Management:</strong> This method is typically called
+     * automatically by {@link ExecutionEngine#close()} when an engine using an
+     * adaptive pattern is closed. Manual calls are only needed for testing or
+     * special cleanup scenarios.
+     * 
+     * @param pattern the pattern to unregister (must not be null)
+     * @since 0.9.10
      */
-    static void removeTracker(AdaptiveLoadPattern pattern) {
-        trackers.remove(pattern);
+    public static void unregister(AdaptiveLoadPattern pattern) {
+        if (pattern != null) {
+            trackers.remove(pattern);
+        }
     }
 }
 

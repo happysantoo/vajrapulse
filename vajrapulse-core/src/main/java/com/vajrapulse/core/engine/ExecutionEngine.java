@@ -380,6 +380,63 @@ public final class ExecutionEngine implements AutoCloseable {
     }
     
     /**
+     * Executes the main load test loop.
+     * 
+     * <p>This method handles the core execution loop:
+     * <ul>
+     *   <li>Creates task executor and rate controller</li>
+     *   <li>Registers rate controller metrics</li>
+     *   <li>Submits task executions according to load pattern</li>
+     *   <li>Respects stop requests and pattern completion</li>
+     * </ul>
+     * 
+     * @throws Exception if execution fails
+     */
+    private void executeLoadTest() throws Exception {
+        TaskExecutor taskExecutor = new TaskExecutor(taskLifecycle);
+        RateController rateController = new RateController(loadPattern);
+        
+        // Register rate controller accuracy metrics
+        com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerRateControllerMetrics(
+            rateController, loadPattern, metricsCollector.getRegistry(), runId);
+        
+        long testDurationMillis = loadPattern.getDuration().toMillis();
+        long iteration = 0;
+        
+        while (!stopRequested.get() && rateController.getElapsedMillis() < testDurationMillis) {
+            rateController.waitForNext();
+            
+            // Check if pattern wants to stop (returns 0.0 TPS)
+            // Only break if:
+            // 1. We've had at least 10 iterations (to allow patterns that start at 0.0 TPS to ramp up)
+            // 2. Elapsed time is significant (> 100ms) to ensure we're not breaking too early
+            // 3. TPS is 0.0 (pattern is complete)
+            // This prevents breaking on RampUpLoad which starts at 0.0, but still catches
+            // AdaptiveLoadPattern at minimum TPS (recovery behavior in RAMP_DOWN phase)
+            long elapsedMillis = rateController.getElapsedMillis();
+            double currentTps = rateController.getCurrentTps();
+            if (iteration >= 10 && elapsedMillis > 100 && currentTps <= 0.0) {
+                logger.info("Load pattern returned 0.0 TPS after {} iterations and {}ms, stopping execution runId={}", 
+                    iteration, elapsedMillis, runId);
+                break;
+            }
+            
+            // Check if we should record metrics (use interface method to avoid instanceof)
+            boolean shouldRecordMetrics = loadPattern.shouldRecordMetrics(elapsedMillis);
+            
+            long currentIteration = iteration++;
+            long queueStartNanos = System.nanoTime();
+            pendingExecutions.incrementAndGet();
+            
+            // Update queue size gauge
+            metricsCollector.updateQueueSize(pendingExecutions.get());
+            
+            executor.submit(new ExecutionCallable(
+                taskExecutor, metricsCollector, currentIteration, queueStartNanos, pendingExecutions, shouldRecordMetrics));
+        }
+    }
+    
+    /**
      * Registers all metrics for this execution engine.
      * 
      * <p>This method consolidates all metrics registration in one place:
@@ -413,10 +470,14 @@ public final class ExecutionEngine implements AutoCloseable {
         this.lifecycleCompleteCounter = healthMetrics.lifecycleCompleteCounter();
         this.uptimeTimer = healthMetrics.uptimeTimer();
         
-        // Register adaptive pattern metrics if applicable
-        // Note: We still need instanceof here because AdaptivePatternMetrics.register()
-        // requires the AdaptiveLoadPattern instance and is in the core module.
-        // This is acceptable as it's isolated to this method.
+        // Register pattern-specific metrics
+        loadPattern.registerMetrics(registry, runId);
+        
+        // Adaptive pattern metrics require special handling due to module boundaries:
+        // - AdaptiveLoadPattern is in api module (zero dependencies)
+        // - AdaptivePatternMetrics is in core module (depends on Micrometer)
+        // - Cannot use polymorphism without breaking module boundaries
+        // This instanceof check is isolated and acceptable.
         if (loadPattern instanceof com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern adaptivePattern) {
             AdaptivePatternMetrics.register(adaptivePattern, registry, runId);
         }
@@ -479,47 +540,7 @@ public final class ExecutionEngine implements AutoCloseable {
         }
         
         try {
-            TaskExecutor taskExecutor = new TaskExecutor(taskLifecycle);
-            RateController rateController = new RateController(loadPattern);
-            
-            // Register rate controller accuracy metrics
-            com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerRateControllerMetrics(
-                rateController, loadPattern, metricsCollector.getRegistry(), runId);
-            
-            long testDurationMillis = loadPattern.getDuration().toMillis();
-            long iteration = 0;
-            
-            while (!stopRequested.get() && rateController.getElapsedMillis() < testDurationMillis) {
-                rateController.waitForNext();
-                
-                // Check if pattern wants to stop (returns 0.0 TPS)
-                // Only break if:
-                // 1. We've had at least 10 iterations (to allow patterns that start at 0.0 TPS to ramp up)
-                // 2. Elapsed time is significant (> 100ms) to ensure we're not breaking too early
-                // 3. TPS is 0.0 (pattern is complete)
-                // This prevents breaking on RampUpLoad which starts at 0.0, but still catches
-                // AdaptiveLoadPattern at minimum TPS (recovery behavior in RAMP_DOWN phase)
-                long elapsedMillis = rateController.getElapsedMillis();
-                double currentTps = rateController.getCurrentTps();
-                if (iteration >= 10 && elapsedMillis > 100 && currentTps <= 0.0) {
-                    logger.info("Load pattern returned 0.0 TPS after {} iterations and {}ms, stopping execution runId={}", 
-                        iteration, elapsedMillis, runId);
-                    break;
-                }
-                
-                // Check if we should record metrics (use interface method to avoid instanceof)
-                boolean shouldRecordMetrics = loadPattern.shouldRecordMetrics(elapsedMillis);
-                
-                long currentIteration = iteration++;
-                long queueStartNanos = System.nanoTime();
-                pendingExecutions.incrementAndGet();
-                
-                // Update queue size gauge
-                metricsCollector.updateQueueSize(pendingExecutions.get());
-                
-                executor.submit(new ExecutionCallable(
-                    taskExecutor, metricsCollector, currentIteration, queueStartNanos, pendingExecutions, shouldRecordMetrics));
-            }
+            executeLoadTest();
             
             if (stopRequested.get()) {
                 logger.info("Stop requested - draining executor runId={}", runId);
@@ -563,6 +584,13 @@ public final class ExecutionEngine implements AutoCloseable {
     
     @Override
     public void close() {
+        // Unregister adaptive pattern metrics to prevent memory leaks
+        // Use instanceof here as unregister() is a static method in core module
+        // and we need to identify AdaptiveLoadPattern instances for cleanup
+        if (loadPattern instanceof com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern adaptivePattern) {
+            AdaptivePatternMetrics.unregister(adaptivePattern);
+        }
+        
         // Signal shutdown completion and remove hook only if hooks were enabled
         if (shutdownHookEnabled) {
             shutdownManager.signalShutdownComplete();

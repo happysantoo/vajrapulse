@@ -71,11 +71,6 @@ public final class AdaptiveLoadPattern implements LoadPattern {
     private static final double PERCENTAGE_TO_RATIO = 100.0;
     
     /**
-     * Recovery TPS ratio (hardcoded to 50% of last known good TPS).
-     */
-    private static final double RECOVERY_TPS_RATIO = 0.5;
-    
-    /**
      * Creates a new adaptive load pattern with configuration.
      * 
      * @param config configuration for the adaptive pattern (must not be null)
@@ -125,7 +120,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         
         // Time for adjustment - make decision and update state
         MetricsSnapshot metrics = captureMetricsSnapshot(elapsedMillis);
-        AdjustmentDecision decision = makeDecision(current, metrics, elapsedMillis);
+        AdaptiveDecisionEngine.AdjustmentDecision decision = makeDecision(current, metrics, elapsedMillis);
         
         // Apply decision
         AdaptiveState newState = applyDecision(current, decision, elapsedMillis);
@@ -165,221 +160,25 @@ public final class AdaptiveLoadPattern implements LoadPattern {
     /**
      * Makes adjustment decision based on current state and metrics.
      * 
+     * <p>Delegates to AdaptiveDecisionEngine for all decision logic.
+     * 
      * @param current current state
      * @param metrics current metrics
      * @param elapsedMillis current time
      * @return adjustment decision
      */
-    private AdjustmentDecision makeDecision(
+    private AdaptiveDecisionEngine.AdjustmentDecision makeDecision(
             AdaptiveState current,
             MetricsSnapshot metrics,
             long elapsedMillis) {
         
-        return switch (current.phase()) {
-            case RAMP_UP -> decideRampUp(current, metrics, elapsedMillis);
-            case RAMP_DOWN -> decideRampDown(current, metrics, elapsedMillis);
-            case SUSTAIN -> decideSustain(current, metrics, elapsedMillis);
-        };
+        return AdaptiveDecisionEngine.decide(
+            current, metrics, config, decisionPolicy, elapsedMillis);
     }
     
-    /**
-     * Decision result.
-     */
-    private record AdjustmentDecision(
-        AdaptivePhase newPhase,
-        double newTps,
-        String reason  // For logging/debugging
-    ) {}
+    // AdjustmentDecision is now defined in AdaptiveDecisionEngine (package-private)
     
-    /**
-     * Decides what to do in RAMP_UP phase.
-     */
-    private AdjustmentDecision decideRampUp(
-            AdaptiveState current,
-            MetricsSnapshot metrics,
-            long elapsedMillis) {
-        
-        // Check for errors/backpressure
-        if (decisionPolicy.shouldRampDown(metrics)) {
-            return decision(AdaptivePhase.RAMP_DOWN, calculateRampDownTps(current.currentTps()),
-                "Errors/backpressure detected");
-        }
-        
-        // Check if max TPS reached
-        AdjustmentDecision maxTpsDecision = checkMaxTpsReached(current.currentTps());
-        if (maxTpsDecision != null) {
-            return maxTpsDecision;
-        }
-        
-        // Check for stability
-        if (isStable(current, metrics)) {
-            return decision(AdaptivePhase.SUSTAIN, current.currentTps(), "Stability detected");
-        }
-        
-        // Continue ramping up or hold
-        return decideRampUpContinuation(current, metrics);
-    }
-    
-    /**
-     * Decides whether to continue ramping up or hold current TPS.
-     * 
-     * @param current current state
-     * @param metrics current metrics
-     * @return decision to ramp up or hold
-     */
-    private AdjustmentDecision decideRampUpContinuation(
-            AdaptiveState current,
-            MetricsSnapshot metrics) {
-        
-        if (decisionPolicy.shouldRampUp(metrics)) {
-            double newTps = calculateRampUpTps(current.currentTps());
-            AdjustmentDecision maxTpsDecision = checkMaxTpsReached(newTps);
-            if (maxTpsDecision != null) {
-                return maxTpsDecision;
-            }
-            return decision(AdaptivePhase.RAMP_UP, newTps, "Conditions good, ramping up");
-        }
-        
-        return decision(AdaptivePhase.RAMP_UP, current.currentTps(), "Moderate backpressure, holding");
-    }
-    
-    /**
-     * Checks if TPS has reached maximum and returns transition decision if so.
-     * 
-     * @param tps the TPS to check
-     * @return transition decision to SUSTAIN if max reached, null otherwise
-     */
-    private AdjustmentDecision checkMaxTpsReached(double tps) {
-        if (tps >= config.maxTps()) {
-            return decision(AdaptivePhase.SUSTAIN, tps, "Max TPS reached");
-        }
-        return null;
-    }
-    
-    /**
-     * Decides what to do in RAMP_DOWN phase.
-     */
-    private AdjustmentDecision decideRampDown(
-            AdaptiveState current,
-            MetricsSnapshot metrics,
-            long elapsedMillis) {
-        
-        // Check if at minimum (recovery mode)
-        if (current.inRecovery()) {
-            return decideRecovery(current, metrics);
-        }
-        
-        // Check for stability when conditions improve
-        if (!decisionPolicy.shouldRampDown(metrics)) {
-            return decideStabilityDuringRampDown(current, metrics);
-        }
-        
-        // Continue ramping down
-        return decision(AdaptivePhase.RAMP_DOWN, calculateRampDownTps(current.currentTps()),
-            "Errors/backpressure persist, ramping down");
-    }
-    
-    /**
-     * Decides recovery action when at minimum TPS.
-     * 
-     * @param current current state
-     * @param metrics current metrics
-     * @return recovery decision
-     */
-    private AdjustmentDecision decideRecovery(AdaptiveState current, MetricsSnapshot metrics) {
-        if (decisionPolicy.canRecoverFromMinimum(metrics)) {
-            return decision(AdaptivePhase.RAMP_UP, 
-                calculateRecoveryTps(current.lastKnownGoodTps()),
-                "Recovery: conditions improved");
-        }
-        return decision(AdaptivePhase.RAMP_DOWN, config.minTps(),
-            "Recovery: waiting for conditions to improve");
-    }
-    
-    /**
-     * Decides action when conditions improve during ramp down.
-     * 
-     * @param current current state
-     * @param metrics current metrics
-     * @return decision (either SUSTAIN if stable, or continue RAMP_DOWN)
-     */
-    private AdjustmentDecision decideStabilityDuringRampDown(AdaptiveState current, MetricsSnapshot metrics) {
-        if (isStable(current, metrics)) {
-            return decision(AdaptivePhase.SUSTAIN, current.currentTps(),
-                "Stability detected during ramp down");
-        }
-        return decision(AdaptivePhase.RAMP_DOWN, current.currentTps(),
-            "Conditions improved, checking stability");
-    }
-    
-    /**
-     * Decides what to do in SUSTAIN phase.
-     */
-    private AdjustmentDecision decideSustain(
-            AdaptiveState current,
-            MetricsSnapshot metrics,
-            long elapsedMillis) {
-        
-        // Check if conditions worsened
-        if (decisionPolicy.shouldRampDown(metrics)) {
-            return decision(AdaptivePhase.RAMP_DOWN, calculateRampDownTps(current.currentTps()),
-                "Conditions worsened during sustain");
-        }
-        
-        // Check if sustain duration elapsed and can ramp up
-        AdjustmentDecision afterSustainDecision = checkAfterSustainDuration(current, metrics, elapsedMillis);
-        if (afterSustainDecision != null) {
-            return afterSustainDecision;
-        }
-        
-        // Continue sustaining
-        return decision(AdaptivePhase.SUSTAIN, current.currentTps(), "Continuing to sustain");
-    }
-    
-    /**
-     * Checks if sustain duration has elapsed and returns decision to ramp up if conditions allow.
-     * 
-     * @param current current state
-     * @param metrics current metrics
-     * @param elapsedMillis current elapsed time
-     * @return decision to ramp up if duration elapsed and conditions allow, null otherwise
-     */
-    private AdjustmentDecision checkAfterSustainDuration(
-            AdaptiveState current,
-            MetricsSnapshot metrics,
-            long elapsedMillis) {
-        
-        long phaseDuration = elapsedMillis - current.phaseStartTime();
-        if (phaseDuration >= config.sustainDuration().toMillis()) {
-            if (decisionPolicy.shouldRampUp(metrics) && current.currentTps() < config.maxTps()) {
-                return decision(AdaptivePhase.RAMP_UP, calculateRampUpTps(current.currentTps()),
-                    "Sustain duration elapsed, ramping up");
-            }
-        }
-        return null;
-    }
-    
-    /**
-     * Checks if current TPS is stable.
-     * 
-     * <p>Stability means:
-     * - Conditions are good (error rate low, backpressure low)
-     * - Been stable for required number of intervals (after incrementing)
-     * 
-     * @param current current state
-     * @param metrics current metrics
-     * @return true if stable
-     */
-    private boolean isStable(AdaptiveState current, MetricsSnapshot metrics) {
-        // Conditions must be good
-        if (!decisionPolicy.shouldRampUp(metrics)) {
-            return false;
-        }
-        
-        // Check if we'll have enough stable intervals after incrementing
-        int newStableCount = current.stableIntervalsCount() + 1;
-        return decisionPolicy.shouldSustain(newStableCount, config.stableIntervalsRequired());
-    }
+    // Decision logic has been extracted to AdaptiveDecisionEngine
     
     /**
      * Applies adjustment decision to state.
@@ -391,7 +190,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
      */
     private AdaptiveState applyDecision(
             AdaptiveState current,
-            AdjustmentDecision decision,
+            AdaptiveDecisionEngine.AdjustmentDecision decision,
             long elapsedMillis) {
         
         if (decision.newPhase() != current.phase()) {
@@ -408,7 +207,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
      */
     private AdaptiveState updateStateInPhase(
             AdaptiveState current,
-            AdjustmentDecision decision,
+            AdaptiveDecisionEngine.AdjustmentDecision decision,
             long elapsedMillis) {
         
         // Update stability count if conditions are good
@@ -506,47 +305,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         };
     }
     
-    /**
-     * Calculates new TPS after ramping up, clamped to max TPS.
-     * 
-     * @param currentTps current TPS
-     * @return new TPS after increment, clamped to max
-     */
-    private double calculateRampUpTps(double currentTps) {
-        return Math.min(config.maxTps(), currentTps + config.rampIncrement());
-    }
-    
-    /**
-     * Calculates new TPS after ramping down, clamped to min TPS.
-     * 
-     * @param currentTps current TPS
-     * @return new TPS after decrement, clamped to min
-     */
-    private double calculateRampDownTps(double currentTps) {
-        return Math.max(config.minTps(), currentTps - config.rampDecrement());
-    }
-    
-    /**
-     * Calculates recovery TPS from last known good TPS.
-     * 
-     * @param lastKnownGoodTps last known good TPS
-     * @return recovery TPS (50% of last known good, clamped to min)
-     */
-    private double calculateRecoveryTps(double lastKnownGoodTps) {
-        return Math.max(config.minTps(), lastKnownGoodTps * RECOVERY_TPS_RATIO);
-    }
-    
-    /**
-     * Creates an adjustment decision.
-     * 
-     * @param newPhase new phase
-     * @param newTps new TPS
-     * @param reason reason for the decision
-     * @return adjustment decision
-     */
-    private AdjustmentDecision decision(AdaptivePhase newPhase, double newTps, String reason) {
-        return new AdjustmentDecision(newPhase, newTps, reason);
-    }
+    // TPS calculation methods have been moved to AdaptiveDecisionEngine
     
     /**
      * Captures a metrics snapshot.
@@ -582,7 +341,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
     private void notifyListeners(
             AdaptiveState oldState,
             AdaptiveState newState,
-            AdjustmentDecision decision) {
+            AdaptiveDecisionEngine.AdjustmentDecision decision) {
         
         if (listeners.isEmpty()) {
             return;
@@ -710,6 +469,11 @@ public final class AdaptiveLoadPattern implements LoadPattern {
     public long getPhaseTransitionCount() {
         return state.get().phaseTransitionCount();
     }
+    
+    // Note: registerMetrics() is not overridden here because AdaptivePatternMetrics
+    // is in the core module, and api module has zero dependencies. ExecutionEngine
+    // handles adaptive pattern metrics registration directly using instanceof check,
+    // which is acceptable given the architecture constraints.
     
     /**
      * Creates a new builder for constructing an AdaptiveLoadPattern.

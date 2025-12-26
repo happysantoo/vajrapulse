@@ -3,6 +3,7 @@ package com.vajrapulse.core.engine;
 import com.vajrapulse.api.metrics.MetricsProvider;
 import com.vajrapulse.core.metrics.CachedMetricsProvider;
 import com.vajrapulse.core.metrics.MetricsCollector;
+import com.vajrapulse.core.util.TimeConstants;
 
 import java.time.Duration;
 import java.util.Deque;
@@ -102,8 +103,7 @@ public final class MetricsProviderAdapter implements MetricsProvider {
         long currentFailures = currentSnapshot.failureCount();
 
         // Add current snapshot to history
-        WindowSnapshot newSnapshot = new WindowSnapshot(currentTime, currentTotal, currentFailures);
-        history.addLast(newSnapshot);
+        history.addLast(new WindowSnapshot(currentTime, currentTotal, currentFailures));
 
         // Prune old history (older than retention policy)
         long retentionCutoff = currentTime - HISTORY_RETENTION_MS;
@@ -111,66 +111,25 @@ public final class MetricsProviderAdapter implements MetricsProvider {
             history.removeFirst();
         }
 
-        // Find the snapshot that is at least windowSeconds ago
-        long windowCutoff = currentTime - (windowSeconds * 1000L);
-        WindowSnapshot baseline = null;
+        // Find baseline snapshot: latest snapshot <= windowCutoff
+        long windowCutoff = currentTime - (long)(windowSeconds * TimeConstants.MILLISECONDS_PER_SECOND);
+        WindowSnapshot baseline = findBaselineSnapshot(windowCutoff);
 
-        // Iterate backwards finding the first snapshot <= windowCutoff
-        // Actually best to iterate forward or pick the one closest to windowCutoff?
-        // We want the snapshot that represents the "start" of the window.
-        // So we want a snapshot with timestamp <= windowCutoff.
-        // The one closest to windowCutoff from the LEFT (older side) or RIGHT?
-        // Ideally we want (Current - Baseline) ~ Window.
-        // So Baseline ~ Current - Window.
-
-        Iterator<WindowSnapshot> it = history.iterator();
-        while (it.hasNext()) {
-            WindowSnapshot snap = it.next();
-            if (snap.timestampMillis() <= windowCutoff) {
-                baseline = snap;
-                // Keep looking? The snapshots are ordered by time (ascending).
-                // The first one we find might be VERY old if we have gaps.
-                // But we want the one closest to windowCutoff but <= windowCutoff.
-                // Since they are ascending, 'snap' is older than next 'snap'.
-                // If snap <= windowCutoff, it's a candidate.
-                // The next one might also be <= windowCutoff.
-                // We want the LATEST snapshot that is <= windowCutoff (closest to the edge).
-            } else {
-                // snap.timestamp > windowCutoff.
-                // Stop, because all subsequent will be > windowCutoff.
-                break;
-            }
-        }
-
-        // If we found no baseline (all snapshots are newer than window),
-        // fallback to the oldest available if it's "reasonably" close?
-        // Or just fallback to all-time (metrics behavior).
-        // If oldest is newer than window, it means we don't have full window history.
-        // Default behavior: return accumulated stats since oldest?
-        // Or all-time.
-
+        // If no baseline found, use oldest available (partial window)
         if (baseline == null) {
-            // Check oldest
-            if (!history.isEmpty()) {
-                baseline = history.peekFirst();
-                // If even the oldest is too new, we can calculate rate based on what we have
-                // (Partial window). This is often better than all-time.
-            } else {
-                return currentSnapshot.failureRate(); // Should not happen as we just added one
+            baseline = history.isEmpty() ? null : history.peekFirst();
+            if (baseline == null) {
+                return currentSnapshot.failureRate();
             }
-        }
-
-        // Evaluate effective window duration
-        long timeDiff = currentTime - baseline.timestampMillis();
-
-        // If the effective window is too small (e.g. < 1s), statistics are noisy.
-        // But if that's all we have, we use it.
-        // Exception: if just started, timeDiff might be 0.
-        if (timeDiff < 100) {
-            return currentSnapshot.failureRate();
         }
 
         // Calculate rate over the window
+        long timeDiff = currentTime - baseline.timestampMillis();
+        if (timeDiff < 100) {
+            // Window too small, use all-time rate
+            return currentSnapshot.failureRate();
+        }
+
         long totalDiff = currentTotal - baseline.totalExecutions();
         long failureDiff = currentFailures - baseline.failureCount();
 
@@ -179,6 +138,27 @@ public final class MetricsProviderAdapter implements MetricsProvider {
         }
 
         return (failureDiff * 100.0) / totalDiff;
+    }
+    
+    /**
+     * Finds the latest snapshot with timestamp at or before windowCutoff.
+     * 
+     * <p>Since snapshots are ordered by time (ascending), we iterate forward
+     * and keep the latest snapshot that meets the criteria.
+     * 
+     * @param windowCutoff cutoff time in milliseconds
+     * @return latest snapshot at or before windowCutoff, or null if none found
+     */
+    private WindowSnapshot findBaselineSnapshot(long windowCutoff) {
+        WindowSnapshot baseline = null;
+        for (WindowSnapshot snap : history) {
+            if (snap.timestampMillis() <= windowCutoff) {
+                baseline = snap; // Keep latest snapshot that meets criteria
+            } else {
+                break; // All subsequent snapshots are newer
+            }
+        }
+        return baseline;
     }
 
     /**

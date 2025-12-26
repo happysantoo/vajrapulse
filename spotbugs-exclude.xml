@@ -36,6 +36,11 @@
         <Class name="com.vajrapulse.core.engine.ExecutionEngine"/>
         <Method name="run"/>
     </Match>
+    <Match>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+        <Class name="com.vajrapulse.core.engine.ExecutionEngine"/>
+        <Method name="executeLoadTest"/>
+    </Match>
     
     <!-- AggregatedMetrics record accessors return unmodifiable maps via compact constructor -->
     <!-- The compact constructor creates defensive copies, so exposure is safe -->

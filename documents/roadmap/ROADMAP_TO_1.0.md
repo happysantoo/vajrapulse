@@ -524,6 +524,11 @@ implementation("com.fasterxml.jackson.core:jackson-databind:2.16.0")
 ## 🚧 Post-1.0 Roadmap (Future Phases)
 
 ### Phase 6: Distributed Orchestration (1.1.0)
+
+**Status**: Design complete, implementation planned post-1.0  
+**Design Document**: `documents/architecture/DISTRIBUTED_TESTING_DESIGN.md`
+
+**Approach**: Leverage existing platforms (Kubernetes, BlazeMeter) rather than building custom orchestrator.
 - Orchestrator component
 - Load distribution engine
 - Worker registration & discovery
