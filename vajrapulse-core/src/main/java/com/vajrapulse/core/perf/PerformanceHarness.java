@@ -7,6 +7,8 @@ import com.vajrapulse.api.task.VirtualThreads;
 import com.vajrapulse.core.engine.ExecutionEngine;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
 import com.vajrapulse.core.metrics.MetricsCollector;
+import com.vajrapulse.core.util.TpsCalculator;
+import com.vajrapulse.core.util.TimeConstants;
 
 import java.time.Duration;
 
@@ -45,7 +47,7 @@ public final class PerformanceHarness {
         long end = System.nanoTime();
 
         AggregatedMetrics snapshot = metricsCollector.snapshot();
-        double achieved = snapshot.totalExecutions() / (double) duration.toMillis() * 1000.0;
+        double achieved = TpsCalculator.calculateActualTps(snapshot.totalExecutions(), duration.toMillis());
         System.out.println("=== Performance Harness ===");
         System.out.println("Target TPS:    " + targetTps);
         System.out.println("Duration:      " + duration);
@@ -53,7 +55,7 @@ public final class PerformanceHarness {
         System.out.println("Achieved TPS:  " + String.format("%.2f", achieved));
         System.out.println("Success Count: " + snapshot.successCount());
         System.out.println("Failures:      " + snapshot.failureCount());
-        System.out.println("Wall Time ms:  " + ((end - start) / 1_000_000));
+        System.out.println("Wall Time ms:  " + ((end - start) / TimeConstants.NANOS_PER_MILLIS));
     }
 
     private static Duration parseDuration(String s) {

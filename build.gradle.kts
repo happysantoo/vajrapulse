@@ -11,7 +11,7 @@ plugins {
 allprojects {
     // Artifact coordinates moved to 'com.vajrapulse' for 0.9 release alignment.
     group = "com.vajrapulse"
-    version = "0.9.9"
+    version = "0.9.10"
 
     repositories {
         mavenCentral()
@@ -138,8 +138,8 @@ subprojects {
 
         // Configure SpotBugs for static code analysis
         tasks.withType<com.github.spotbugs.snom.SpotBugsTask> {
-            // Skip examples from static analysis
-            enabled = !project.path.startsWith(":examples")
+            // Skip examples and benchmarks from static analysis (not production code)
+            enabled = !project.path.startsWith(":examples") && project.path != ":benchmarks"
             
             // Set exclusion filter
             excludeFilter = file("${rootProject.projectDir}/spotbugs-exclude.xml")
@@ -230,7 +230,28 @@ subprojects {
                 sign(publishing.publications["mavenJava"])
             }
         }
+    } else if (project.path.startsWith(":examples")) {
+        // For examples: ensure they compile during build
+        // Examples are educational code, so we verify compilation but don't run tests/analysis
+        tasks.named("build") {
+            dependsOn(tasks.named("compileJava"))
+        }
     }
+}
+
+// Task to compile all examples to ensure they stay up to date
+tasks.register("compileExamples") {
+    group = "verification"
+    description = "Compile all examples to ensure they use current APIs and stay up to date"
+    // Only depend on example subprojects (not the :examples aggregator)
+    dependsOn(subprojects.filter { 
+        it.path.startsWith(":examples:") && it.path != ":examples"
+    }.map { it.tasks.named("compileJava") })
+}
+
+// Ensure examples compile during build
+tasks.named("build") {
+    dependsOn(tasks.named("compileExamples"))
 }
 
 // Convenience task: aggregate build before release
@@ -238,5 +259,6 @@ tasks.register("prepareRelease") {
     group = "release"
     description = "Assemble all publishable modules for Maven Central release"
     dependsOn(subprojects.filter { it.name.startsWith("vajrapulse") }.map { it.tasks.named("build") })
+    dependsOn(tasks.named("compileExamples")) // Ensure examples compile before release
 }
 
