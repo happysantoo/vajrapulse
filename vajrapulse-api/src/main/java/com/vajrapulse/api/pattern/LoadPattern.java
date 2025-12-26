@@ -68,4 +68,25 @@ public interface LoadPattern {
         return true;
     }
     
+    /**
+     * Registers pattern-specific metrics with the meter registry.
+     * 
+     * <p>This method allows load patterns to register custom metrics (e.g., adaptive pattern
+     * phase tracking, TPS adjustments). Patterns that don't need custom metrics can provide
+     * a no-op implementation.
+     * 
+     * <p><strong>Note:</strong> The registry parameter is typed as {@code Object} to maintain
+     * the zero-dependency constraint of the api module. Implementations should cast it to
+     * {@code io.micrometer.core.instrument.MeterRegistry} when needed.
+     * 
+     * <p>Default implementation does nothing (no custom metrics).
+     * 
+     * @param registry the meter registry to register metrics in (must be a MeterRegistry instance)
+     * @param runId optional run ID for tagging (can be null)
+     * @since 0.9.10
+     */
+    default void registerMetrics(Object registry, String runId) {
+        // Default: no custom metrics
+    }
+    
 }

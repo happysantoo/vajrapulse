@@ -16,20 +16,17 @@
 
 ---
 
-## 🆕 What's New in 0.9.9
+## 🆕 What's New in 0.9.10
 
-Version 0.9.9 delivers **significant code quality improvements** and **architectural refactoring**:
+Version 0.9.10 focuses on **code simplification**, **new examples**, **documentation**, and **performance optimizations**:
 
-- ✅ **23.5% code reduction** in `AdaptiveLoadPattern` (1,275 → 975 lines) - improved maintainability
-- ✅ **3.4% code reduction** in `ExecutionEngine` (640 → 618 lines) - better organization
-- ✅ **100% test timeout coverage** (62/62 test files) - prevents hanging tests
-- ✅ **0% test flakiness** (validated across 10 consecutive runs) - excellent reliability
-- ✅ **Polymorphism over type checking** - eliminated `instanceof` checks for better extensibility
-- ✅ **Comprehensive test utilities** - `TestExecutionHelper` and `TestMetricsHelper` for consistent patterns
-- ✅ **Builder pattern improvements** - simplified `AdaptiveLoadPattern` builder with method chaining
-- ✅ **Enhanced LoadPattern interface** - new methods for polymorphism support
+- ✅ **4 new examples** - Database, CPU-bound, gRPC, and multi-exporter examples
+- ✅ **Comprehensive User Guide** - Complete guide for getting started and best practices
+- ✅ **Lock-free optimizations** - Replaced synchronized blocks with lock-free structures
+- ✅ **Performance benchmarks** - JMH benchmarks setup for core components
+- ✅ **Code simplification** - AdaptiveLoadPattern and ExecutionEngine further refined
 
-See [CHANGELOG.md](CHANGELOG.md#099---2025-12-14) for complete release notes and migration guide.
+See [CHANGELOG.md](CHANGELOG.md#0910---2025-12-14) for complete release notes.
 
 ---
 
@@ -43,11 +40,11 @@ See [CHANGELOG.md](CHANGELOG.md#099---2025-12-14) for complete release notes and
 - 🎯 **Simple API**: Implement one interface (`TaskLifecycle`) and you're ready to test
 - 📊 **Rich Metrics**: Built-in latency percentiles, queue depth tracking, client-side metrics, and OpenTelemetry support
 - 🔄 **Flexible Patterns**: 7 load patterns (static, ramp, step, spike, sine, ramp-sustain, adaptive) with warm-up/cool-down support
-- 🧩 **Adaptive Intelligence**: Self-tuning adaptive pattern with event notifications and pluggable decision policies (improved in 0.9.9)
+- 🧩 **Adaptive Intelligence**: Self-tuning adaptive pattern with event notifications and pluggable decision policies
 - ✅ **Assertion Framework**: Built-in assertions for latency, error rate, throughput, and success rate validation
 - 📦 **Minimal Dependencies**: ~1.6MB fat JAR, zero-dependency API module
 - 🚀 **Production Ready**: OpenTelemetry integration, comprehensive metrics, graceful shutdown
-- 🏗️ **Well-Architected**: Clean code organization, polymorphism-based design, excellent test coverage (0.9.9)
+- 🏗️ **Well-Architected**: Clean code organization, polymorphism-based design, excellent test coverage
 
 > 📊 **Want to see how VajraPulse compares to JMeter, Gatling, and BlazeMeter?** Check out our [comprehensive comparison guide](COMPARISON.md) covering architecture, performance, enterprise scalability, and real-world use cases.
 
@@ -60,7 +57,7 @@ See [CHANGELOG.md](CHANGELOG.md#099---2025-12-14) for complete release notes and
 **Gradle (Kotlin DSL)** - Using BOM (Recommended):
 ```kotlin
 dependencies {
-    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.9"))
+    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.10"))
     implementation("com.vajrapulse:vajrapulse-core")
     implementation("com.vajrapulse:vajrapulse-worker") // For CLI
 }
@@ -73,7 +70,7 @@ dependencies {
         <dependency>
             <groupId>com.vajrapulse</groupId>
             <artifactId>vajrapulse-bom</artifactId>
-            <version>0.9.9</version>
+            <version>0.9.10</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -136,7 +133,7 @@ public class ApiLoadTest implements TaskLifecycle {
 
 **CLI (Recommended for quick tests):**
 ```bash
-java -jar vajrapulse-worker-0.9.9-all.jar \
+java -jar vajrapulse-worker-0.9.10-all.jar \
   com.example.ApiLoadTest \
   --mode static \
   --tps 100 \
@@ -229,7 +226,7 @@ Built-in metrics collection with Micrometer:
 - **Queue Depth Tracking**: Monitor pending executions
 - **Client-Side Metrics**: Connection pool metrics, queue depth, timeouts
 - **TPS Metrics**: Request TPS, Success TPS, Failure TPS
-- **Failure Count**: Absolute failure count tracking (enhanced in 0.9.9)
+- **Failure Count**: Absolute failure count tracking
 - **OpenTelemetry Export**: Full OTLP support for integration with observability platforms
 
 **Example Output:**
@@ -321,13 +318,13 @@ if (result.failed()) {
 - `vajrapulse-api` has **zero external dependencies**
 - Clean separation of concerns
 - Easy to extend and integrate
-- Enhanced with polymorphism support in 0.9.9
+- Enhanced with polymorphism support
 
 **Minimal Core:**
 - Only Micrometer and SLF4J as dependencies
 - ~150 KB core module
 - ~1.6 MB fat JAR (all-in-one)
-- Improved code organization in 0.9.9
+- Improved code organization
 
 ---
 
@@ -340,7 +337,7 @@ if (result.failed()) {
 **Gradle (Kotlin DSL):**
 ```kotlin
 dependencies {
-    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.9"))
+    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.10"))
     implementation("com.vajrapulse:vajrapulse-core")
     implementation("com.vajrapulse:vajrapulse-worker")
     // Optional exporters
@@ -365,7 +362,7 @@ dependencies {
         <dependency>
             <groupId>com.vajrapulse</groupId>
             <artifactId>vajrapulse-bom</artifactId>
-            <version>0.9.9</version>
+            <version>0.9.10</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -387,8 +384,8 @@ dependencies {
 **Without BOM** - Specify versions individually:
 ```kotlin
 dependencies {
-    implementation("com.vajrapulse:vajrapulse-core:0.9.9")
-    implementation("com.vajrapulse:vajrapulse-worker:0.9.9")
+    implementation("com.vajrapulse:vajrapulse-core:0.9.10")
+    implementation("com.vajrapulse:vajrapulse-worker:0.9.10")
 }
 ```
 
@@ -554,7 +551,7 @@ Smooth oscillation around a mean. Reveals latency drift and GC sensitivity.
 
 ### Adaptive Load Pattern
 
-The adaptive load pattern automatically finds the maximum sustainable TPS by dynamically adjusting based on error rates, backpressure, and system conditions. **Significantly improved in 0.9.9** with better code organization and maintainability.
+The adaptive load pattern automatically finds the maximum sustainable TPS by dynamically adjusting based on error rates, backpressure, and system conditions.
 
 **Key Features:**
 - **Automatic Ramp-Up**: Increases TPS until errors occur
@@ -566,7 +563,7 @@ The adaptive load pattern automatically finds the maximum sustainable TPS by dyn
 - **Continuous Operation**: Never gets stuck - continuously adapts to changing conditions
 - **Backpressure Integration**: Responds to backpressure signals from queues, connection pools, etc.
 
-**Using the Builder Pattern (Recommended in 0.9.9):**
+**Using the Builder Pattern (Recommended):**
 
 ```java
 MetricsCollector metrics = new MetricsCollector();
@@ -678,7 +675,7 @@ pattern.listener(new AdaptivePatternListener() {
 });
 ```
 
-**0.9.9 Improvements:**
+**Recent Improvements:**
 - ✅ **23.5% code reduction** - easier to understand and maintain
 - ✅ **Better organization** - helper methods extracted for clarity
 - ✅ **Simplified builder** - method chaining for better developer experience
@@ -703,7 +700,7 @@ LoadPattern pattern = new WarmupCooldownLoadPattern(
 - No warm-up artifacts in metrics
 - Graceful shutdown with cool-down phase
 
-**0.9.9 Enhancement**: The `LoadPattern` interface now includes `supportsWarmupCooldown()` and `shouldRecordMetrics()` methods, enabling polymorphism over type checking.
+The `LoadPattern` interface includes `supportsWarmupCooldown()` and `shouldRecordMetrics()` methods, enabling polymorphism over type checking.
 
 ---
 
@@ -739,16 +736,16 @@ LoadPattern pattern = new WarmupCooldownLoadPattern(
 ### Modules
 
 - **`vajrapulse-api`** - Zero-dependency public API (TaskLifecycle, LoadPattern, annotations)
-  - Enhanced in 0.9.9 with polymorphism support methods
+  - Enhanced with polymorphism support methods
 - **`vajrapulse-core`** - Execution engine, metrics collection, rate control
-  - Improved in 0.9.9 with better code organization (3.4% reduction)
+  - Improved with better code organization
 - **`vajrapulse-worker`** - CLI application with fat JAR
 - **`vajrapulse-exporter-console`** - Human-readable console output
 - **`vajrapulse-exporter-opentelemetry`** - OTLP metrics and tracing export
 - **`vajrapulse-exporter-report`** - HTML report generation
 - **`vajrapulse-bom`** - Bill of Materials for dependency management
 
-### Architecture Improvements in 0.9.9
+### Architecture Improvements
 
 - ✅ **Polymorphism over Type Checking**: Interface methods replace `instanceof` checks
 - ✅ **Better Code Organization**: Extracted helper methods and top-level classes
@@ -809,9 +806,9 @@ All metrics are tagged with `run_id` for test correlation.
 
 ---
 
-## Code Quality (0.9.9)
+## Code Quality
 
-Version 0.9.9 delivers significant code quality improvements:
+Version 0.9.10 continues the code quality improvements:
 
 - ✅ **Test Coverage**: ≥90% for all modules
 - ✅ **Test Reliability**: 100% timeout coverage, 0% flakiness (validated)
@@ -831,7 +828,7 @@ See the `examples/` directory for complete working examples:
 - **`adaptive-with-warmup`** - Adaptive pattern with warm-up/cool-down
 - More examples coming soon
 
-All examples updated to use 0.9.9 APIs (builder pattern, TaskLifecycle interface).
+All examples updated to use latest APIs (builder pattern, TaskLifecycle interface).
 
 ---
 
@@ -842,9 +839,9 @@ All examples updated to use 0.9.9 APIs (builder pattern, TaskLifecycle interface
 
 ---
 
-## Breaking Changes in 0.9.9
+## Breaking Changes
 
-Version 0.9.9 includes some breaking changes (pre-1.0 release):
+Version 0.9.10 includes some breaking changes (pre-1.0 release):
 
 ### Removed Incomplete Features
 - `BackpressureHandlingResult.RETRY` - Removed (was incomplete)
@@ -906,4 +903,5 @@ Built with:
 - [CHANGELOG.md](CHANGELOG.md) - Complete release history
 - [COMPARISON.md](COMPARISON.md) - Comparison with JMeter, Gatling, BlazeMeter
 - [Test Best Practices](documents/guides/TEST_BEST_PRACTICES.md) - Comprehensive testing guide
+- [User Guide](documents/guides/USER_GUIDE.md) - Comprehensive user guide
 - [Release 0.9.9 Detailed Notes](documents/releases/RELEASE_0.9.9_DETAILED_NOTES.md) - Detailed release notes
