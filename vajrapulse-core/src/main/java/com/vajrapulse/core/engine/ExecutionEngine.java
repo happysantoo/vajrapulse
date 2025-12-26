@@ -4,8 +4,10 @@ import com.vajrapulse.api.pattern.LoadPattern;
 import com.vajrapulse.api.task.PlatformThreads;
 import com.vajrapulse.api.task.TaskLifecycle;
 import com.vajrapulse.api.task.VirtualThreads;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
 import com.vajrapulse.core.config.ConfigLoader;
 import com.vajrapulse.core.config.VajraPulseConfig;
+import com.vajrapulse.core.metrics.EngineMetricsRegistrar;
 import com.vajrapulse.core.metrics.MetricsCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -393,11 +395,17 @@ public final class ExecutionEngine implements AutoCloseable {
      * @throws Exception if execution fails
      */
     private void executeLoadTest() throws Exception {
+        // TaskExecutor is a simple wrapper that provides instrumentation and metrics capture.
+        // It's created directly here rather than injected because:
+        // 1. It's tightly coupled to the task lifecycle (one TaskExecutor per task)
+        // 2. It has no dependencies beyond the TaskLifecycle itself
+        // 3. It's a lightweight utility class, not a service requiring DI
+        // 4. This pattern is consistent throughout the codebase
         TaskExecutor taskExecutor = new TaskExecutor(taskLifecycle);
         RateController rateController = new RateController(loadPattern);
         
         // Register rate controller accuracy metrics
-        com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerRateControllerMetrics(
+        EngineMetricsRegistrar.registerRateControllerMetrics(
             rateController, loadPattern, metricsCollector.getRegistry(), runId);
         
         long testDurationMillis = loadPattern.getDuration().toMillis();
@@ -455,11 +463,11 @@ public final class ExecutionEngine implements AutoCloseable {
      */
     private void registerMetrics(Class<?> taskClass, io.micrometer.core.instrument.MeterRegistry registry, String runId) {
         // Register executor metrics
-        com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerExecutorMetrics(
+        EngineMetricsRegistrar.registerExecutorMetrics(
             executor, taskClass, registry, runId);
         
         // Register engine health metrics
-        var healthMetrics = com.vajrapulse.core.metrics.EngineMetricsRegistrar.registerHealthMetrics(
+        var healthMetrics = EngineMetricsRegistrar.registerHealthMetrics(
             registry,
             runId,
             () -> engineState.getValue(),
@@ -478,7 +486,7 @@ public final class ExecutionEngine implements AutoCloseable {
         // - AdaptivePatternMetrics is in core module (depends on Micrometer)
         // - Cannot use polymorphism without breaking module boundaries
         // This instanceof check is isolated and acceptable.
-        if (loadPattern instanceof com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern adaptivePattern) {
+        if (loadPattern instanceof AdaptiveLoadPattern adaptivePattern) {
             AdaptivePatternMetrics.register(adaptivePattern, registry, runId);
         }
     }
@@ -587,7 +595,7 @@ public final class ExecutionEngine implements AutoCloseable {
         // Unregister adaptive pattern metrics to prevent memory leaks
         // Use instanceof here as unregister() is a static method in core module
         // and we need to identify AdaptiveLoadPattern instances for cleanup
-        if (loadPattern instanceof com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern adaptivePattern) {
+        if (loadPattern instanceof AdaptiveLoadPattern adaptivePattern) {
             AdaptivePatternMetrics.unregister(adaptivePattern);
         }
         

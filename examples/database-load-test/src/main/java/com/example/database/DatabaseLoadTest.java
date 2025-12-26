@@ -58,14 +58,16 @@ public class DatabaseLoadTest implements TaskLifecycle {
     private void initializeDatabase() throws SQLException {
         try (Connection conn = dataSource.getConnection()) {
             // Create users table
-            conn.createStatement().execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id INT PRIMARY KEY,
-                    name VARCHAR(100),
-                    email VARCHAR(100),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-                """);
+            try (var stmt = conn.createStatement()) {
+                stmt.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id INT PRIMARY KEY,
+                        name VARCHAR(100),
+                        email VARCHAR(100),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """);
+            }
             
             // Insert initial test data
             try (PreparedStatement stmt = conn.prepareStatement(
@@ -169,7 +171,9 @@ public class DatabaseLoadTest implements TaskLifecycle {
     public void teardown() throws Exception {
         // Clean up test data (optional)
         try (Connection conn = dataSource.getConnection()) {
-            conn.createStatement().execute("DROP TABLE IF EXISTS users");
+            try (var stmt = conn.createStatement()) {
+                stmt.execute("DROP TABLE IF EXISTS users");
+            }
             System.out.println("DatabaseLoadTest teardown completed - tables dropped");
         }
         
