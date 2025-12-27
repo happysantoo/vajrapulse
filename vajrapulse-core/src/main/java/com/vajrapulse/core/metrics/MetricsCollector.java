@@ -394,6 +394,10 @@ public final class MetricsCollector implements AutoCloseable {
         }
 
         long currentQueueSize = queueSizeHolder.get();
+        
+        // Calculate statistical summaries from snapshots
+        LatencyStats successStats = calculateStats(successSnapshot, successCount);
+        LatencyStats failureStats = calculateStats(failureSnapshot, failureCount);
 
         return new AggregatedMetrics(
             totalCount,
@@ -403,8 +407,115 @@ public final class MetricsCollector implements AutoCloseable {
             failureMap,
             elapsedMillis,
             currentQueueSize,
-            queueWaitMap
+            queueWaitMap,
+            successStats,
+            failureStats
         );
+    }
+    
+    /**
+     * Calculates statistical summary from a histogram snapshot.
+     * 
+     * @param snapshot the histogram snapshot
+     * @param count the number of samples
+     * @return latency statistics, or null if no data
+     */
+    private LatencyStats calculateStats(io.micrometer.core.instrument.distribution.HistogramSnapshot snapshot, long count) {
+        if (count == 0) {
+            return null;
+        }
+        
+        // Get mean from snapshot (Micrometer provides this)
+        double meanNanos = snapshot.mean(TimeUnit.NANOSECONDS);
+        
+        // Get max from snapshot
+        double maxNanos = snapshot.max(TimeUnit.NANOSECONDS);
+        
+        // Estimate min from P0 or use a reasonable approximation
+        // Micrometer doesn't directly provide min, so we use P0 or estimate
+        double minNanos = 0.0;
+        var percentileValues = snapshot.percentileValues();
+        if (percentileValues.length > 0) {
+            // Use the smallest percentile as an approximation for min
+            double smallestPercentileValue = Double.MAX_VALUE;
+            for (var pv : percentileValues) {
+                double value = pv.value(TimeUnit.NANOSECONDS);
+                if (value > 0 && value < smallestPercentileValue) {
+                    smallestPercentileValue = value;
+                }
+            }
+            if (smallestPercentileValue < Double.MAX_VALUE) {
+                minNanos = smallestPercentileValue;
+            }
+        }
+        
+        // Calculate standard deviation
+        // Micrometer doesn't provide stddev directly, so we estimate from percentiles
+        // Using the empirical rule: ~68% of data falls within 1 stddev of mean
+        // P84 - P50 ≈ 1 stddev (for normal distribution)
+        double stdDevNanos = estimateStdDev(snapshot, meanNanos);
+        
+        return new LatencyStats(meanNanos, stdDevNanos, minNanos, maxNanos, count);
+    }
+    
+    /**
+     * Estimates standard deviation from histogram percentiles.
+     * 
+     * <p>Uses the empirical rule: for a normal distribution, approximately 68%
+     * of data falls within 1 standard deviation of the mean. This means:
+     * <ul>
+     *   <li>P84 - P50 ≈ 1 stddev (upper half)</li>
+     *   <li>P50 - P16 ≈ 1 stddev (lower half)</li>
+     * </ul>
+     * 
+     * <p>We use the average of both estimates for a more robust approximation.
+     * 
+     * @param snapshot the histogram snapshot
+     * @param meanNanos the mean value in nanoseconds
+     * @return estimated standard deviation in nanoseconds
+     */
+    private double estimateStdDev(io.micrometer.core.instrument.distribution.HistogramSnapshot snapshot, double meanNanos) {
+        var percentileValues = snapshot.percentileValues();
+        if (percentileValues.length < 2) {
+            return 0.0;
+        }
+        
+        // Find P50, P16, and P84 (or closest available)
+        double p50 = Double.NaN;
+        double p16 = Double.NaN;
+        double p84 = Double.NaN;
+        
+        for (var pv : percentileValues) {
+            double p = pv.percentile();
+            double value = pv.value(TimeUnit.NANOSECONDS);
+            
+            if (Math.abs(p - 0.50) < 0.01) {
+                p50 = value;
+            } else if (Math.abs(p - 0.16) < 0.05) {
+                p16 = value;
+            } else if (Math.abs(p - 0.84) < 0.05) {
+                p84 = value;
+            }
+        }
+        
+        // If we have P50 and P84, estimate upper stddev
+        if (!Double.isNaN(p50) && !Double.isNaN(p84)) {
+            return p84 - p50;
+        }
+        
+        // If we have P50 and P16, estimate lower stddev
+        if (!Double.isNaN(p50) && !Double.isNaN(p16)) {
+            return p50 - p16;
+        }
+        
+        // Fallback: use (max - mean) / 3 as a rough estimate
+        // (assuming max is approximately at 3 stddev from mean)
+        double maxNanos = snapshot.max(TimeUnit.NANOSECONDS);
+        if (maxNanos > meanNanos) {
+            return (maxNanos - meanNanos) / 3.0;
+        }
+        
+        return 0.0;
     }
 
     /**

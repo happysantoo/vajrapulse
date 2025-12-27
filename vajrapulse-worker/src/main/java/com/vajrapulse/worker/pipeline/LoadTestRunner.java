@@ -1,5 +1,7 @@
 package com.vajrapulse.worker.pipeline;
 
+import com.vajrapulse.api.metrics.RunContext;
+import com.vajrapulse.api.metrics.SystemInfo;
 import com.vajrapulse.api.pattern.LoadPattern;
 import com.vajrapulse.api.metrics.MetricsProvider;
 import com.vajrapulse.api.task.TaskLifecycle;
@@ -13,8 +15,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * High-level convenience runner for executing load tests with metrics collection,
@@ -32,6 +37,8 @@ import java.util.List;
  *     runner.run(task, loadPattern);
  * } // Automatic final export and cleanup
  * }</pre>
+ * 
+ * @since 0.9.0
  */
 public final class LoadTestRunner implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(LoadTestRunner.class);
@@ -40,12 +47,19 @@ public final class LoadTestRunner implements AutoCloseable {
     private final List<MetricsExporter> exporters;
     private final Duration periodicInterval;
     private final boolean fireImmediateLive;
+    private final String runId;
 
-    private LoadTestRunner(MetricsCollector collector, List<MetricsExporter> exporters, Duration periodicInterval, boolean fireImmediateLive) {
+    private LoadTestRunner(MetricsCollector collector, List<MetricsExporter> exporters, 
+                          Duration periodicInterval, boolean fireImmediateLive, String runId) {
         this.collector = collector;
         this.exporters = exporters;
         this.periodicInterval = periodicInterval;
         this.fireImmediateLive = fireImmediateLive;
+        this.runId = runId != null ? runId : (collector.getRunId() != null ? collector.getRunId() : generateRunId());
+    }
+    
+    private static String generateRunId() {
+        return java.util.UUID.randomUUID().toString().substring(0, 8);
     }
 
     public static Builder builder() { return new Builder(); }
@@ -80,6 +94,8 @@ public final class LoadTestRunner implements AutoCloseable {
 
     /** Executes the task under the provided load pattern returning final aggregated metrics. */
     public AggregatedMetrics run(TaskLifecycle task, LoadPattern loadPattern) throws Exception {
+        Instant startTime = Instant.now();
+        
         PeriodicMetricsReporter reporter = null;
         if (periodicInterval != null && !exporters.isEmpty()) {
             reporter = new PeriodicMetricsReporter(collector, exporters.get(0), periodicInterval, fireImmediateLive);
@@ -103,15 +119,115 @@ public final class LoadTestRunner implements AutoCloseable {
             }
         }
 
-        // Export final metrics to all exporters
+        Instant endTime = Instant.now();
+        
+        // Create RunContext with metadata
+        RunContext context = createRunContext(task, loadPattern, startTime, endTime);
+
+        // Export final metrics to all exporters with context
         for (MetricsExporter exporter : exporters) {
             try {
-                exporter.export("Final Results", finalSnapshot);
+                exporter.export("Final Results", finalSnapshot, context);
             } catch (Exception e) {
                 logger.error("Exporter {} failed during final export", exporter.getClass().getSimpleName(), e);
             }
         }
         return finalSnapshot;
+    }
+    
+    /**
+     * Creates a RunContext with metadata about the test run.
+     * 
+     * @param task the task that was executed
+     * @param loadPattern the load pattern used
+     * @param startTime when the test started
+     * @param endTime when the test ended
+     * @return a RunContext with all available metadata
+     */
+    private RunContext createRunContext(TaskLifecycle task, LoadPattern loadPattern, 
+                                        Instant startTime, Instant endTime) {
+        Map<String, Object> configuration = new LinkedHashMap<>();
+        
+        // Add load pattern configuration
+        configuration.put("duration", loadPattern.getDuration().toString());
+        
+        // Add pattern-specific configuration based on type
+        addPatternConfiguration(loadPattern, configuration);
+        
+        return RunContext.of(
+            runId,
+            startTime,
+            endTime,
+            task.getClass().getSimpleName(),
+            loadPattern.getClass().getSimpleName(),
+            configuration,
+            SystemInfo.current()
+        );
+    }
+    
+    /**
+     * Adds pattern-specific configuration to the map.
+     * 
+     * <p>Uses reflection to extract pattern-specific configuration values.
+     * Silently ignores any reflection errors since configuration extraction
+     * is optional and should not affect test execution.
+     * 
+     * @param loadPattern the load pattern
+     * @param configuration the configuration map to populate
+     */
+    @SuppressWarnings("PMD.EmptyCatchBlock")
+    private void addPatternConfiguration(LoadPattern loadPattern, Map<String, Object> configuration) {
+        // Use reflection to extract pattern-specific configuration
+        String patternType = loadPattern.getClass().getSimpleName();
+        
+        switch (patternType) {
+            case "StaticLoad" -> extractStaticLoadConfig(loadPattern, configuration);
+            case "RampUpLoad", "RampSustainLoad" -> extractRampLoadConfig(loadPattern, configuration);
+            case "AdaptiveLoadPattern" -> extractAdaptiveLoadConfig(loadPattern, configuration);
+            default -> {
+                // For unknown patterns, just use the type name
+            }
+        }
+    }
+    
+    @SuppressWarnings("PMD.EmptyCatchBlock")
+    private void extractStaticLoadConfig(LoadPattern loadPattern, Map<String, Object> configuration) {
+        try {
+            var tpsMethod = loadPattern.getClass().getMethod("tps");
+            configuration.put("tps", tpsMethod.invoke(loadPattern));
+        } catch (NoSuchMethodException | IllegalAccessException | java.lang.reflect.InvocationTargetException e) {
+            // Ignore if method doesn't exist or fails - configuration is optional
+        }
+    }
+    
+    @SuppressWarnings("PMD.EmptyCatchBlock")
+    private void extractRampLoadConfig(LoadPattern loadPattern, Map<String, Object> configuration) {
+        try {
+            var startTpsMethod = loadPattern.getClass().getMethod("startTps");
+            var endTpsMethod = loadPattern.getClass().getMethod("endTps");
+            configuration.put("startTps", startTpsMethod.invoke(loadPattern));
+            configuration.put("endTps", endTpsMethod.invoke(loadPattern));
+        } catch (NoSuchMethodException | IllegalAccessException | java.lang.reflect.InvocationTargetException e) {
+            // Ignore if methods don't exist or fail - configuration is optional
+        }
+    }
+    
+    @SuppressWarnings("PMD.EmptyCatchBlock")
+    private void extractAdaptiveLoadConfig(LoadPattern loadPattern, Map<String, Object> configuration) {
+        try {
+            var configMethod = loadPattern.getClass().getMethod("getConfig");
+            var config = configMethod.invoke(loadPattern);
+            if (config != null) {
+                var initialTpsMethod = config.getClass().getMethod("initialTps");
+                var maxTpsMethod = config.getClass().getMethod("maxTps");
+                var minTpsMethod = config.getClass().getMethod("minTps");
+                configuration.put("initialTps", initialTpsMethod.invoke(config));
+                configuration.put("maxTps", maxTpsMethod.invoke(config));
+                configuration.put("minTps", minTpsMethod.invoke(config));
+            }
+        } catch (NoSuchMethodException | IllegalAccessException | java.lang.reflect.InvocationTargetException e) {
+            // Ignore if methods don't exist or fail - configuration is optional
+        }
     }
 
     /**
@@ -192,23 +308,25 @@ public final class LoadTestRunner implements AutoCloseable {
                 throw new IllegalStateException("withCollector cannot be combined with withPercentiles/withSloBuckets");
             }
             MetricsCollector effectiveCollector = collector;
+            String effectiveRunId = runId;
+            
             if (effectiveCollector == null) {
                 if ((sloBuckets != null && sloBuckets.length > 0) || percentiles != null) {
                     double[] pts = (percentiles != null) ? percentiles : new double[]{0.50, 0.95, 0.99};
-                    if (runId != null && !runId.isBlank()) {
-                        effectiveCollector = MetricsCollector.createWithRunId(runId, pts, sloBuckets == null ? new java.time.Duration[]{} : sloBuckets);
+                    if (effectiveRunId != null && !effectiveRunId.isBlank()) {
+                        effectiveCollector = MetricsCollector.createWithRunId(effectiveRunId, pts, sloBuckets == null ? new java.time.Duration[]{} : sloBuckets);
                     } else {
                         effectiveCollector = MetricsCollector.createWith(pts, sloBuckets == null ? new java.time.Duration[]{} : sloBuckets);
                     }
                 } else {
-                    if (runId != null && !runId.isBlank()) {
-                        effectiveCollector = MetricsCollector.createWithRunId(runId, new double[]{0.50, 0.95, 0.99});
+                    if (effectiveRunId != null && !effectiveRunId.isBlank()) {
+                        effectiveCollector = MetricsCollector.createWithRunId(effectiveRunId, new double[]{0.50, 0.95, 0.99});
                     } else {
                         effectiveCollector = new MetricsCollector();
                     }
                 }
             }
-            return new LoadTestRunner(effectiveCollector, List.copyOf(exporters), periodicInterval, fireImmediateLive);
+            return new LoadTestRunner(effectiveCollector, List.copyOf(exporters), periodicInterval, fireImmediateLive, effectiveRunId);
         }
     }
 }

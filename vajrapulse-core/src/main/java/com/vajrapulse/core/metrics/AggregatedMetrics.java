@@ -20,6 +20,8 @@ import java.util.Collections;
  * @param elapsedMillis time elapsed since metrics collection started
  * @param queueSize current number of pending executions in queue
  * @param queueWaitPercentiles map of percentile→wait time nanos for queue wait
+ * @param successStats statistical summary for successful executions (may be null)
+ * @param failureStats statistical summary for failed executions (may be null)
  * @since 0.9.7
  */
 public record AggregatedMetrics(
@@ -30,12 +32,15 @@ public record AggregatedMetrics(
     java.util.Map<Double, Double> failurePercentiles,
     long elapsedMillis,
     long queueSize,
-    java.util.Map<Double, Double> queueWaitPercentiles
+    java.util.Map<Double, Double> queueWaitPercentiles,
+    LatencyStats successStats,
+    LatencyStats failureStats
 ) implements Metrics {
     /**
      * Percentage multiplier for rate calculations (100.0 = 100%).
      */
     private static final double PERCENTAGE_MULTIPLIER = 100.0;
+    
     /**
      * Compact constructor that creates defensive copies of mutable collections.
      */
@@ -50,6 +55,33 @@ public record AggregatedMetrics(
         queueWaitPercentiles = queueWaitPercentiles != null
             ? Collections.unmodifiableMap(new java.util.LinkedHashMap<>(queueWaitPercentiles))
             : Collections.emptyMap();
+    }
+    
+    /**
+     * Backward-compatible constructor without statistical summary.
+     * 
+     * @param totalExecutions total number of executions
+     * @param successCount number of successful executions
+     * @param failureCount number of failed executions
+     * @param successPercentiles map of percentile→latency nanos for successes
+     * @param failurePercentiles map of percentile→latency nanos for failures
+     * @param elapsedMillis time elapsed since metrics collection started
+     * @param queueSize current number of pending executions in queue
+     * @param queueWaitPercentiles map of percentile→wait time nanos for queue wait
+     */
+    public AggregatedMetrics(
+        long totalExecutions,
+        long successCount,
+        long failureCount,
+        java.util.Map<Double, Double> successPercentiles,
+        java.util.Map<Double, Double> failurePercentiles,
+        long elapsedMillis,
+        long queueSize,
+        java.util.Map<Double, Double> queueWaitPercentiles
+    ) {
+        this(totalExecutions, successCount, failureCount, successPercentiles, 
+             failurePercentiles, elapsedMillis, queueSize, queueWaitPercentiles, 
+             null, null);
     }
     
     /**
@@ -101,5 +133,59 @@ public record AggregatedMetrics(
      */
     public double failureTps() {
         return TpsCalculator.calculateActualTps(failureCount, elapsedMillis);
+    }
+    
+    /**
+     * Returns the mean success latency in nanoseconds.
+     * 
+     * @return mean success latency, or 0.0 if no statistics available
+     */
+    public double meanSuccessLatencyNanos() {
+        return successStats != null ? successStats.mean() : 0.0;
+    }
+    
+    /**
+     * Returns the mean failure latency in nanoseconds.
+     * 
+     * @return mean failure latency, or 0.0 if no statistics available
+     */
+    public double meanFailureLatencyNanos() {
+        return failureStats != null ? failureStats.mean() : 0.0;
+    }
+    
+    /**
+     * Returns the minimum success latency in nanoseconds.
+     * 
+     * @return minimum success latency, or 0.0 if no statistics available
+     */
+    public double minSuccessLatencyNanos() {
+        return successStats != null ? successStats.min() : 0.0;
+    }
+    
+    /**
+     * Returns the maximum success latency in nanoseconds.
+     * 
+     * @return maximum success latency, or 0.0 if no statistics available
+     */
+    public double maxSuccessLatencyNanos() {
+        return successStats != null ? successStats.max() : 0.0;
+    }
+    
+    /**
+     * Returns the standard deviation of success latency in nanoseconds.
+     * 
+     * @return standard deviation of success latency, or 0.0 if no statistics available
+     */
+    public double stdDevSuccessLatencyNanos() {
+        return successStats != null ? successStats.stdDev() : 0.0;
+    }
+    
+    /**
+     * Checks if statistical summary is available.
+     * 
+     * @return true if statistics are available, false otherwise
+     */
+    public boolean hasStatistics() {
+        return successStats != null || failureStats != null;
     }
 }

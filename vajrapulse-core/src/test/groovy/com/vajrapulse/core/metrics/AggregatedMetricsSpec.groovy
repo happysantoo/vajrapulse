@@ -151,4 +151,104 @@ class AggregatedMetricsSpec extends Specification {
         successRate == 95.0
         failureRate == 5.0
     }
+    
+    // New tests for statistical summary
+    
+    def "should include statistical summary when provided"() {
+        given: "metrics with statistical summary"
+        def successStats = new LatencyStats(10_000_000.0, 2_000_000.0, 1_000_000.0, 50_000_000.0, 950L)
+        def failureStats = new LatencyStats(100_000_000.0, 20_000_000.0, 50_000_000.0, 200_000_000.0, 50L)
+        
+        when: "creating metrics with stats"
+        def metrics = new AggregatedMetrics(
+            1000L,
+            950L,
+            50L,
+            [:] as Map<Double, Double>,
+            [:] as Map<Double, Double>,
+            1000L,
+            0L,
+            [:] as Map<Double, Double>,
+            successStats,
+            failureStats
+        )
+        
+        then: "statistics are accessible"
+        metrics.hasStatistics()
+        metrics.successStats() == successStats
+        metrics.failureStats() == failureStats
+        metrics.meanSuccessLatencyNanos() == 10_000_000.0
+        metrics.meanFailureLatencyNanos() == 100_000_000.0
+        metrics.minSuccessLatencyNanos() == 1_000_000.0
+        metrics.maxSuccessLatencyNanos() == 50_000_000.0
+        metrics.stdDevSuccessLatencyNanos() == 2_000_000.0
+    }
+    
+    def "should handle null statistics gracefully"() {
+        given: "metrics without statistical summary (using old constructor)"
+        def metrics = new AggregatedMetrics(
+            1000L,
+            950L,
+            50L,
+            [:] as Map<Double, Double>,
+            [:] as Map<Double, Double>,
+            1000L,
+            0L,
+            [:] as Map<Double, Double>
+        )
+        
+        expect: "statistics methods return defaults"
+        !metrics.hasStatistics()
+        metrics.successStats() == null
+        metrics.failureStats() == null
+        metrics.meanSuccessLatencyNanos() == 0.0
+        metrics.meanFailureLatencyNanos() == 0.0
+        metrics.minSuccessLatencyNanos() == 0.0
+        metrics.maxSuccessLatencyNanos() == 0.0
+        metrics.stdDevSuccessLatencyNanos() == 0.0
+    }
+    
+    def "should report hasStatistics true when only success stats present"() {
+        given: "metrics with only success stats"
+        def successStats = new LatencyStats(10_000_000.0, 2_000_000.0, 1_000_000.0, 50_000_000.0, 950L)
+        
+        when: "creating metrics with only success stats"
+        def metrics = new AggregatedMetrics(
+            1000L,
+            950L,
+            50L,
+            [:] as Map<Double, Double>,
+            [:] as Map<Double, Double>,
+            1000L,
+            0L,
+            [:] as Map<Double, Double>,
+            successStats,
+            null
+        )
+        
+        then: "hasStatistics returns true"
+        metrics.hasStatistics()
+        metrics.successStats() != null
+        metrics.failureStats() == null
+    }
+    
+    def "should create immutable percentile maps"() {
+        given: "mutable percentile maps"
+        def successPercentiles = new HashMap<Double, Double>()
+        successPercentiles.put(0.50, 10_000_000.0)
+        
+        when: "creating metrics and modifying original"
+        def metrics = new AggregatedMetrics(
+            1000L, 950L, 50L,
+            successPercentiles,
+            [:] as Map<Double, Double>,
+            1000L, 0L,
+            [:] as Map<Double, Double>
+        )
+        successPercentiles.put(0.95, 50_000_000.0)
+        
+        then: "metrics percentiles are not affected"
+        metrics.successPercentiles().size() == 1
+        !metrics.successPercentiles().containsKey(0.95)
+    }
 }

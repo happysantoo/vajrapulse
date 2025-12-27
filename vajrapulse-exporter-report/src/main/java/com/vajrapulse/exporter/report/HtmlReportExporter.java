@@ -1,6 +1,8 @@
 package com.vajrapulse.exporter.report;
 
+import com.vajrapulse.api.metrics.RunContext;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
+import com.vajrapulse.core.metrics.LatencyStats;
 import com.vajrapulse.core.metrics.MetricsExporter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
@@ -18,7 +20,8 @@ import java.util.stream.Collectors;
  * HTML report exporter with charts and visualizations.
  * 
  * <p>Generates beautiful HTML reports with interactive charts using Chart.js.
- * Reports include summary tables, percentile graphs, and run metadata.
+ * Reports include summary tables, percentile graphs, run metadata, and statistical
+ * summaries.
  * 
  * <p>Example usage:
  * <pre>{@code
@@ -27,6 +30,8 @@ import java.util.stream.Collectors;
  *     .build()
  *     .run(task, loadPattern);
  * }</pre>
+ * 
+ * @since 0.9.0
  */
 public final class HtmlReportExporter implements MetricsExporter {
     private static final Logger logger = LoggerFactory.getLogger(HtmlReportExporter.class);
@@ -56,8 +61,13 @@ public final class HtmlReportExporter implements MetricsExporter {
     
     @Override
     public void export(String title, AggregatedMetrics metrics) {
+        export(title, metrics, RunContext.empty());
+    }
+    
+    @Override
+    public void export(String title, AggregatedMetrics metrics, RunContext context) {
         try {
-            String html = generateHtml(title, metrics);
+            String html = generateHtml(title, metrics, context);
             
             // Create parent directories if needed
             var parent = outputPath.getParent();
@@ -73,7 +83,7 @@ public final class HtmlReportExporter implements MetricsExporter {
         }
     }
     
-    private String generateHtml(String title, AggregatedMetrics metrics) {
+    private String generateHtml(String title, AggregatedMetrics metrics, RunContext context) {
         StringBuilder html = new StringBuilder();
         
         html.append("<!DOCTYPE html>\n");
@@ -92,10 +102,9 @@ public final class HtmlReportExporter implements MetricsExporter {
         // Header
         html.append("  <div class=\"container\">\n");
         html.append("    <h1>").append(escapeHtml(title)).append("</h1>\n");
-        html.append("    <div class=\"metadata\">\n");
-        html.append("      <p><strong>Generated:</strong> ").append(Instant.now().toString()).append("</p>\n");
-        html.append("      <p><strong>Elapsed Time:</strong> ").append(formatDuration(metrics.elapsedMillis())).append("</p>\n");
-        html.append("    </div>\n");
+        
+        // Run Metadata Section
+        html.append(generateRunMetadataSection(metrics, context));
         
         // Adaptive Pattern Section (if available)
         if (registry != null) {
@@ -121,6 +130,11 @@ public final class HtmlReportExporter implements MetricsExporter {
         html.append("        <p class=\"value\">").append(String.format("%.2f%%", metrics.failureRate())).append("</p>\n");
         html.append("      </div>\n");
         html.append("    </div>\n");
+        
+        // Statistical Summary Section (if available)
+        if (metrics.hasStatistics()) {
+            html.append(generateStatisticalSummarySection(metrics));
+        }
         
         // Detailed Metrics Table
         html.append("    <div class=\"section\">\n");
@@ -170,6 +184,130 @@ public final class HtmlReportExporter implements MetricsExporter {
         
         html.append("</body>\n");
         html.append("</html>\n");
+        
+        return html.toString();
+    }
+    
+    private String generateRunMetadataSection(AggregatedMetrics metrics, RunContext context) {
+        StringBuilder html = new StringBuilder();
+        
+        html.append("    <div class=\"metadata-section\">\n");
+        html.append("      <div class=\"metadata-grid\">\n");
+        
+        // Run ID
+        if (context != null && !"unknown".equals(context.runId())) {
+            html.append("        <div class=\"metadata-item\">\n");
+            html.append("          <span class=\"metadata-label\">Run ID:</span>\n");
+            html.append("          <span class=\"metadata-value run-id\">").append(escapeHtml(context.runId())).append("</span>\n");
+            html.append("        </div>\n");
+        }
+        
+        // Task Class
+        if (context != null && !"unknown".equals(context.taskClass())) {
+            html.append("        <div class=\"metadata-item\">\n");
+            html.append("          <span class=\"metadata-label\">Task:</span>\n");
+            html.append("          <span class=\"metadata-value\">").append(escapeHtml(context.taskClass())).append("</span>\n");
+            html.append("        </div>\n");
+        }
+        
+        // Load Pattern
+        if (context != null && !"unknown".equals(context.loadPatternType())) {
+            html.append("        <div class=\"metadata-item\">\n");
+            html.append("          <span class=\"metadata-label\">Pattern:</span>\n");
+            html.append("          <span class=\"metadata-value\">").append(escapeHtml(context.loadPatternType())).append("</span>\n");
+            html.append("        </div>\n");
+        }
+        
+        // Start Time
+        if (context != null && context.startTime() != null && !context.startTime().equals(Instant.EPOCH)) {
+            html.append("        <div class=\"metadata-item\">\n");
+            html.append("          <span class=\"metadata-label\">Start Time:</span>\n");
+            html.append("          <span class=\"metadata-value\">").append(context.startTime().toString()).append("</span>\n");
+            html.append("        </div>\n");
+        }
+        
+        // End Time / Generated
+        html.append("        <div class=\"metadata-item\">\n");
+        html.append("          <span class=\"metadata-label\">Generated:</span>\n");
+        html.append("          <span class=\"metadata-value\">").append(Instant.now().toString()).append("</span>\n");
+        html.append("        </div>\n");
+        
+        // Duration
+        html.append("        <div class=\"metadata-item\">\n");
+        html.append("          <span class=\"metadata-label\">Duration:</span>\n");
+        html.append("          <span class=\"metadata-value\">").append(formatDuration(metrics.elapsedMillis())).append("</span>\n");
+        html.append("        </div>\n");
+        
+        // System Info
+        if (context != null && context.systemInfo() != null && !"unknown".equals(context.systemInfo().javaVersion())) {
+            html.append("        <div class=\"metadata-item\">\n");
+            html.append("          <span class=\"metadata-label\">Java:</span>\n");
+            html.append("          <span class=\"metadata-value\">").append(escapeHtml(context.systemInfo().javaVersion())).append("</span>\n");
+            html.append("        </div>\n");
+            
+            html.append("        <div class=\"metadata-item\">\n");
+            html.append("          <span class=\"metadata-label\">OS:</span>\n");
+            html.append("          <span class=\"metadata-value\">").append(escapeHtml(context.systemInfo().osName())).append(" ").append(escapeHtml(context.systemInfo().osArch())).append("</span>\n");
+            html.append("        </div>\n");
+            
+            html.append("        <div class=\"metadata-item\">\n");
+            html.append("          <span class=\"metadata-label\">Host:</span>\n");
+            html.append("          <span class=\"metadata-value\">").append(escapeHtml(context.systemInfo().hostname())).append("</span>\n");
+            html.append("        </div>\n");
+            
+            html.append("        <div class=\"metadata-item\">\n");
+            html.append("          <span class=\"metadata-label\">CPUs:</span>\n");
+            html.append("          <span class=\"metadata-value\">").append(context.systemInfo().availableProcessors()).append("</span>\n");
+            html.append("        </div>\n");
+        }
+        
+        html.append("      </div>\n");
+        html.append("    </div>\n");
+        
+        return html.toString();
+    }
+    
+    private String generateStatisticalSummarySection(AggregatedMetrics metrics) {
+        StringBuilder html = new StringBuilder();
+        
+        html.append("    <div class=\"section stats-section\">\n");
+        html.append("      <h2>Statistical Summary</h2>\n");
+        html.append("      <div class=\"stats-grid\">\n");
+        
+        // Success Statistics
+        LatencyStats successStats = metrics.successStats();
+        if (successStats != null && successStats.hasData()) {
+            html.append("        <div class=\"stats-card success-stats\">\n");
+            html.append("          <h3>Success Latency</h3>\n");
+            html.append("          <table class=\"stats-table\">\n");
+            html.append("            <tr><td>Mean</td><td>").append(String.format("%.2f ms", successStats.meanMillis())).append("</td></tr>\n");
+            html.append("            <tr><td>Std Dev</td><td>").append(String.format("%.2f ms", successStats.stdDevMillis())).append("</td></tr>\n");
+            html.append("            <tr><td>Min</td><td>").append(String.format("%.2f ms", successStats.minMillis())).append("</td></tr>\n");
+            html.append("            <tr><td>Max</td><td>").append(String.format("%.2f ms", successStats.maxMillis())).append("</td></tr>\n");
+            html.append("            <tr><td>CV</td><td>").append(String.format("%.1f%%", successStats.coefficientOfVariation())).append("</td></tr>\n");
+            html.append("            <tr><td>Count</td><td>").append(successStats.count()).append("</td></tr>\n");
+            html.append("          </table>\n");
+            html.append("        </div>\n");
+        }
+        
+        // Failure Statistics
+        LatencyStats failureStats = metrics.failureStats();
+        if (failureStats != null && failureStats.hasData()) {
+            html.append("        <div class=\"stats-card failure-stats\">\n");
+            html.append("          <h3>Failure Latency</h3>\n");
+            html.append("          <table class=\"stats-table\">\n");
+            html.append("            <tr><td>Mean</td><td>").append(String.format("%.2f ms", failureStats.meanMillis())).append("</td></tr>\n");
+            html.append("            <tr><td>Std Dev</td><td>").append(String.format("%.2f ms", failureStats.stdDevMillis())).append("</td></tr>\n");
+            html.append("            <tr><td>Min</td><td>").append(String.format("%.2f ms", failureStats.minMillis())).append("</td></tr>\n");
+            html.append("            <tr><td>Max</td><td>").append(String.format("%.2f ms", failureStats.maxMillis())).append("</td></tr>\n");
+            html.append("            <tr><td>CV</td><td>").append(String.format("%.1f%%", failureStats.coefficientOfVariation())).append("</td></tr>\n");
+            html.append("            <tr><td>Count</td><td>").append(failureStats.count()).append("</td></tr>\n");
+            html.append("          </table>\n");
+            html.append("        </div>\n");
+        }
+        
+        html.append("      </div>\n");
+        html.append("    </div>\n");
         
         return html.toString();
     }
@@ -373,9 +511,34 @@ public final class HtmlReportExporter implements MetricsExporter {
               color: #333;
               margin-top: 0;
             }
-            .metadata {
-              color: #666;
+            .metadata-section {
+              background: #f8f9fa;
+              padding: 15px 20px;
+              border-radius: 6px;
               margin-bottom: 30px;
+              border-left: 4px solid #17a2b8;
+            }
+            .metadata-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+              gap: 10px 20px;
+            }
+            .metadata-item {
+              display: flex;
+              gap: 8px;
+            }
+            .metadata-label {
+              color: #666;
+              font-weight: 500;
+            }
+            .metadata-value {
+              color: #333;
+            }
+            .metadata-value.run-id {
+              font-family: monospace;
+              background: #e9ecef;
+              padding: 2px 6px;
+              border-radius: 3px;
             }
             .summary-grid {
               display: grid;
@@ -408,6 +571,49 @@ public final class HtmlReportExporter implements MetricsExporter {
               color: #333;
               border-bottom: 2px solid #007bff;
               padding-bottom: 10px;
+            }
+            .stats-section {
+              background: #f8f9fa;
+              padding: 20px;
+              border-radius: 6px;
+            }
+            .stats-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+              gap: 20px;
+            }
+            .stats-card {
+              background: white;
+              padding: 15px;
+              border-radius: 6px;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            .stats-card h3 {
+              margin: 0 0 15px 0;
+              font-size: 16px;
+              color: #333;
+            }
+            .success-stats {
+              border-left: 4px solid #28a745;
+            }
+            .failure-stats {
+              border-left: 4px solid #dc3545;
+            }
+            .stats-table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+            .stats-table td {
+              padding: 6px 0;
+              border-bottom: 1px solid #eee;
+            }
+            .stats-table td:first-child {
+              color: #666;
+              width: 100px;
+            }
+            .stats-table td:last-child {
+              text-align: right;
+              font-weight: 500;
             }
             table {
               width: 100%;
@@ -508,4 +714,3 @@ public final class HtmlReportExporter implements MetricsExporter {
         throw new IllegalArgumentException("Cannot convert " + value.getClass() + " to double");
     }
 }
-
