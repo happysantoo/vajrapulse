@@ -1,6 +1,8 @@
 package com.vajrapulse.exporter.console;
 
+import com.vajrapulse.api.metrics.RunContext;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
+import com.vajrapulse.core.metrics.LatencyStats;
 import com.vajrapulse.core.metrics.MetricsExporter;
 
 import java.io.PrintStream;
@@ -10,9 +12,11 @@ import java.io.PrintStream;
  * 
  * <p>This exporter formats metrics as a table showing:
  * <ul>
+ *   <li>Run metadata (runId, task class, pattern type)</li>
  *   <li>Elapsed time and throughput (TPS)</li>
  *   <li>Request counts (total/success/failure) with rates</li>
  *   <li>Response TPS (actual throughput achieved)</li>
+ *   <li>Statistical summary (mean, stddev, min, max)</li>
  *   <li>Latency percentiles (dynamically displays all configured percentiles)</li>
  *   <li>Formatted duration values (ms)</li>
  * </ul>
@@ -22,30 +26,35 @@ import java.io.PrintStream;
  * ========================================
  * Load Test Results
  * ========================================
- * Elapsed Time:        30.5s
+ * Run ID:           abc123
+ * Task:             HttpLoadTest
+ * Pattern:          StaticLoad
+ * Elapsed Time:     30.5s
  * 
  * Requests:
- *   Total:             3050
- *   Successful:        2995 (98.2%)
- *   Failed:            55 (1.8%)
- * 
- * Request TPS:         100.0
+ *   Total:          3050
+ *   Successful:     2995 (98.2%)
+ *   Failed:         55 (1.8%)
  * 
  * Response TPS:
- *   Total:             100.0
- *   Successful:        98.2
- *   Failed:            1.8
+ *   Total:          100.0
+ *   Successful:     98.2
+ *   Failed:         1.8
  * 
- * Success Latency (ms):
- *   P50:  12.5
- *   P95:  45.2
- *   P99:  78.9
+ * Success Latency Statistics:
+ *   Mean:           12.5 ms
+ *   Std Dev:        5.2 ms
+ *   Min:            2.1 ms
+ *   Max:            150.3 ms
  * 
- * Failure Latency (ms):
- *   P50:  150.3
- *   P99:  380.1
+ * Success Latency Percentiles (ms):
+ *   P50:            12.5
+ *   P95:            45.2
+ *   P99:            78.9
  * ========================================
  * </pre>
+ * 
+ * @since 0.9.0
  */
 public final class ConsoleMetricsExporter implements MetricsExporter {
     
@@ -77,7 +86,7 @@ public final class ConsoleMetricsExporter implements MetricsExporter {
         out.println("========================================");
         out.println("Load Test Results");
         out.println("========================================");
-        printMetricsBody(metrics);
+        printMetricsBody(metrics, null);
         out.println("========================================");
         out.println();
     }
@@ -90,16 +99,40 @@ public final class ConsoleMetricsExporter implements MetricsExporter {
      */
     @Override
     public void export(String title, AggregatedMetrics metrics) {
+        export(title, metrics, RunContext.empty());
+    }
+    
+    /**
+     * Exports metrics with a custom title and run context.
+     * 
+     * @param title the title to display
+     * @param metrics the metrics to export
+     * @param context the run context with metadata
+     * @since 0.9.12
+     */
+    @Override
+    public void export(String title, AggregatedMetrics metrics, RunContext context) {
         out.println();
         out.println("========================================");
         out.println(title);
         out.println("========================================");
-        printMetricsBody(metrics);
+        printMetricsBody(metrics, context);
         out.println("========================================");
         out.println();
     }
     
-    private void printMetricsBody(AggregatedMetrics metrics) {
+    private void printMetricsBody(AggregatedMetrics metrics, RunContext context) {
+        // Run metadata (if available)
+        if (context != null && !"unknown".equals(context.runId())) {
+            out.printf("Run ID:              %s%n", context.runId());
+        }
+        if (context != null && !"unknown".equals(context.taskClass())) {
+            out.printf("Task:                %s%n", context.taskClass());
+        }
+        if (context != null && !"unknown".equals(context.loadPatternType())) {
+            out.printf("Pattern:             %s%n", context.loadPatternType());
+        }
+        
         // Elapsed time
         out.printf("Elapsed Time:        %.1fs%n", metrics.elapsedMillis() / 1000.0);
         out.println();
@@ -113,11 +146,6 @@ public final class ConsoleMetricsExporter implements MetricsExporter {
             metrics.failureCount(), metrics.failureRate());
         out.println();
         
-        // Request TPS (target/intended rate)
-        double requestTps = metrics.responseTps();
-        out.printf("Request TPS:         %.1f%n", requestTps);
-        out.println();
-        
         // Response TPS (actual achieved throughput)
         out.println("Response TPS:");
         out.printf("  Total:             %.1f%n", metrics.responseTps());
@@ -125,9 +153,21 @@ public final class ConsoleMetricsExporter implements MetricsExporter {
         out.printf("  Failed:            %.1f%n", metrics.failureTps());
         out.println();
         
+        // Success latency statistics
+        LatencyStats successStats = metrics.successStats();
+        if (successStats != null && successStats.hasData()) {
+            out.println("Success Latency Statistics:");
+            out.printf("  Mean:              %.2f ms%n", successStats.meanMillis());
+            out.printf("  Std Dev:           %.2f ms%n", successStats.stdDevMillis());
+            out.printf("  Min:               %.2f ms%n", successStats.minMillis());
+            out.printf("  Max:               %.2f ms%n", successStats.maxMillis());
+            out.printf("  CV:                %.1f%%%n", successStats.coefficientOfVariation());
+            out.println();
+        }
+        
         // Success latencies - display all configured percentiles
         if (metrics.successCount() > 0 && !metrics.successPercentiles().isEmpty()) {
-            out.println("Success Latency (ms):");
+            out.println("Success Latency Percentiles (ms):");
             metrics.successPercentiles().entrySet().stream()
                 .sorted(java.util.Map.Entry.comparingByKey())
                 .forEach(e -> {
@@ -137,9 +177,21 @@ public final class ConsoleMetricsExporter implements MetricsExporter {
             out.println();
         }
         
+        // Failure latency statistics
+        LatencyStats failureStats = metrics.failureStats();
+        if (failureStats != null && failureStats.hasData()) {
+            out.println("Failure Latency Statistics:");
+            out.printf("  Mean:              %.2f ms%n", failureStats.meanMillis());
+            out.printf("  Std Dev:           %.2f ms%n", failureStats.stdDevMillis());
+            out.printf("  Min:               %.2f ms%n", failureStats.minMillis());
+            out.printf("  Max:               %.2f ms%n", failureStats.maxMillis());
+            out.printf("  CV:                %.1f%%%n", failureStats.coefficientOfVariation());
+            out.println();
+        }
+        
         // Failure latencies - display all configured percentiles
         if (metrics.failureCount() > 0 && !metrics.failurePercentiles().isEmpty()) {
-            out.println("Failure Latency (ms):");
+            out.println("Failure Latency Percentiles (ms):");
             metrics.failurePercentiles().entrySet().stream()
                 .sorted(java.util.Map.Entry.comparingByKey())
                 .forEach(e -> {
@@ -162,7 +214,16 @@ public final class ConsoleMetricsExporter implements MetricsExporter {
                 });
         }
         out.println();
-            }
+        
+        // System info (if available)
+        if (context != null && context.systemInfo() != null && !"unknown".equals(context.systemInfo().javaVersion())) {
+            out.println("System:");
+            out.printf("  Java:              %s%n", context.systemInfo().javaVersion());
+            out.printf("  OS:                %s %s%n", context.systemInfo().osName(), context.systemInfo().osArch());
+            out.printf("  Host:              %s%n", context.systemInfo().hostname());
+            out.printf("  CPUs:              %d%n", context.systemInfo().availableProcessors());
+        }
+    }
     
     private double nanosToMillis(double nanos) {
         return nanos / 1_000_000.0;

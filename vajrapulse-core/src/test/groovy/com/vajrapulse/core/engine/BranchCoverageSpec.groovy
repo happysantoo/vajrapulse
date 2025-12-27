@@ -82,7 +82,7 @@ class BranchCoverageSpec extends Specification {
         def executor = new TaskExecutor(task)
 
         when:
-        def metrics = executor.executeWithMetrics(5)
+        def metrics = executor.executeWithMetrics(5, io.opentelemetry.api.trace.Span.getInvalid(), "test-run")
 
         then:
         metrics.isSuccess()

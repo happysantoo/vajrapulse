@@ -187,6 +187,26 @@ class AdaptiveLoadPatternBuilderSpec extends Specification {
         e.message.contains("Listener must not be null")
     }
     
+    def "should build pattern with initialRampDuration"() {
+        given:
+        def provider = new MockMetricsProvider()
+        
+        when:
+        def pattern = com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern.builder()
+            .initialTps(100.0)
+            .initialRampDuration(Duration.ofSeconds(30))
+            .metricsProvider(provider)
+            .build()
+        
+        then:
+        pattern != null
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_UP
+        // During initial ramp, TPS should be less than initialTps
+        def tps = pattern.calculateTps(5000) // 5s into 30s ramp
+        tps < 100.0
+        tps > 0.0
+    }
+    
     def "should validate config in builder"() {
         given:
         def provider = new MockMetricsProvider()

@@ -3,6 +3,7 @@ package com.vajrapulse.benchmarks;
 import com.vajrapulse.api.task.TaskLifecycle;
 import com.vajrapulse.api.task.TaskResult;
 import com.vajrapulse.core.engine.TaskExecutor;
+import io.opentelemetry.api.trace.Span;
 import org.openjdk.jmh.annotations.*;
 
 import java.util.concurrent.TimeUnit;
@@ -66,7 +67,9 @@ public class TaskExecutorBenchmark {
     
     @Benchmark
     public com.vajrapulse.core.engine.ExecutionMetrics executeWithMetrics() {
-        return taskExecutor.executeWithMetrics(0);
+        // Use invalid span for benchmarks (tracing disabled)
+        // In real usage, ExecutionEngine provides the actual scenario span
+        return taskExecutor.executeWithMetrics(0, Span.getInvalid(), "benchmark-run");
     }
     
     @Benchmark

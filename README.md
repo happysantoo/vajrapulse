@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/happysantoo/vajrapulse/actions/workflows/ci.yml"><img src="https://github.com/happysantoo/vajrapulse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://openjdk.org/projects/jdk/21/"><img src="https://img.shields.io/badge/Java-21-orange.svg" alt="Java 21"></a>
   <a href="https://gradle.org/"><img src="https://img.shields.io/badge/Gradle-9.0-blue.svg" alt="Gradle 9.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-green.svg" alt="Apache License 2.0"></a>
@@ -16,17 +17,20 @@
 
 ---
 
-## 🆕 What's New in 0.9.10
+## 🆕 What's New in 0.9.11
 
-Version 0.9.10 focuses on **code simplification**, **new examples**, **documentation**, and **performance optimizations**:
+Version 0.9.11 is the **final pre-1.0 release**, completing all P0 items for 1.0.0 readiness:
 
-- ✅ **4 new examples** - Database, CPU-bound, gRPC, and multi-exporter examples
-- ✅ **Comprehensive User Guide** - Complete guide for getting started and best practices
-- ✅ **Lock-free optimizations** - Replaced synchronized blocks with lock-free structures
-- ✅ **Performance benchmarks** - JMH benchmarks setup for core components
-- ✅ **Code simplification** - AdaptiveLoadPattern and ExecutionEngine further refined
+- ✅ **ScopedValue migration** - Better virtual thread support, replacing ThreadLocal
+- ✅ **Enhanced tracing** - Proper span hierarchy with trace correlation in logs
+- ✅ **Run metadata persistence** - JSON manifest file for each test run
+- ✅ **CI/CD pipeline** - GitHub Actions with quality gates (coverage, SpotBugs)
+- ✅ **API freeze documentation** - Complete API stability inventory for 1.0
+- ✅ **Quick Start guide** - Get running in under 2 minutes
 
-See [CHANGELOG.md](CHANGELOG.md#0910---2025-12-14) for complete release notes.
+> 🚀 **New to VajraPulse?** Check out the [Quick Start Guide](QUICK_START.md) to run your first load test!
+
+See [CHANGELOG.md](CHANGELOG.md#0911---2024-12-26) for complete release notes.
 
 ---
 

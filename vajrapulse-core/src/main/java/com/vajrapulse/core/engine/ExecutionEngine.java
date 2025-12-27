@@ -7,19 +7,25 @@ import com.vajrapulse.api.task.VirtualThreads;
 import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
 import com.vajrapulse.core.config.ConfigLoader;
 import com.vajrapulse.core.config.VajraPulseConfig;
+import com.vajrapulse.core.logging.StructuredLogger;
 import com.vajrapulse.core.metrics.EngineMetricsRegistrar;
 import com.vajrapulse.core.metrics.MetricsCollector;
+import com.vajrapulse.core.run.RunManifest;
+import com.vajrapulse.core.tracing.Tracing;
+import io.opentelemetry.api.trace.Span;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * Main execution engine for load testing.
@@ -75,9 +81,10 @@ public final class ExecutionEngine implements AutoCloseable {
     private final boolean shutdownHookEnabled;
     private final java.util.concurrent.atomic.AtomicBoolean stopRequested = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean executorShutdown = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private volatile Span scenarioSpan; // Root span for the entire load test scenario
     
-    // Queue depth tracking
-    private final java.util.concurrent.atomic.AtomicLong pendingExecutions = new java.util.concurrent.atomic.AtomicLong(0);
+    // Queue depth tracking - using LongAdder for high-contention counter
+    private final LongAdder pendingExecutions = new LongAdder();
     
     // Engine health tracking
     private final AtomicLong startTimeMillis = new AtomicLong(0);
@@ -140,6 +147,9 @@ public final class ExecutionEngine implements AutoCloseable {
         
         // Register all metrics in one place
         registerMetrics(taskClass, metricsCollector.getRegistry(), runId);
+        
+        // Initialize tracing if enabled
+        Tracing.initIfEnabled(runId);
     }
     
     /**
@@ -434,13 +444,14 @@ public final class ExecutionEngine implements AutoCloseable {
             
             long currentIteration = iteration++;
             long queueStartNanos = System.nanoTime();
-            pendingExecutions.incrementAndGet();
+            pendingExecutions.increment(); // LongAdder for high-contention counter
             
             // Update queue size gauge
-            metricsCollector.updateQueueSize(pendingExecutions.get());
+            metricsCollector.updateQueueSize(pendingExecutions.sum()); // LongAdder sum for read
             
             executor.submit(new ExecutionCallable(
-                taskExecutor, metricsCollector, currentIteration, queueStartNanos, pendingExecutions, shouldRecordMetrics));
+                taskExecutor, metricsCollector, currentIteration, queueStartNanos, pendingExecutions, 
+                shouldRecordMetrics, scenarioSpan, runId));
         }
     }
     
@@ -521,13 +532,36 @@ public final class ExecutionEngine implements AutoCloseable {
         startTimeMillis.set(System.currentTimeMillis());
         lifecycleStartCounter.increment();
         
+        // Create scenario span for tracing (root span for entire load test)
+        if (Tracing.isEnabled()) {
+            scenarioSpan = Tracing.startScenarioSpan(
+                runId,
+                taskLifecycle.getClass().getSimpleName(),
+                loadPattern.getClass().getSimpleName()
+            );
+        } else {
+            scenarioSpan = Span.getInvalid();
+        }
+        
+        // Use structured logging with trace correlation
+        StructuredLogger.logWithRunId(ExecutionEngine.class, "INFO", 
+            "Starting load test", 
+            Map.of("pattern", loadPattern.getClass().getSimpleName(), 
+                   "duration_ms", loadPattern.getDuration().toMillis()),
+            runId);
         logger.info("Starting load test runId={} pattern={} duration={}", runId, loadPattern.getClass().getSimpleName(), loadPattern.getDuration());
         
         // Initialize task
         try {
             taskLifecycle.init();
+            StructuredLogger.logWithRunId(ExecutionEngine.class, "INFO", 
+                "Task initialization completed", Map.of(), runId);
             logger.info("Task initialization completed for runId={}", runId);
         } catch (Exception e) {
+            StructuredLogger.logWithRunId(ExecutionEngine.class, "ERROR", 
+                "Task initialization failed", 
+                Map.of("error", e.getClass().getSimpleName(), "error_message", sanitize(e.getMessage())),
+                runId);
             logger.error("Task initialization failed for runId={}: {}", runId, e.getMessage(), e);
             // Don't call teardown if init failed, but ensure executor is shut down
             executorShutdown.set(true);
@@ -579,14 +613,70 @@ public final class ExecutionEngine implements AutoCloseable {
             // Always call teardown (cleanup resources)
             try {
                 taskLifecycle.teardown();
+                StructuredLogger.logWithRunId(ExecutionEngine.class, "INFO", 
+                    "Task teardown completed", Map.of(), runId);
                 logger.info("Task teardown completed for runId={}", runId);
             } catch (Exception e) {
+                StructuredLogger.logWithRunId(ExecutionEngine.class, "ERROR", 
+                    "Task teardown failed", 
+                    Map.of("error", e.getClass().getSimpleName(), "error_message", sanitize(e.getMessage())),
+                    runId);
                 logger.error("Task teardown failed for runId={}: {}", runId, e.getMessage(), e);
             } finally {
+                // End scenario span
+                if (Tracing.isEnabled() && scenarioSpan != null && scenarioSpan.isRecording()) {
+                    scenarioSpan.end();
+                }
+                
+                // Create and persist run manifest
+                try {
+                    long endTimeMillis = System.currentTimeMillis();
+                    long actualDurationMillis = endTimeMillis - startTimeMillis.get();
+                    Map<String, Object> configMap = new java.util.HashMap<>();
+                    configMap.put("thread_strategy", determineThreadStrategy());
+                    configMap.put("drain_timeout_ms", config.execution().drainTimeout().toMillis());
+                    configMap.put("force_timeout_ms", config.execution().forceTimeout().toMillis());
+                    configMap.put("tracing_enabled", Tracing.isEnabled());
+                    
+                    RunManifest manifest = new RunManifest(
+                        runId,
+                        java.time.Instant.ofEpochMilli(startTimeMillis.get()),
+                        taskLifecycle.getClass().getSimpleName(),
+                        loadPattern.getClass().getSimpleName(),
+                        actualDurationMillis,
+                        configMap
+                    );
+                    
+                    // Write manifest to current directory (can be configured later)
+                    java.nio.file.Path manifestPath = java.nio.file.Paths.get("vajrapulse-run-" + runId + ".json");
+                    manifest.writeToFile(manifestPath);
+                    logger.info("Run manifest written to {}", manifestPath);
+                } catch (Exception e) {
+                    logger.warn("Failed to write run manifest for runId={}: {}", runId, e.getMessage());
+                }
+                
                 // Update engine state to stopped
                 engineState = EngineState.STOPPED;
+                StructuredLogger.logWithSpan(ExecutionEngine.class, "INFO", 
+                    "Run finished", Map.of(), scenarioSpan, runId);
                 logger.info("Run finished runId={}", runId);
             }
+        }
+    }
+    
+    /**
+     * Determines the thread strategy being used.
+     * 
+     * @return thread strategy string
+     */
+    private String determineThreadStrategy() {
+        Class<?> taskClass = taskLifecycle.getClass();
+        if (taskClass.isAnnotationPresent(VirtualThreads.class)) {
+            return "VIRTUAL";
+        } else if (taskClass.isAnnotationPresent(PlatformThreads.class)) {
+            return "PLATFORM";
+        } else {
+            return config.execution().defaultThreadPool().name();
         }
     }
     
@@ -648,7 +738,16 @@ public final class ExecutionEngine implements AutoCloseable {
      * @return the current queue depth
      */
     public long getQueueDepth() {
-        return pendingExecutions.get();
+        return pendingExecutions.sum(); // LongAdder sum for read
     }
     
+    /**
+     * Sanitizes a string for safe logging (handles null).
+     * 
+     * @param s the string to sanitize
+     * @return the sanitized string, or empty string if null
+     */
+    private static String sanitize(String s) {
+        return s == null ? "" : s;
+    }
 }

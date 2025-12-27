@@ -1,10 +1,17 @@
 package com.vajrapulse.exporter.console
 
+import com.vajrapulse.api.metrics.RunContext
+import com.vajrapulse.api.metrics.SystemInfo
 import com.vajrapulse.core.metrics.AggregatedMetrics
+import com.vajrapulse.core.metrics.LatencyStats
 import spock.lang.Specification
+import spock.lang.Timeout
 
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
+import java.time.Instant
+
+@Timeout(10)
 
 class ConsoleMetricsExporterSpec extends Specification {
 
@@ -168,9 +175,8 @@ class ConsoleMetricsExporterSpec extends Specification {
         and: "summary still shown with new format"
         output.contains("Requests:")
         output.contains("Total:             0")
-        output.contains("Request TPS:")
         output.contains("Response TPS:")
-        output.contains("Elapsed Time:        0.0s")
+        output.contains("Elapsed Time:")
     }
     
     def "should show title when provided"() {
@@ -290,5 +296,119 @@ def "should display queue wait percentiles when present"() {
         output.contains("Wait Time (ms):")
         output.contains("P50:")
         output.contains("P95:")
+    }
+    
+    def "should display statistical summary when available"() {
+        given: "metrics with statistical summary"
+        def successStats = new LatencyStats(10_000_000.0d, 2_000_000.0d, 1_000_000.0d, 50_000_000.0d, 950L)
+        def failureStats = new LatencyStats(100_000_000.0d, 20_000_000.0d, 50_000_000.0d, 200_000_000.0d, 50L)
+        
+        def metrics = new AggregatedMetrics(
+            1000L, 950L, 50L,
+            [0.50d: 10_000_000.0d],
+            [0.50d: 100_000_000.0d],
+            1000L, 0L,
+            [:] as Map<Double, Double>,
+            successStats,
+            failureStats
+        )
+        
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream()
+        ConsoleMetricsExporter exporter = new ConsoleMetricsExporter(new PrintStream(outputStream))
+        
+        when: "exporting metrics"
+        exporter.export("Stats Test", metrics)
+        String output = outputStream.toString()
+        
+        then: "success statistics are displayed"
+        output.contains("Success Latency Statistics:")
+        output.contains("Mean:")
+        output.contains("Std Dev:")
+        output.contains("Min:")
+        output.contains("Max:")
+        output.contains("CV:")
+        
+        and: "failure statistics are displayed"
+        output.contains("Failure Latency Statistics:")
+    }
+    
+    def "should not display statistics section when not available"() {
+        given: "metrics without statistics"
+        def metrics = new AggregatedMetrics(
+            100L, 100L, 0L,
+            [0.50d: 10_000_000.0d],
+            [:] as Map<Double, Double>,
+            1000L, 0L,
+            [:] as Map<Double, Double>
+        )
+        
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream()
+        ConsoleMetricsExporter exporter = new ConsoleMetricsExporter(new PrintStream(outputStream))
+        
+        when: "exporting metrics"
+        exporter.export("No Stats Test", metrics)
+        String output = outputStream.toString()
+        
+        then: "no statistics section shown"
+        !output.contains("Statistics:")
+    }
+    
+    def "should display run context metadata when provided"() {
+        given: "metrics and run context"
+        def metrics = new AggregatedMetrics(
+            100L, 95L, 5L,
+            [0.50d: 10_000_000.0d],
+            [:] as Map<Double, Double>,
+            1000L, 0L,
+            [:] as Map<Double, Double>
+        )
+        
+        def context = RunContext.of(
+            "test-run-123",
+            Instant.now(),
+            null,
+            "HttpLoadTest",
+            "StaticLoad",
+            [tps: 100.0],
+            SystemInfo.current()
+        )
+        
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream()
+        ConsoleMetricsExporter exporter = new ConsoleMetricsExporter(new PrintStream(outputStream))
+        
+        when: "exporting with context"
+        exporter.export("Context Test", metrics, context)
+        String output = outputStream.toString()
+        
+        then: "run context metadata is displayed"
+        output.contains("Run ID:")
+        output.contains("test-run-123")
+        output.contains("Task:")
+        output.contains("HttpLoadTest")
+        output.contains("Pattern:")
+        output.contains("StaticLoad")
+        output.contains("System:")
+    }
+    
+    def "should not display unknown context values"() {
+        given: "metrics and empty context"
+        def metrics = new AggregatedMetrics(
+            100L, 95L, 5L,
+            [0.50d: 10_000_000.0d],
+            [:] as Map<Double, Double>,
+            1000L, 0L,
+            [:] as Map<Double, Double>
+        )
+        
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream()
+        ConsoleMetricsExporter exporter = new ConsoleMetricsExporter(new PrintStream(outputStream))
+        
+        when: "exporting with empty context"
+        exporter.export("Empty Context Test", metrics, RunContext.empty())
+        String output = outputStream.toString()
+        
+        then: "unknown values are not displayed"
+        !output.contains("Run ID:")
+        !output.contains("unknown")
     }
 }

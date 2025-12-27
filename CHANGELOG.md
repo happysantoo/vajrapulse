@@ -12,6 +12,74 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 - GraalVM native image validation
 - Scenario scripting DSL
 
+## [0.9.11] - 2024-12-26
+
+### 🎯 Release Highlights
+
+Version 0.9.11 is the **final pre-1.0 release**, focusing on **architecture hardening**, **observability enhancements**, **performance baselines**, and **release process improvements**. This release completes all P0 items required for 1.0.0 readiness.
+
+**Key Improvements**:
+- ✅ **ScopedValue migration** - Replaced ThreadLocal with ScopedValue for virtual thread compatibility
+- ✅ **Enhanced tracing** - Proper span hierarchy with scenario and execution spans
+- ✅ **Structured logging** - Trace correlation with run_id, trace_id, span_id
+- ✅ **Run metadata persistence** - Run manifest JSON file for each test run
+- ✅ **LongAdder optimization** - High-contention counters use LongAdder
+- ✅ **CI/CD pipeline** - GitHub Actions with quality gates
+- ✅ **API freeze documentation** - Complete API stability inventory
+
+### Added
+
+- **Architecture Hardening**:
+  - `ScopedValue` replaces `ThreadLocal` in `MetricsCollector` for better virtual thread support
+  - `LongAdder` replaces `AtomicLong` for high-contention `pendingExecutions` counter
+  - Task lifecycle boundaries formally documented and tested
+  - Graceful shutdown integration tests
+
+- **Observability Enhancements**:
+  - `StructuredLogger` now includes `trace_id`, `span_id`, `run_id` in log entries
+  - `Tracing.startScenarioSpan()` creates root span for test scenarios
+  - `Tracing.startExecutionSpan()` links iteration spans to scenario span
+  - `RunManifest` class for persisting run metadata as JSON
+
+- **CI/CD Pipeline** (`.github/workflows/ci.yml`):
+  - Build and test on push/PR
+  - Code coverage verification (≥90%)
+  - SpotBugs static analysis
+  - Example compilation verification
+
+- **Security**:
+  - Dependabot configuration (`.github/dependabot.yml`)
+  - Security guide (`documents/guides/SECURITY.md`)
+
+- **Documentation**:
+  - API freeze document (`documents/architecture/API_FREEZE_0.9.11.md`)
+  - Versioning strategy (`documents/guides/VERSIONING.md`)
+  - Quick start guide (`QUICK_START.md`)
+  - Migration guide (`documents/guides/MIGRATION_0.9_TO_1.0.md`)
+  - Performance baseline (`documents/analysis/PERFORMANCE_BASELINE.md`)
+  - 1.0.0 release checklist (`documents/releases/RELEASE_1.0.0_CHECKLIST.md`)
+
+- **Tests**:
+  - `TaskLifecycleMetricsBoundarySpec` - Verifies metrics exclude init/teardown
+  - `GracefulShutdownSpec` - Integration tests for shutdown scenarios
+
+### Changed
+
+- **MetricsCollector**: Uses `ScopedValue` instead of `ThreadLocal` for reusable maps
+- **ExecutionEngine**: 
+  - Creates scenario span at test start
+  - Writes run manifest on completion
+  - Uses `LongAdder` for pending execution counter
+- **TaskExecutor**: `executeWithMetrics()` now accepts `Span` and `runId` parameters
+- **ExecutionCallable**: Updated to propagate tracing context
+- **Build**: Preview features enabled for all modules (required for ScopedValue)
+
+### Performance
+
+- **LongAdder**: Reduced contention on pending execution counter
+- **ScopedValue**: Better memory management with virtual threads
+- **Lock-free paths**: Verified no synchronized blocks in hot paths
+
 ## [0.9.10] - 2025-12-14
 
 ### 🎯 Release Highlights

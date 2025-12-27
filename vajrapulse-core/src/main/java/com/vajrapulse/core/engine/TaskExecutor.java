@@ -41,6 +41,7 @@ public final class TaskExecutor {
      * <p>This method:
      * <ol>
      *   <li>Captures start time</li>
+     *   <li>Creates execution span (child of scenario span) for tracing</li>
      *   <li>Calls taskLifecycle.execute(iteration)</li>
      *   <li>Catches any exceptions</li>
      *   <li>Captures end time</li>
@@ -49,15 +50,18 @@ public final class TaskExecutor {
      * </ol>
      * 
      * @param iteration the iteration number (0-based)
+     * @param scenarioSpan the parent scenario span for tracing (may be invalid if tracing disabled)
+     * @param runId the run ID for tracing correlation
      * @return metrics for this execution
      */
-    public ExecutionMetrics executeWithMetrics(long iteration) {
+    public ExecutionMetrics executeWithMetrics(long iteration, Span scenarioSpan, String runId) {
         long startNanos = System.nanoTime();
         TaskResult result;
         Span execSpan = Span.getInvalid();
-        // Parent scenario span not tracked here yet; execution spans stand-alone for now.
+        
+        // Create execution span as child of scenario span
         if (Tracing.isEnabled()) {
-            execSpan = Tracing.startExecutionSpan(null, "unknown", iteration); // runId injected by caller soon
+            execSpan = Tracing.startExecutionSpan(scenarioSpan, runId, iteration);
         }
         
         try {

@@ -1,6 +1,8 @@
 package com.vajrapulse.exporter.report;
 
+import com.vajrapulse.api.metrics.RunContext;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
+import com.vajrapulse.core.metrics.LatencyStats;
 import com.vajrapulse.core.metrics.MetricsExporter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
@@ -17,7 +19,8 @@ import java.util.List;
  * CSV report exporter for spreadsheet analysis.
  * 
  * <p>Exports metrics in CSV format suitable for Excel, LibreOffice, Google Sheets,
- * and other spreadsheet applications.
+ * and other spreadsheet applications. Includes run metadata, statistical summaries,
+ * and system information.
  * 
  * <p>Example usage:
  * <pre>{@code
@@ -26,6 +29,8 @@ import java.util.List;
  *     .build()
  *     .run(task, loadPattern);
  * }</pre>
+ * 
+ * @since 0.9.0
  */
 public final class CsvReportExporter implements MetricsExporter {
     private static final Logger logger = LoggerFactory.getLogger(CsvReportExporter.class);
@@ -55,8 +60,13 @@ public final class CsvReportExporter implements MetricsExporter {
     
     @Override
     public void export(String title, AggregatedMetrics metrics) {
+        export(title, metrics, RunContext.empty());
+    }
+    
+    @Override
+    public void export(String title, AggregatedMetrics metrics, RunContext context) {
         try {
-            List<String> rows = buildCsvRows(title, metrics);
+            List<String> rows = buildCsvRows(title, metrics, context);
             String csv = String.join("\n", rows);
             
             // Create parent directories if needed
@@ -73,7 +83,7 @@ public final class CsvReportExporter implements MetricsExporter {
         }
     }
     
-    private List<String> buildCsvRows(String title, AggregatedMetrics metrics) {
+    private List<String> buildCsvRows(String title, AggregatedMetrics metrics, RunContext context) {
         List<String> rows = new ArrayList<>();
         
         // Header section
@@ -84,7 +94,33 @@ public final class CsvReportExporter implements MetricsExporter {
         rows.add("Title," + escapeCsv(title));
         rows.add("Timestamp," + escapeCsv(Instant.now().toString()));
         rows.add("Elapsed Seconds," + (metrics.elapsedMillis() / 1000.0));
+        
+        // Run Context metadata
+        if (context != null && !"unknown".equals(context.runId())) {
+            rows.add("Run ID," + escapeCsv(context.runId()));
+        }
+        if (context != null && !"unknown".equals(context.taskClass())) {
+            rows.add("Task Class," + escapeCsv(context.taskClass()));
+        }
+        if (context != null && !"unknown".equals(context.loadPatternType())) {
+            rows.add("Load Pattern," + escapeCsv(context.loadPatternType()));
+        }
+        if (context != null && context.startTime() != null && !context.startTime().equals(Instant.EPOCH)) {
+            rows.add("Start Time," + escapeCsv(context.startTime().toString()));
+        }
         rows.add("");
+        
+        // System Info
+        if (context != null && context.systemInfo() != null && !"unknown".equals(context.systemInfo().javaVersion())) {
+            rows.add("System Info,");
+            rows.add("Java Version," + escapeCsv(context.systemInfo().javaVersion()));
+            rows.add("Java Vendor," + escapeCsv(context.systemInfo().javaVendor()));
+            rows.add("OS," + escapeCsv(context.systemInfo().osName() + " " + context.systemInfo().osVersion()));
+            rows.add("Architecture," + escapeCsv(context.systemInfo().osArch()));
+            rows.add("Hostname," + escapeCsv(context.systemInfo().hostname()));
+            rows.add("Available Processors," + context.systemInfo().availableProcessors());
+            rows.add("");
+        }
         
         // Summary
         rows.add("Summary,");
@@ -97,6 +133,33 @@ public final class CsvReportExporter implements MetricsExporter {
         rows.add("Success TPS," + String.format("%.2f", metrics.successTps()));
         rows.add("Failure TPS," + String.format("%.2f", metrics.failureTps()));
         rows.add("");
+        
+        // Statistical Summary
+        if (metrics.hasStatistics()) {
+            LatencyStats successStats = metrics.successStats();
+            if (successStats != null && successStats.hasData()) {
+                rows.add("Success Latency Statistics,");
+                rows.add("Mean (ms)," + String.format("%.2f", successStats.meanMillis()));
+                rows.add("Std Dev (ms)," + String.format("%.2f", successStats.stdDevMillis()));
+                rows.add("Min (ms)," + String.format("%.2f", successStats.minMillis()));
+                rows.add("Max (ms)," + String.format("%.2f", successStats.maxMillis()));
+                rows.add("Coefficient of Variation %," + String.format("%.1f", successStats.coefficientOfVariation()));
+                rows.add("Sample Count," + successStats.count());
+                rows.add("");
+            }
+            
+            LatencyStats failureStats = metrics.failureStats();
+            if (failureStats != null && failureStats.hasData()) {
+                rows.add("Failure Latency Statistics,");
+                rows.add("Mean (ms)," + String.format("%.2f", failureStats.meanMillis()));
+                rows.add("Std Dev (ms)," + String.format("%.2f", failureStats.stdDevMillis()));
+                rows.add("Min (ms)," + String.format("%.2f", failureStats.minMillis()));
+                rows.add("Max (ms)," + String.format("%.2f", failureStats.maxMillis()));
+                rows.add("Coefficient of Variation %," + String.format("%.1f", failureStats.coefficientOfVariation()));
+                rows.add("Sample Count," + failureStats.count());
+                rows.add("");
+            }
+        }
         
         // Queue metrics
         rows.add("Queue,");
@@ -208,4 +271,3 @@ public final class CsvReportExporter implements MetricsExporter {
         throw new IllegalArgumentException("Cannot convert " + value.getClass() + " to double");
     }
 }
-

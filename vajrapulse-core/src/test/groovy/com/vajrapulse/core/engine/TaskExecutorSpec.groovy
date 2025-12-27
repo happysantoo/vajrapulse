@@ -4,6 +4,7 @@ import com.vajrapulse.api.task.TaskLifecycle
 import com.vajrapulse.api.task.TaskResult
 import com.vajrapulse.api.task.TaskResultSuccess
 import com.vajrapulse.api.task.TaskResultFailure
+import io.opentelemetry.api.trace.Span
 import spock.lang.Specification
 import spock.lang.Timeout
 
@@ -27,7 +28,7 @@ class TaskExecutorSpec extends Specification {
         def executor = new TaskExecutor(task)
         
         when: "executing the task"
-        def metrics = executor.executeWithMetrics(0)
+        def metrics = executor.executeWithMetrics(0, Span.getInvalid(), "test-run")
         
         then: "metrics show success"
         metrics.isSuccess()
@@ -56,7 +57,7 @@ class TaskExecutorSpec extends Specification {
         def executor = new TaskExecutor(task)
         
         when: "executing the task"
-        def metrics = executor.executeWithMetrics(0)
+        def metrics = executor.executeWithMetrics(0, Span.getInvalid(), "test-run")
         
         then: "metrics show failure"
         !metrics.isSuccess()
@@ -83,7 +84,7 @@ class TaskExecutorSpec extends Specification {
         def executor = new TaskExecutor(task)
         
         when: "executing the task"
-        def metrics = executor.executeWithMetrics(0)
+        def metrics = executor.executeWithMetrics(0, Span.getInvalid(), "test-run")
         
         then: "exception is wrapped in failure"
         metrics.isFailure()
@@ -108,9 +109,11 @@ class TaskExecutorSpec extends Specification {
         def executor = new TaskExecutor(task)
         
         when: "executing multiple iterations"
-        def metrics0 = executor.executeWithMetrics(0)
-        def metrics5 = executor.executeWithMetrics(5)
-        def metrics10 = executor.executeWithMetrics(10)
+        def invalidSpan = Span.getInvalid()
+        def runId = "test-run"
+        def metrics0 = executor.executeWithMetrics(0, invalidSpan, runId)
+        def metrics5 = executor.executeWithMetrics(5, invalidSpan, runId)
+        def metrics10 = executor.executeWithMetrics(10, invalidSpan, runId)
         
         then: "iteration numbers are tracked"
         metrics0.iteration() == 0

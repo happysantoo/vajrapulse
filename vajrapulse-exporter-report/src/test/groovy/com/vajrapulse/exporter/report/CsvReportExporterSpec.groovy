@@ -1,15 +1,21 @@
 package com.vajrapulse.exporter.report
 
+import com.vajrapulse.api.metrics.RunContext
+import com.vajrapulse.api.metrics.SystemInfo
 import com.vajrapulse.core.metrics.AggregatedMetrics
+import com.vajrapulse.core.metrics.LatencyStats
 import spock.lang.Specification
 import spock.lang.TempDir
+import spock.lang.Timeout
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 
 /**
  * Tests for CsvReportExporter.
  */
+@Timeout(10)
 class CsvReportExporterSpec extends Specification {
     
     @TempDir
@@ -155,6 +161,79 @@ class CsvReportExporterSpec extends Specification {
         then:
         def csv = Files.readString(outputPath)
         csv.contains('"Test\nReport"')
+    }
+    
+    def "should include run context metadata in CSV"() {
+        given:
+        def outputPath = tempDir.resolve("context.csv")
+        def exporter = new CsvReportExporter(outputPath)
+        def metrics = new AggregatedMetrics(100L, 95L, 5L, [:], [:], 1000L, 0L, [:])
+        def context = RunContext.of(
+            "test-run-789",
+            Instant.now(),
+            null,
+            "DatabaseLoadTest",
+            "StepLoad",
+            [:],
+            new SystemInfo("21.0.2", "Amazon", "Linux", "5.10", "amd64", "db-server", 4)
+        )
+        
+        when:
+        exporter.export("Context CSV Test", metrics, context)
+        
+        then:
+        Files.exists(outputPath)
+        def csv = Files.readString(outputPath)
+        csv.contains("Run ID,test-run-789")
+        csv.contains("Task Class,DatabaseLoadTest")
+        csv.contains("Load Pattern,StepLoad")
+        csv.contains("System Info")
+        csv.contains("Java Version,21.0.2")
+        csv.contains("Hostname,db-server")
+    }
+    
+    def "should include statistical summary in CSV"() {
+        given:
+        def outputPath = tempDir.resolve("stats.csv")
+        def exporter = new CsvReportExporter(outputPath)
+        def successStats = new LatencyStats(10_000_000.0d, 2_000_000.0d, 1_000_000.0d, 50_000_000.0d, 950L)
+        def metrics = new AggregatedMetrics(
+            1000L, 950L, 50L,
+            [:], [:],
+            1000L, 0L,
+            [:] as Map<Double, Double>,
+            successStats,
+            null
+        )
+        
+        when:
+        exporter.export("Stats CSV Test", metrics)
+        
+        then:
+        Files.exists(outputPath)
+        def csv = Files.readString(outputPath)
+        csv.contains("Success Latency Statistics")
+        csv.contains("Mean (ms)")
+        csv.contains("Std Dev (ms)")
+        csv.contains("Min (ms)")
+        csv.contains("Max (ms)")
+        csv.contains("Sample Count,950")
+    }
+    
+    def "should handle empty RunContext gracefully"() {
+        given:
+        def outputPath = tempDir.resolve("empty-context.csv")
+        def exporter = new CsvReportExporter(outputPath)
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        
+        when:
+        exporter.export("Empty Context CSV", metrics, RunContext.empty())
+        
+        then:
+        Files.exists(outputPath)
+        def csv = Files.readString(outputPath)
+        !csv.contains("Run ID,unknown")  // Should not include unknown values
+        noExceptionThrown()
     }
 }
 

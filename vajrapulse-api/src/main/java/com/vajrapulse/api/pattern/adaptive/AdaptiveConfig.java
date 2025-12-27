@@ -23,7 +23,8 @@ public record AdaptiveConfig(
     double rampDecrement,
     Duration rampInterval,
     Duration sustainDuration,
-    int stableIntervalsRequired
+    int stableIntervalsRequired,
+    Duration initialRampDuration
 ) {
     /**
      * Creates a configuration with validation.
@@ -36,6 +37,7 @@ public record AdaptiveConfig(
      * @param rampInterval time between adjustments (must be positive)
      * @param sustainDuration duration to sustain at stable point (must be positive)
      * @param stableIntervalsRequired number of stable intervals required (must be at least 1)
+     * @param initialRampDuration duration to gradually ramp from 0 to initialTps (must be non-negative, 0 means no initial ramp)
      * @throws IllegalArgumentException if any parameter is invalid
      */
     public AdaptiveConfig {
@@ -66,6 +68,9 @@ public record AdaptiveConfig(
         if (stableIntervalsRequired < 1) {
             throw new IllegalArgumentException("Stable intervals required must be at least 1, got: " + stableIntervalsRequired);
         }
+        if (initialRampDuration == null || initialRampDuration.isNegative()) {
+            throw new IllegalArgumentException("Initial ramp duration must be non-negative, got: " + initialRampDuration);
+        }
     }
     
     /**
@@ -81,6 +86,7 @@ public record AdaptiveConfig(
      *   <li>Ramp interval: 1 minute</li>
      *   <li>Sustain duration: 10 minutes</li>
      *   <li>Stable intervals required: 3</li>
+     *   <li>Initial ramp duration: 0 (no gradual ramp-up)</li>
      * </ul>
      * 
      * @return default configuration
@@ -94,7 +100,8 @@ public record AdaptiveConfig(
             100.0,                      // rampDecrement
             Duration.ofMinutes(1),     // rampInterval
             Duration.ofMinutes(10),     // sustainDuration
-            3                           // stableIntervalsRequired
+            3,                          // stableIntervalsRequired
+            Duration.ZERO               // initialRampDuration (no gradual ramp-up by default)
         );
     }
 }
