@@ -14,7 +14,7 @@
 - [x] All tests pass (`./gradlew test --rerun-tasks`)
 - [x] Code coverage ≥90% (`./gradlew jacocoTestCoverageVerification`)
 - [x] Static analysis passes (`./gradlew spotbugsMain`)
-- [x] PR description document created (`PR_0.9.9_DESCRIPTION.md`)
+- [x] PR description document created (`documents/releases/PR_0.9.9_DESCRIPTION.md`)
 
 ---
 
@@ -35,7 +35,7 @@ git push origin 0.9.9
 1. Go to: https://github.com/YOUR_USERNAME/vajrapulse/compare/main...0.9.9
 2. Click "Create Pull Request"
 3. **Title**: `Release 0.9.9: Code Quality Improvements and Refactoring`
-4. **Description**: Copy content from `PR_0.9.9_DESCRIPTION.md` (see below)
+4. **Description**: Copy content from `documents/releases/PR_0.9.9_DESCRIPTION.md` (see below)
 
 ### 3. Create PR via GitHub CLI (Alternative)
 
@@ -44,14 +44,14 @@ gh pr create \
   --base main \
   --head 0.9.9 \
   --title "Release 0.9.9: Code Quality Improvements and Refactoring" \
-  --body-file PR_0.9.9_DESCRIPTION.md
+  --body-file documents/releases/PR_0.9.9_DESCRIPTION.md
 ```
 
 ---
 
 ## 📝 PR Description
 
-Use the content from `PR_0.9.9_DESCRIPTION.md` as the PR description. The key points are:
+Use the content from `documents/releases/PR_0.9.9_DESCRIPTION.md` as the PR description. The key points are:
 
 ### Summary
 - Release 0.9.9 ready for merge
@@ -135,7 +135,7 @@ After PR is merged to `main`:
 
 ## 📚 References
 
-- `PR_0.9.9_DESCRIPTION.md` - Full PR description
+- `documents/releases/PR_0.9.9_DESCRIPTION.md` - Full PR description
 - `documents/analysis/RELEASE_0.9.9_READINESS_ASSESSMENT.md` - Release readiness assessment
 - `CHANGELOG.md` - Release notes
 - `documents/releases/RELEASE_0.9.9_SUMMARY.md` - Release summary

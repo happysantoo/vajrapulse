@@ -25,7 +25,7 @@ gh pr create \
   --base main \
   --head 0.9.9 \
   --title "Release 0.9.9: Code Quality Improvements and Refactoring" \
-  --body-file PR_0.9.9_DESCRIPTION.md
+  --body-file documents/releases/PR_0.9.9_DESCRIPTION.md
 ```
 
 ### Option B: Using Script
@@ -39,7 +39,7 @@ gh pr create \
 1. Go to: https://github.com/YOUR_USERNAME/vajrapulse/compare/main...0.9.9
 2. Click "Create Pull Request"
 3. **Title**: `Release 0.9.9: Code Quality Improvements and Refactoring`
-4. **Description**: Copy content from `PR_0.9.9_DESCRIPTION.md`
+4. **Description**: Copy content from `documents/releases/PR_0.9.9_DESCRIPTION.md`
 
 ## Step 3: Verify PR
 
@@ -69,7 +69,7 @@ The following commits are ready to be pushed:
 **Branch**: `0.9.9`  
 **Target**: `main`  
 **PR Title**: `Release 0.9.9: Code Quality Improvements and Refactoring`  
-**PR Description**: Use content from `PR_0.9.9_DESCRIPTION.md`
+**PR Description**: Use content from `documents/releases/PR_0.9.9_DESCRIPTION.md`
 
 ---
 

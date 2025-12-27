@@ -11,7 +11,7 @@
 1. ✅ **Version Updated**: `build.gradle.kts` already at 0.9.9
 2. ✅ **JReleaser Config Updated**: `jreleaser.yml` already at 0.9.9
 3. ✅ **Git Tag Created**: `v0.9.9` tag created locally
-4. ✅ **Release Notes Created**: `RELEASE_0.9.9_NOTES.md` ready
+4. ✅ **Release Notes Created**: `documents/releases/RELEASE_0.9.9_NOTES.md` ready
 5. ✅ **Build Successful**: All modules build successfully
 
 ---
@@ -34,14 +34,14 @@ git push origin v0.9.9
 ```bash
 gh release create v0.9.9 \
   --title "Release 0.9.9: Code Quality Improvements and Refactoring" \
-  --notes-file RELEASE_0.9.9_NOTES.md
+  --notes-file documents/releases/RELEASE_0.9.9_NOTES.md
 ```
 
 **Option B: Using GitHub Web Interface**
 1. Go to: https://github.com/happysantoo/vajrapulse/releases/new
 2. Select tag: `v0.9.9`
 3. Title: `Release 0.9.9: Code Quality Improvements and Refactoring`
-4. Description: Copy content from `RELEASE_0.9.9_NOTES.md`
+4. Description: Copy content from `documents/releases/RELEASE_0.9.9_NOTES.md`
 5. Click "Publish release"
 
 ### 3. Publish to Maven Central

@@ -13,7 +13,7 @@
 - ✅ **Code Coverage**: ≥90% maintained
 - ✅ **Build Successful**: All modules build successfully
 - ✅ **Git Tag Created**: `v0.9.9` tag exists locally
-- ✅ **Release Notes**: `RELEASE_0.9.9_NOTES.md` created
+- ✅ **Release Notes**: `documents/releases/RELEASE_0.9.9_NOTES.md` created
 
 ---
 
@@ -38,7 +38,7 @@ git push origin v0.9.9
 ```bash
 gh release create v0.9.9 \
   --title "Release 0.9.9: Code Quality Improvements and Refactoring" \
-  --notes-file RELEASE_0.9.9_NOTES.md
+  --notes-file documents/releases/RELEASE_0.9.9_NOTES.md
 ```
 
 **Option B: Using GitHub Web Interface**
@@ -46,7 +46,7 @@ gh release create v0.9.9 \
 1. Go to: https://github.com/happysantoo/vajrapulse/releases/new
 2. Select tag: `v0.9.9`
 3. Title: `Release 0.9.9: Code Quality Improvements and Refactoring`
-4. Description: Copy content from `RELEASE_0.9.9_NOTES.md`
+4. Description: Copy content from `documents/releases/RELEASE_0.9.9_NOTES.md`
 5. Click "Publish release"
 
 ---

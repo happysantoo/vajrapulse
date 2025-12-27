@@ -57,7 +57,7 @@ Explicitly Excluded (until post-1.0): Exemplars (O3), Backpressure variants beyo
 | Versioning Strategy | Document semantic versioning policy; 1.0 freeze date; pre-release tags rules | VERSIONING.md added; referenced in README | R4 |
 | Security Review | Dependency vulnerability scan + SBOM generation | No critical CVEs; SBOM artifact attached to release | R6 |
 | License & Headers | Confirm license (Apache 2.0) + verify headers policy (none or minimal) | LICENSE file present; headers policy documented | R8 |
-| Quick Start Guide | Minimal scenario run in <2 minutes: config file + command | `QUICK_START.md` validated by new-user script | R12 |
+| Quick Start Guide | Minimal scenario run in <2 minutes: config file + command | `documents/guides/QUICK_START.md` validated by new-user script | R12 |
 | Quality Gates | Enforce: zero warnings, test coverage threshold, perf gate, JavaDoc coverage | CI badge reflects gating state | R14 |
 
 ## 8. Phase Breakdown & Timeline (Indicative)
@@ -69,7 +69,7 @@ Explicitly Excluded (until post-1.0): Exemplars (O3), Backpressure variants beyo
 | P4: Distributed Minimal | Week 5 | Controller/worker minimal coordination | Multi-worker test passes |
 | P5: Shutdown & Reliability | Week 6 | Graceful shutdown + final metrics/traces flush | Signal handling validated |
 | P6: Gates & CI Hardening | Week 7 | CI workflows, perf regression gate, JavaDoc enforcement | CI passing with gates active |
-| P7: Final Audit & Freeze | Week 8 | API freeze, versioning doc, quick start, security review | VERSIONING.md, QUICK_START.md, release candidate |
+| P7: Final Audit & Freeze | Week 8 | API freeze, versioning doc, quick start, security review | VERSIONING.md, documents/guides/QUICK_START.md, release candidate |
 
 ## 9. Dependency & Sequencing Notes
 - Tracing depends on lifecycle instrumentation (Phase 1). 

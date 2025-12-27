@@ -28,7 +28,7 @@ Version 0.9.11 is the **final pre-1.0 release**, completing all P0 items for 1.0
 - ✅ **API freeze documentation** - Complete API stability inventory for 1.0
 - ✅ **Quick Start guide** - Get running in under 2 minutes
 
-> 🚀 **New to VajraPulse?** Check out the [Quick Start Guide](QUICK_START.md) to run your first load test!
+> 🚀 **New to VajraPulse?** Check out the [Quick Start Guide](documents/guides/QUICK_START.md) to run your first load test!
 
 See [CHANGELOG.md](CHANGELOG.md#0911---2024-12-26) for complete release notes.
 
@@ -50,7 +50,7 @@ See [CHANGELOG.md](CHANGELOG.md#0911---2024-12-26) for complete release notes.
 - 🚀 **Production Ready**: OpenTelemetry integration, comprehensive metrics, graceful shutdown
 - 🏗️ **Well-Architected**: Clean code organization, polymorphism-based design, excellent test coverage
 
-> 📊 **Want to see how VajraPulse compares to JMeter, Gatling, and BlazeMeter?** Check out our [comprehensive comparison guide](COMPARISON.md) covering architecture, performance, enterprise scalability, and real-world use cases.
+> 📊 **Want to see how VajraPulse compares to JMeter, Gatling, and BlazeMeter?** Check out our [comprehensive comparison guide](documents/guides/COMPARISON.md) covering architecture, performance, enterprise scalability, and real-world use cases.
 
 ---
 
@@ -905,7 +905,7 @@ Built with:
 ## Additional Resources
 
 - [CHANGELOG.md](CHANGELOG.md) - Complete release history
-- [COMPARISON.md](COMPARISON.md) - Comparison with JMeter, Gatling, BlazeMeter
+- [COMPARISON.md](documents/guides/COMPARISON.md) - Comparison with JMeter, Gatling, BlazeMeter
 - [Test Best Practices](documents/guides/TEST_BEST_PRACTICES.md) - Comprehensive testing guide
 - [User Guide](documents/guides/USER_GUIDE.md) - Comprehensive user guide
 - [Release 0.9.9 Detailed Notes](documents/releases/RELEASE_0.9.9_DETAILED_NOTES.md) - Detailed release notes
