@@ -28,7 +28,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "good metrics and ramp-up state"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -50,7 +51,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "high error rate and ramp-up state"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -72,7 +74,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "stable conditions with enough intervals"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -94,7 +97,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "state at max TPS"
         def config = new AdaptiveConfig(
             10.0, 50.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -116,7 +120,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "recovery state at minimum"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -138,7 +143,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "sustain state with good conditions"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -160,7 +166,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "moderate backpressure during ramp up"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -183,7 +190,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "recovery state with poor conditions"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -205,7 +213,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "improved conditions during ramp down but not stable yet"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -227,7 +236,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "sustain state with worsening conditions"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -249,7 +259,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "sustain state with elapsed duration and good conditions"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -271,7 +282,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "sustain state at max TPS with elapsed duration"
         def config = new AdaptiveConfig(
             10.0, 50.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -293,7 +305,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "sustain state with elapsed duration but poor conditions"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -315,7 +328,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "state near max TPS"
         def config = new AdaptiveConfig(
             10.0, 50.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -335,7 +349,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "state near min TPS"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -355,7 +370,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "recovery with low last known good TPS"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -375,7 +391,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "state with not enough stable intervals"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(
@@ -395,7 +412,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "null state"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def metrics = new MetricsSnapshot(0.0, 0.0, 0.0, 1000)
@@ -411,7 +429,8 @@ class AdaptiveDecisionEngineSpec extends Specification {
         given: "null metrics"
         def config = new AdaptiveConfig(
             10.0, 100.0, 5.0, 10.0, 20.0,
-            Duration.ofSeconds(5), Duration.ofSeconds(10), 3
+            Duration.ofSeconds(5), Duration.ofSeconds(10), 3,
+            Duration.ZERO
         )
         def policy = new DefaultRampDecisionPolicy(0.01)
         def state = new AdaptiveState(

@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 
 /**
  * Adaptive load pattern that automatically finds the maximum sustainable TPS.
@@ -110,6 +109,56 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         // Initialize on first call
         if (current.lastAdjustmentTime() < 0) {
             current = initializeState(elapsedMillis);
+        }
+        
+        // Handle initial ramp-up period (gradual ramp from 0 to initialTps)
+        long initialRampDurationMillis = config.initialRampDuration().toMillis();
+        if (initialRampDurationMillis > 0 && elapsedMillis < initialRampDurationMillis) {
+            // Calculate TPS linearly from 0 (or minTps) to initialTps over initialRampDuration
+            double startTps = Math.max(0.0, config.minTps());
+            double targetTps = config.initialTps();
+            double progress = (double) elapsedMillis / initialRampDurationMillis;
+            double rampTps = startTps + (targetTps - startTps) * progress;
+            
+            // Update state with current ramp TPS (but don't trigger adjustments yet)
+            AdaptiveState rampState = new AdaptiveState(
+                AdaptivePhase.RAMP_UP,
+                rampTps,
+                current.lastAdjustmentTime(), // Don't update lastAdjustmentTime during initial ramp
+                current.phaseStartTime(),
+                current.stableTps(),
+                current.stableIntervalsCount(),
+                current.lastKnownGoodTps(),
+                current.inRecovery(),
+                current.phaseTransitionCount()
+            );
+            state.set(rampState);
+            
+            // Notify TPS change if it's different from previous
+            if (Math.abs(rampTps - current.currentTps()) > 0.001) {
+                notifyTpsChange(current.currentTps(), rampTps, AdaptivePhase.RAMP_UP);
+            }
+            
+            return rampTps;
+        }
+        
+        // After initial ramp, check if we need to transition to normal adaptive behavior
+        if (initialRampDurationMillis > 0 && elapsedMillis >= initialRampDurationMillis && 
+            current.lastAdjustmentTime() < initialRampDurationMillis) {
+            // Transition from initial ramp to normal adaptive behavior
+            // Set lastAdjustmentTime to the end of initial ramp period
+            current = new AdaptiveState(
+                current.phase(),
+                config.initialTps(), // Ensure we're at initialTps
+                initialRampDurationMillis, // Set adjustment time to end of initial ramp
+                current.phaseStartTime(),
+                current.stableTps(),
+                current.stableIntervalsCount(),
+                current.lastKnownGoodTps(),
+                current.inRecovery(),
+                current.phaseTransitionCount()
+            );
+            state.set(current);
         }
         
         // Check if it's time to adjust
@@ -530,6 +579,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         private Duration rampInterval = Duration.ofMinutes(1);
         private Duration sustainDuration = Duration.ofMinutes(10);
         private int stableIntervalsRequired = 3;
+        private Duration initialRampDuration = Duration.ZERO;
         
         private MetricsProvider metricsProvider;
         private BackpressureProvider backpressureProvider;
@@ -555,7 +605,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                 .rampDecrement(config.rampDecrement())
                 .rampInterval(config.rampInterval())
                 .sustainDuration(config.sustainDuration())
-                .stableIntervalsRequired(config.stableIntervalsRequired());
+                .stableIntervalsRequired(config.stableIntervalsRequired())
+                .initialRampDuration(config.initialRampDuration());
         }
         
         /**
@@ -643,6 +694,22 @@ public final class AdaptiveLoadPattern implements LoadPattern {
          */
         public Builder stableIntervalsRequired(int count) {
             this.stableIntervalsRequired = count;
+            return this;
+        }
+        
+        /**
+         * Sets the initial ramp duration.
+         * 
+         * <p>If set to a positive duration, the pattern will gradually ramp up
+         * from 0 (or minTps) to initialTps over this duration before starting
+         * normal adaptive behavior. If set to Duration.ZERO (default), the
+         * pattern starts immediately at initialTps.
+         * 
+         * @param duration duration for initial ramp-up (must be non-negative)
+         * @return this builder
+         */
+        public Builder initialRampDuration(Duration duration) {
+            this.initialRampDuration = duration;
             return this;
         }
         
@@ -744,7 +811,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
                 rampDecrement,
                 rampInterval,
                 sustainDuration,
-                stableIntervalsRequired
+                stableIntervalsRequired,
+                initialRampDuration
             );
         }
     }

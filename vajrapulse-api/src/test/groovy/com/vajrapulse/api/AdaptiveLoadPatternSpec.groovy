@@ -692,4 +692,163 @@ class AdaptiveLoadPatternSpec extends Specification {
         then: "should ramp up when both conditions are met"
         tps2 >= tps1
     }
+    
+    def "should gradually ramp up from 0 to initialTps during initialRampDuration"() {
+        given: "a pattern with initial ramp duration and minTps = 0"
+        def provider = new MockMetricsProvider()
+        provider.setFailureRate(0.0) // No errors
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(100.0)
+            .initialRampDuration(Duration.ofSeconds(10)) // 10 second initial ramp
+            .rampIncrement(50.0)
+            .rampDecrement(100.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(1000.0)
+            .minTps(0.0) // Set to 0 to start from 0
+            .sustainDuration(Duration.ofSeconds(10))
+            .stableIntervalsRequired(3)
+            .metricsProvider(provider)
+            .build()
+        
+        when: "calling calculateTps at different points during initial ramp"
+        def tps0 = pattern.calculateTps(0) // Start
+        def tps2 = pattern.calculateTps(2000) // 20% through ramp (2s / 10s)
+        def tps5 = pattern.calculateTps(5000) // 50% through ramp (5s / 10s)
+        def tps8 = pattern.calculateTps(8000) // 80% through ramp (8s / 10s)
+        def tps10 = pattern.calculateTps(10000) // End of ramp (10s)
+        
+        then: "TPS should gradually increase from 0 to initialTps"
+        tps0 == 0.0 // Starts at 0 (or minTps)
+        tps2 == 20.0 // 20% of 100 = 20
+        tps5 == 50.0 // 50% of 100 = 50
+        tps8 == 80.0 // 80% of 100 = 80
+        tps10 == 100.0 // End of ramp = initialTps
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_UP
+    }
+    
+    def "should gradually ramp up from minTps to initialTps when minTps > 0"() {
+        given: "a pattern with minTps > 0 and initial ramp duration"
+        def provider = new MockMetricsProvider()
+        provider.setFailureRate(0.0)
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(100.0)
+            .minTps(20.0) // Start from 20, not 0
+            .initialRampDuration(Duration.ofSeconds(10))
+            .rampIncrement(50.0)
+            .rampDecrement(100.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(1000.0)
+            .sustainDuration(Duration.ofSeconds(10))
+            .stableIntervalsRequired(3)
+            .metricsProvider(provider)
+            .build()
+        
+        when: "calling calculateTps during initial ramp"
+        def tps0 = pattern.calculateTps(0)
+        def tps5 = pattern.calculateTps(5000) // 50% through ramp
+        def tps10 = pattern.calculateTps(10000) // End of ramp
+        
+        then: "TPS should gradually increase from minTps to initialTps"
+        tps0 == 20.0 // Starts at minTps
+        tps5 == 60.0 // 20 + (100-20)*0.5 = 20 + 40 = 60
+        tps10 == 100.0 // End of ramp = initialTps
+    }
+    
+    def "should start normal adaptive behavior after initial ramp completes"() {
+        given: "a pattern with initial ramp duration"
+        def provider = new MockMetricsProvider()
+        provider.setFailureRate(0.0) // No errors
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(100.0)
+            .initialRampDuration(Duration.ofSeconds(5)) // 5 second initial ramp
+            .rampIncrement(50.0)
+            .rampDecrement(100.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(1000.0)
+            .minTps(10.0)
+            .sustainDuration(Duration.ofSeconds(10))
+            .stableIntervalsRequired(3)
+            .metricsProvider(provider)
+            .build()
+        
+        when: "completing initial ramp and waiting for first adjustment interval"
+        def tpsDuringRamp = pattern.calculateTps(3000) // During ramp (3s)
+        def tpsEndRamp = pattern.calculateTps(5000) // End of ramp (5s)
+        def tpsAfterInterval = pattern.calculateTps(6000) // After ramp + 1s interval
+        
+        then: "should complete initial ramp, then start normal adaptive behavior"
+        // With minTps=10.0, at 3s (60% progress): 10 + (100-10)*0.6 = 10 + 54 = 64
+        tpsDuringRamp == 64.0 // 60% progress from 10 to 100
+        tpsEndRamp == 100.0 // End of ramp = initialTps
+        tpsAfterInterval == 150.0 // After interval, should ramp up (100 + 50)
+        pattern.getCurrentPhase() == AdaptivePhase.RAMP_UP
+    }
+    
+    def "should not perform initial ramp when initialRampDuration is zero"() {
+        given: "a pattern with zero initial ramp duration (default)"
+        def provider = new MockMetricsProvider()
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(100.0)
+            .initialRampDuration(Duration.ZERO) // No initial ramp
+            .rampIncrement(50.0)
+            .rampDecrement(100.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(1000.0)
+            .minTps(10.0)
+            .sustainDuration(Duration.ofSeconds(10))
+            .stableIntervalsRequired(3)
+            .metricsProvider(provider)
+            .build()
+        
+        when: "calling calculateTps immediately"
+        def tps = pattern.calculateTps(0)
+        
+        then: "should start at initialTps immediately"
+        tps == 100.0
+        pattern.getCurrentTps() == 100.0
+    }
+    
+    def "should notify TPS changes during initial ramp"() {
+        given: "a pattern with initial ramp and listener"
+        def provider = new MockMetricsProvider()
+        def tpsChanges = new java.util.concurrent.CopyOnWriteArrayList<com.vajrapulse.api.pattern.adaptive.TpsChangeEvent>()
+        def listener = new com.vajrapulse.api.pattern.adaptive.AdaptivePatternListener() {
+            @Override
+            void onTpsChange(com.vajrapulse.api.pattern.adaptive.TpsChangeEvent event) {
+                tpsChanges.add(event)
+            }
+        }
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(100.0)
+            .initialRampDuration(Duration.ofSeconds(10))
+            .rampIncrement(50.0)
+            .rampDecrement(100.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(1000.0)
+            .minTps(10.0)
+            .sustainDuration(Duration.ofSeconds(10))
+            .stableIntervalsRequired(3)
+            .metricsProvider(provider)
+            .listener(listener)
+            .build()
+        
+        when: "calling calculateTps multiple times during initial ramp"
+        pattern.calculateTps(0)
+        pattern.calculateTps(2000) // 2s
+        pattern.calculateTps(5000) // 5s
+        pattern.calculateTps(10000) // 10s (end of ramp)
+        
+        then: "should notify TPS changes"
+        // Notifications occur when TPS changes by more than 0.001
+        // With minTps=10.0, initialTps=100.0, ramp over 10s:
+        // - At 0s: 10.0
+        // - At 2s: 10 + (100-10)*0.2 = 28.0 (change of 18.0, should notify)
+        // - At 5s: 10 + (100-10)*0.5 = 55.0 (change of 27.0, should notify)
+        // - At 10s: 100.0 (change of 45.0, should notify)
+        tpsChanges.size() >= 2 // At least some notifications
+        if (tpsChanges.size() > 0) {
+            tpsChanges.every { it.phase() == AdaptivePhase.RAMP_UP }
+            tpsChanges.every { it.newTps() >= it.previousTps() } // Should be increasing
+        }
+    }
 }

@@ -1,15 +1,21 @@
 package com.vajrapulse.exporter.report
 
+import com.vajrapulse.api.metrics.RunContext
+import com.vajrapulse.api.metrics.SystemInfo
 import com.vajrapulse.core.metrics.AggregatedMetrics
+import com.vajrapulse.core.metrics.LatencyStats
 import spock.lang.Specification
 import spock.lang.TempDir
+import spock.lang.Timeout
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 
 /**
  * Tests for JsonReportExporter.
  */
+@Timeout(10)
 class JsonReportExporterSpec extends Specification {
     
     @TempDir
@@ -145,6 +151,83 @@ class JsonReportExporterSpec extends Specification {
         json.contains("waitTimeMs")
         json.contains("p50")
         json.contains("p95")
+    }
+    
+    def "should include run context metadata in JSON"() {
+        given:
+        def outputPath = tempDir.resolve("context-report.json")
+        def exporter = new JsonReportExporter(outputPath)
+        def metrics = new AggregatedMetrics(100L, 95L, 5L, [:], [:], 1000L, 0L, [:])
+        def context = RunContext.of(
+            "test-run-456",
+            Instant.parse("2024-01-01T12:00:00Z"),
+            Instant.parse("2024-01-01T12:01:00Z"),
+            "MyLoadTest",
+            "RampUpLoad",
+            [startTps: 10.0, endTps: 100.0],
+            new SystemInfo("21.0.1", "Eclipse", "Linux", "5.15", "x86_64", "server-1", 16)
+        )
+        
+        when:
+        exporter.export("Context Test", metrics, context)
+        
+        then:
+        Files.exists(outputPath)
+        def json = Files.readString(outputPath)
+        json.contains('"runId" : "test-run-456"')
+        json.contains('"taskClass" : "MyLoadTest"')
+        json.contains('"loadPatternType" : "RampUpLoad"')
+        json.contains("systemInfo")
+        json.contains('"javaVersion" : "21.0.1"')
+        json.contains('"hostname" : "server-1"')
+        json.contains("configuration")
+    }
+    
+    def "should include statistical summary in JSON"() {
+        given:
+        def outputPath = tempDir.resolve("stats-report.json")
+        def exporter = new JsonReportExporter(outputPath)
+        def successStats = new LatencyStats(10_000_000.0d, 2_000_000.0d, 1_000_000.0d, 50_000_000.0d, 950L)
+        def failureStats = new LatencyStats(100_000_000.0d, 20_000_000.0d, 50_000_000.0d, 200_000_000.0d, 50L)
+        def metrics = new AggregatedMetrics(
+            1000L, 950L, 50L,
+            [:], [:],
+            1000L, 0L,
+            [:] as Map<Double, Double>,
+            successStats,
+            failureStats
+        )
+        
+        when:
+        exporter.export("Stats Test", metrics)
+        
+        then:
+        Files.exists(outputPath)
+        def json = Files.readString(outputPath)
+        json.contains("statistics")
+        json.contains("success")
+        json.contains("failure")
+        json.contains("meanMs")
+        json.contains("stdDevMs")
+        json.contains("minMs")
+        json.contains("maxMs")
+        json.contains("coefficientOfVariation")
+    }
+    
+    def "should handle empty RunContext gracefully"() {
+        given:
+        def outputPath = tempDir.resolve("empty-context-report.json")
+        def exporter = new JsonReportExporter(outputPath)
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        
+        when:
+        exporter.export("Empty Context", metrics, RunContext.empty())
+        
+        then:
+        Files.exists(outputPath)
+        def json = Files.readString(outputPath)
+        !json.contains('"runId" : "unknown"')  // Should not include unknown values
+        noExceptionThrown()
     }
 }
 

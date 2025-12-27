@@ -1,15 +1,21 @@
 package com.vajrapulse.exporter.report
 
+import com.vajrapulse.api.metrics.RunContext
+import com.vajrapulse.api.metrics.SystemInfo
 import com.vajrapulse.core.metrics.AggregatedMetrics
+import com.vajrapulse.core.metrics.LatencyStats
 import spock.lang.Specification
 import spock.lang.TempDir
+import spock.lang.Timeout
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 
 /**
  * Tests for HtmlReportExporter.
  */
+@Timeout(10)
 class HtmlReportExporterSpec extends Specification {
     
     @TempDir
@@ -146,6 +152,91 @@ class HtmlReportExporterSpec extends Specification {
         then:
         def html = Files.readString(outputPath)
         html.contains("500ms")
+    }
+    
+    def "should include run context metadata in report"() {
+        given:
+        def outputPath = tempDir.resolve("context.html")
+        def exporter = new HtmlReportExporter(outputPath)
+        def metrics = new AggregatedMetrics(100L, 95L, 5L, [:], [:], 1000L, 0L, [:])
+        def context = RunContext.of(
+            "test-run-123",
+            Instant.now(),
+            null,
+            "HttpLoadTest",
+            "StaticLoad",
+            [tps: 100.0],
+            new SystemInfo("21.0.1", "Eclipse", "Mac OS X", "14.0", "aarch64", "test-host", 8)
+        )
+        
+        when:
+        exporter.export("Context Test", metrics, context)
+        
+        then:
+        def html = Files.readString(outputPath)
+        html.contains("test-run-123")
+        html.contains("HttpLoadTest")
+        html.contains("StaticLoad")
+        html.contains("21.0.1")
+        html.contains("test-host")
+    }
+    
+    def "should include statistical summary in report"() {
+        given:
+        def outputPath = tempDir.resolve("stats.html")
+        def exporter = new HtmlReportExporter(outputPath)
+        def successStats = new LatencyStats(10_000_000.0d, 2_000_000.0d, 1_000_000.0d, 50_000_000.0d, 950L)
+        def failureStats = new LatencyStats(100_000_000.0d, 20_000_000.0d, 50_000_000.0d, 200_000_000.0d, 50L)
+        def metrics = new AggregatedMetrics(
+            1000L, 950L, 50L,
+            [0.50d: 10_000_000.0d],
+            [0.50d: 100_000_000.0d],
+            1000L, 0L,
+            [:] as Map<Double, Double>,
+            successStats,
+            failureStats
+        )
+        
+        when:
+        exporter.export("Stats Test", metrics)
+        
+        then:
+        def html = Files.readString(outputPath)
+        html.contains("Statistical Summary")
+        html.contains("Success Latency")
+        html.contains("Failure Latency")
+        html.contains("Mean")
+        html.contains("Std Dev")
+        html.contains("Min")
+        html.contains("Max")
+    }
+    
+    def "should handle empty RunContext gracefully"() {
+        given:
+        def outputPath = tempDir.resolve("empty-context.html")
+        def exporter = new HtmlReportExporter(outputPath)
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 1000L, 0L, [:])
+        
+        when:
+        exporter.export("Empty Context", metrics, RunContext.empty())
+        
+        then:
+        Files.exists(outputPath)
+        noExceptionThrown()
+    }
+    
+    def "should format long duration correctly"() {
+        given:
+        def outputPath = tempDir.resolve("long-duration.html")
+        def exporter = new HtmlReportExporter(outputPath)
+        def metrics = new AggregatedMetrics(100L, 100L, 0L, [:], [:], 125000L, 0L, [:]) // 2m 5s
+        
+        when:
+        exporter.export("Long Duration Test", metrics)
+        
+        then:
+        def html = Files.readString(outputPath)
+        html.contains("2m 5s")
     }
 }
 

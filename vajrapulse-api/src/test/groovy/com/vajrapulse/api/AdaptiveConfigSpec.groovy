@@ -24,6 +24,7 @@ class AdaptiveConfigSpec extends Specification {
         config.rampInterval() == Duration.ofMinutes(1)
         config.sustainDuration() == Duration.ofMinutes(10)
         config.stableIntervalsRequired() == 3
+        config.initialRampDuration() == Duration.ZERO
     }
     
     def "should create valid custom config"() {
@@ -36,7 +37,8 @@ class AdaptiveConfigSpec extends Specification {
             150.0,  // rampDecrement
             Duration.ofSeconds(30),  // rampInterval
             Duration.ofMinutes(5),  // sustainDuration
-            5  // stableIntervalsRequired
+            5,  // stableIntervalsRequired
+            Duration.ofSeconds(30)  // initialRampDuration
         )
         
         then:
@@ -48,6 +50,62 @@ class AdaptiveConfigSpec extends Specification {
         config.rampInterval() == Duration.ofSeconds(30)
         config.sustainDuration() == Duration.ofMinutes(5)
         config.stableIntervalsRequired() == 5
+        config.initialRampDuration() == Duration.ofSeconds(30)
+    }
+    
+    def "should create config with initialRampDuration"() {
+        when:
+        def config = new AdaptiveConfig(
+            100.0,
+            5000.0,
+            10.0,
+            50.0,
+            100.0,
+            Duration.ofMinutes(1),
+            Duration.ofMinutes(10),
+            3,
+            Duration.ofSeconds(30)
+        )
+        
+        then:
+        config.initialRampDuration() == Duration.ofSeconds(30)
+    }
+    
+    def "should reject negative initialRampDuration"() {
+        when:
+        new AdaptiveConfig(
+            100.0,
+            5000.0,
+            10.0,
+            50.0,
+            100.0,
+            Duration.ofMinutes(1),
+            Duration.ofMinutes(10),
+            3,
+            Duration.ofSeconds(-1) // Negative duration
+        )
+        
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains("Initial ramp duration must be non-negative")
+    }
+    
+    def "should allow zero initialRampDuration"() {
+        when:
+        def config = new AdaptiveConfig(
+            100.0,
+            5000.0,
+            10.0,
+            50.0,
+            100.0,
+            Duration.ofMinutes(1),
+            Duration.ofMinutes(10),
+            3,
+            Duration.ZERO // Zero duration (no initial ramp)
+        )
+        
+        then:
+        config.initialRampDuration() == Duration.ZERO
     }
     
     def "should reject invalid initialTps"() {
@@ -60,7 +118,8 @@ class AdaptiveConfigSpec extends Specification {
             100.0,
             Duration.ofMinutes(1),
             Duration.ofMinutes(10),
-            3
+            3,
+            Duration.ZERO
         )
         
         then:
@@ -78,7 +137,8 @@ class AdaptiveConfigSpec extends Specification {
             100.0,
             Duration.ofMinutes(1),
             Duration.ofMinutes(10),
-            3
+            3,
+            Duration.ZERO
         )
         
         then:
@@ -96,7 +156,8 @@ class AdaptiveConfigSpec extends Specification {
             100.0,
             null,  // invalid
             Duration.ofMinutes(10),
-            3
+            3,
+            Duration.ZERO
         )
         
         then:
@@ -114,7 +175,8 @@ class AdaptiveConfigSpec extends Specification {
             100.0,
             Duration.ofMinutes(1),
             Duration.ofMinutes(10),
-            0  // invalid (< 1)
+            0,  // invalid (< 1)
+            Duration.ZERO
         )
         
         then:
@@ -132,7 +194,8 @@ class AdaptiveConfigSpec extends Specification {
             100.0,
             Duration.ofMinutes(1),
             Duration.ofMinutes(10),
-            3
+            3,
+            Duration.ZERO
         )
         
         then:
@@ -150,7 +213,8 @@ class AdaptiveConfigSpec extends Specification {
             100.0,
             Duration.ofMinutes(1),
             Duration.ofMinutes(10),
-            3
+            3,
+            Duration.ZERO
         )
         
         then:

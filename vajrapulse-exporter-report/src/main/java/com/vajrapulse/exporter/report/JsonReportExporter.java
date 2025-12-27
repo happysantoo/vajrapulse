@@ -2,7 +2,9 @@ package com.vajrapulse.exporter.report;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.vajrapulse.api.metrics.RunContext;
 import com.vajrapulse.core.metrics.AggregatedMetrics;
+import com.vajrapulse.core.metrics.LatencyStats;
 import com.vajrapulse.core.metrics.MetricsExporter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
@@ -19,7 +21,8 @@ import java.util.Map;
  * JSON report exporter for programmatic analysis.
  * 
  * <p>Exports metrics in JSON format suitable for parsing by analysis tools,
- * CI/CD pipelines, and custom reporting systems.
+ * CI/CD pipelines, and custom reporting systems. Includes run metadata,
+ * statistical summaries, and system information.
  * 
  * <p>Example usage:
  * <pre>{@code
@@ -28,6 +31,8 @@ import java.util.Map;
  *     .build()
  *     .run(task, loadPattern);
  * }</pre>
+ * 
+ * @since 0.9.0
  */
 public final class JsonReportExporter implements MetricsExporter {
     private static final Logger logger = LoggerFactory.getLogger(JsonReportExporter.class);
@@ -61,8 +66,13 @@ public final class JsonReportExporter implements MetricsExporter {
     
     @Override
     public void export(String title, AggregatedMetrics metrics) {
+        export(title, metrics, RunContext.empty());
+    }
+    
+    @Override
+    public void export(String title, AggregatedMetrics metrics, RunContext context) {
         try {
-            Map<String, Object> report = buildReport(title, metrics);
+            Map<String, Object> report = buildReport(title, metrics, context);
             String json = mapper.writeValueAsString(report);
             
             // Create parent directories if needed
@@ -79,15 +89,50 @@ public final class JsonReportExporter implements MetricsExporter {
         }
     }
     
-    private Map<String, Object> buildReport(String title, AggregatedMetrics metrics) {
+    private Map<String, Object> buildReport(String title, AggregatedMetrics metrics, RunContext context) {
         Map<String, Object> report = new LinkedHashMap<>();
         
-        // Metadata
+        // Metadata (enriched with RunContext)
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("title", title);
         metadata.put("timestamp", Instant.now().toString());
         metadata.put("elapsedSeconds", metrics.elapsedMillis() / 1000.0);
+        
+        // Add run context metadata
+        if (context != null && !"unknown".equals(context.runId())) {
+            metadata.put("runId", context.runId());
+        }
+        if (context != null && !"unknown".equals(context.taskClass())) {
+            metadata.put("taskClass", context.taskClass());
+        }
+        if (context != null && !"unknown".equals(context.loadPatternType())) {
+            metadata.put("loadPatternType", context.loadPatternType());
+        }
+        if (context != null && context.startTime() != null && !context.startTime().equals(Instant.EPOCH)) {
+            metadata.put("startTime", context.startTime().toString());
+        }
+        if (context != null && context.endTime() != null) {
+            metadata.put("endTime", context.endTime().toString());
+        }
         report.put("metadata", metadata);
+        
+        // System Info
+        if (context != null && context.systemInfo() != null && !"unknown".equals(context.systemInfo().javaVersion())) {
+            Map<String, Object> systemInfo = new LinkedHashMap<>();
+            systemInfo.put("javaVersion", context.systemInfo().javaVersion());
+            systemInfo.put("javaVendor", context.systemInfo().javaVendor());
+            systemInfo.put("osName", context.systemInfo().osName());
+            systemInfo.put("osVersion", context.systemInfo().osVersion());
+            systemInfo.put("osArch", context.systemInfo().osArch());
+            systemInfo.put("hostname", context.systemInfo().hostname());
+            systemInfo.put("availableProcessors", context.systemInfo().availableProcessors());
+            report.put("systemInfo", systemInfo);
+        }
+        
+        // Configuration (if available)
+        if (context != null && !context.configuration().isEmpty()) {
+            report.put("configuration", context.configuration());
+        }
         
         // Summary
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -100,6 +145,39 @@ public final class JsonReportExporter implements MetricsExporter {
         summary.put("successTps", metrics.successTps());
         summary.put("failureTps", metrics.failureTps());
         report.put("summary", summary);
+        
+        // Statistical Summary (if available)
+        if (metrics.hasStatistics()) {
+            Map<String, Object> statistics = new LinkedHashMap<>();
+            
+            LatencyStats successStats = metrics.successStats();
+            if (successStats != null && successStats.hasData()) {
+                Map<String, Object> successStatsMap = new LinkedHashMap<>();
+                successStatsMap.put("meanMs", successStats.meanMillis());
+                successStatsMap.put("stdDevMs", successStats.stdDevMillis());
+                successStatsMap.put("minMs", successStats.minMillis());
+                successStatsMap.put("maxMs", successStats.maxMillis());
+                successStatsMap.put("coefficientOfVariation", successStats.coefficientOfVariation());
+                successStatsMap.put("count", successStats.count());
+                statistics.put("success", successStatsMap);
+            }
+            
+            LatencyStats failureStats = metrics.failureStats();
+            if (failureStats != null && failureStats.hasData()) {
+                Map<String, Object> failureStatsMap = new LinkedHashMap<>();
+                failureStatsMap.put("meanMs", failureStats.meanMillis());
+                failureStatsMap.put("stdDevMs", failureStats.stdDevMillis());
+                failureStatsMap.put("minMs", failureStats.minMillis());
+                failureStatsMap.put("maxMs", failureStats.maxMillis());
+                failureStatsMap.put("coefficientOfVariation", failureStats.coefficientOfVariation());
+                failureStatsMap.put("count", failureStats.count());
+                statistics.put("failure", failureStatsMap);
+            }
+            
+            if (!statistics.isEmpty()) {
+                report.put("statistics", statistics);
+            }
+        }
         
         // Queue metrics
         Map<String, Object> queue = new LinkedHashMap<>();
@@ -211,4 +289,3 @@ public final class JsonReportExporter implements MetricsExporter {
         throw new IllegalArgumentException("Cannot convert " + value.getClass() + " to double");
     }
 }
-
