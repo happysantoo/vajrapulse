@@ -431,7 +431,7 @@ Version 0.9.9 is **ready for release**. The release demonstrates excellent engin
 - `TEST_RELIABILITY_VALIDATION_REPORT.md` - Test reliability validation
 - `CODE_COMPLEXITY_ANALYSIS.md` - Code complexity analysis
 - `CHANGELOG.md` - Release notes
-- `PR_0.9.9_DESCRIPTION.md` - PR description
+- `documents/releases/PR_0.9.9_DESCRIPTION.md` - PR description
 
 ---
 

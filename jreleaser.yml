@@ -1,6 +1,6 @@
 project:
   name: vajrapulse
-  version: 0.9.10
+  version: 0.9.11
   description: VajraPulse distributed load testing framework (pre-1.0, Java 21 virtual threads)
   authors:
     - Santhosh Kuppusamy
@@ -20,7 +20,8 @@ signing:
 
 release:
   github:
-    enabled: false  # disabled for 0.9.1 Maven Central deployment; enable later when token available
+    enabled: true
+    overwrite: false
 
 deploy:
   maven:

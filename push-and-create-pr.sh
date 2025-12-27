@@ -45,7 +45,7 @@ gh pr create \
   --base main \
   --head 0.9.9 \
   --title "Release 0.9.9: Code Quality Improvements and Refactoring" \
-  --body-file PR_0.9.9_DESCRIPTION.md
+  --body-file documents/releases/PR_0.9.9_DESCRIPTION.md
 
 echo "✅ Pull Request created successfully!"
 echo ""

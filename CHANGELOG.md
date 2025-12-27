@@ -54,7 +54,7 @@ Version 0.9.11 is the **final pre-1.0 release**, focusing on **architecture hard
 - **Documentation**:
   - API freeze document (`documents/architecture/API_FREEZE_0.9.11.md`)
   - Versioning strategy (`documents/guides/VERSIONING.md`)
-  - Quick start guide (`QUICK_START.md`)
+  - Quick start guide (`documents/guides/QUICK_START.md`)
   - Migration guide (`documents/guides/MIGRATION_0.9_TO_1.0.md`)
   - Performance baseline (`documents/analysis/PERFORMANCE_BASELINE.md`)
   - 1.0.0 release checklist (`documents/releases/RELEASE_1.0.0_CHECKLIST.md`)
@@ -574,7 +574,7 @@ ClientMetrics metrics = new ClientMetrics(
   - Clear naming conventions and classification rules
   - Improved discoverability and maintainability
   - `DOCUMENT_ORGANIZATION_STRATEGY.md` guide created
-- **Comparison Guide**: Comprehensive comparison document (`COMPARISON.md`) with JMeter, Gatling, and BlazeMeter
+- **Comparison Guide**: Comprehensive comparison document (`documents/guides/COMPARISON.md`) with JMeter, Gatling, and BlazeMeter
   - Architecture and concurrency model comparison
   - Performance benchmarks and resource usage analysis
   - Enterprise scalability considerations
