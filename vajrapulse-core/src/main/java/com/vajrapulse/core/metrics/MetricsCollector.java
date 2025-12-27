@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.lang.ScopedValue;
 
 /**
  * Collects and aggregates execution metrics using Micrometer.
@@ -29,10 +30,11 @@ import java.util.LinkedHashMap;
  * 
  * <p>Thread-safe for concurrent metric recording.
  * 
- * <p><strong>Resource Management:</strong> This class uses {@link ThreadLocal} instances
- * for performance optimization. To prevent memory leaks, especially in thread pool
- * environments, this class implements {@link AutoCloseable}. Always use try-with-resources
- * or explicitly call {@link #close()} when done:
+ * <p><strong>Resource Management:</strong> This class uses {@link ScopedValue} (Java 21)
+ * for performance optimization, which is safer for virtual threads than ThreadLocal.
+ * This class implements {@link AutoCloseable} for consistency, though ScopedValue
+ * does not require explicit cleanup. Always use try-with-resources or explicitly
+ * call {@link #close()} when done:
  * 
  * <pre>{@code
  * try (MetricsCollector collector = new MetricsCollector()) {
@@ -41,13 +43,11 @@ import java.util.LinkedHashMap;
  *         .withMetricsCollector(collector)
  *         .build();
  *     engine.run();
- * } // ThreadLocal instances automatically cleaned up
+ * } // Resources automatically cleaned up
  * }</pre>
  * 
- * <p><strong>Note:</strong> In long-running applications or when threads are reused
- * (e.g., platform thread pools), failure to close this collector can lead to memory
- * leaks as ThreadLocal instances accumulate. Virtual threads are less affected but
- * cleanup is still recommended.
+ * <p><strong>Note:</strong> ScopedValue provides better virtual thread compatibility
+ * compared to ThreadLocal, with automatic cleanup when the scope ends.
  * 
  * @since 0.9.0
  */
@@ -68,17 +68,18 @@ public final class MetricsCollector implements AutoCloseable {
     private final long startMillis; // Track when collection started
     
     // Reusable maps for snapshot() to avoid allocations
-    // Using ThreadLocal to ensure thread safety (snapshot() may be called from different threads)
-    private final ThreadLocal<LinkedHashMap<Double, Double>> reusableSuccessMap = 
-        ThreadLocal.withInitial(LinkedHashMap::new);
-    private final ThreadLocal<LinkedHashMap<Double, Double>> reusableFailureMap = 
-        ThreadLocal.withInitial(LinkedHashMap::new);
-    private final ThreadLocal<LinkedHashMap<Double, Double>> reusableQueueWaitMap = 
-        ThreadLocal.withInitial(LinkedHashMap::new);
+    // Using ScopedValue (Java 21) instead of ThreadLocal for better virtual thread compatibility
+    // These are bound at the ExecutionEngine scope level
+    private static final ScopedValue<LinkedHashMap<Double, Double>> REUSABLE_SUCCESS_MAP = 
+        ScopedValue.newInstance();
+    private static final ScopedValue<LinkedHashMap<Double, Double>> REUSABLE_FAILURE_MAP = 
+        ScopedValue.newInstance();
+    private static final ScopedValue<LinkedHashMap<Double, Double>> REUSABLE_QUEUE_WAIT_MAP = 
+        ScopedValue.newInstance();
     
     // Reusable intermediate HashMap for indexSnapshot() to avoid allocations
-    private final ThreadLocal<HashMap<Double, Double>> reusableIndexMap = 
-        ThreadLocal.withInitial(HashMap::new);
+    private static final ScopedValue<HashMap<Double, Double>> REUSABLE_INDEX_MAP = 
+        ScopedValue.newInstance();
     
     /**
      * Creates a collector with default SimpleMeterRegistry.
@@ -348,15 +349,14 @@ public final class MetricsCollector implements AutoCloseable {
      * <p><strong>Performance Optimizations:</strong>
      * <ul>
      *   <li>Reuses map instances (LinkedHashMap and HashMap) to avoid allocations</li>
-     *   <li>Thread-safe via ThreadLocal for reusable maps</li>
+     *   <li>Thread-safe via ScopedValue (Java 21) for reusable maps</li>
      *   <li>Minimizes GC pressure by reusing intermediate data structures</li>
      * </ul>
      * 
-     * <p><strong>ThreadLocal Lifecycle:</strong> This method uses ThreadLocal instances
-     * for map reuse. In long-running applications or thread pool environments, ensure
-     * {@link #close()} is called when the collector is no longer needed to prevent
-     * memory leaks. The ThreadLocal cleanup is the caller's responsibility when using
-     * this collector in a long-lived context.
+     * <p><strong>ScopedValue Usage:</strong> This method uses ScopedValue instances
+     * for map reuse, which is safer for virtual threads than ThreadLocal. The scope
+     * should be set up at the ExecutionEngine level. If not bound, new maps are
+     * created (with minimal performance impact).
      * 
      * @return aggregated metrics snapshot
      */
@@ -374,10 +374,13 @@ public final class MetricsCollector implements AutoCloseable {
         Map<Double, Double> failureIdx = indexSnapshot(failureSnapshot);
         Map<Double, Double> queueWaitIdx = indexSnapshot(queueWaitSnapshot);
 
-        // Reuse map instances to avoid allocations
-        LinkedHashMap<Double, Double> successMap = reusableSuccessMap.get();
-        LinkedHashMap<Double, Double> failureMap = reusableFailureMap.get();
-        LinkedHashMap<Double, Double> queueWaitMap = reusableQueueWaitMap.get();
+        // Reuse map instances to avoid allocations (using ScopedValue with fallback)
+        LinkedHashMap<Double, Double> successMap = REUSABLE_SUCCESS_MAP.isBound() 
+            ? REUSABLE_SUCCESS_MAP.get() : new LinkedHashMap<>();
+        LinkedHashMap<Double, Double> failureMap = REUSABLE_FAILURE_MAP.isBound() 
+            ? REUSABLE_FAILURE_MAP.get() : new LinkedHashMap<>();
+        LinkedHashMap<Double, Double> queueWaitMap = REUSABLE_QUEUE_WAIT_MAP.isBound() 
+            ? REUSABLE_QUEUE_WAIT_MAP.get() : new LinkedHashMap<>();
         
         // Clear and populate maps
         successMap.clear();
@@ -408,14 +411,15 @@ public final class MetricsCollector implements AutoCloseable {
      * Indexes a histogram snapshot into a map of percentile -> value.
      * 
      * <p><strong>Performance Optimization:</strong> Reuses a HashMap instance
-     * via ThreadLocal to avoid allocations in the hot path.
+     * via ScopedValue (Java 21) to avoid allocations in the hot path.
      * 
      * @param snapshot the histogram snapshot to index
      * @return map of percentile (rounded to 3 decimals) -> value in nanoseconds
      */
     private Map<Double, Double> indexSnapshot(io.micrometer.core.instrument.distribution.HistogramSnapshot snapshot) {
-        // Reuse HashMap instance to avoid allocations
-        HashMap<Double, Double> idx = reusableIndexMap.get();
+        // Reuse HashMap instance to avoid allocations (using ScopedValue with fallback)
+        HashMap<Double, Double> idx = REUSABLE_INDEX_MAP.isBound() 
+            ? REUSABLE_INDEX_MAP.get() : new HashMap<>();
         idx.clear();
         for (var pv : snapshot.percentileValues()) {
             double key = round3(pv.percentile());
@@ -497,8 +501,10 @@ public final class MetricsCollector implements AutoCloseable {
     /**
      * Closes this metrics collector and cleans up resources.
      * 
-     * <p>This method cleans up {@link ThreadLocal} instances to prevent memory leaks,
-     * especially important in thread pool environments where threads are reused.
+     * <p>This method is provided for {@link AutoCloseable} compatibility.
+     * With ScopedValue (Java 21), explicit cleanup is not required as values
+     * are automatically cleaned up when the scope ends. However, this method
+     * is kept for API consistency and potential future resource management needs.
      * 
      * <p>After calling this method, the collector should not be used. Calling
      * {@link #snapshot()} or other methods after close may work but is not guaranteed
@@ -515,11 +521,8 @@ public final class MetricsCollector implements AutoCloseable {
      */
     @Override
     public void close() {
-        // Clean up ThreadLocal instances to prevent memory leaks
-        // This is critical in thread pool environments where threads are reused
-        reusableSuccessMap.remove();
-        reusableFailureMap.remove();
-        reusableQueueWaitMap.remove();
-        reusableIndexMap.remove();
+        // ScopedValue does not require explicit cleanup - values are automatically
+        // cleaned up when the scope ends. This method is kept for AutoCloseable
+        // compatibility and potential future resource management needs.
     }
 }

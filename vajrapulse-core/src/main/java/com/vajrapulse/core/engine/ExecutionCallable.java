@@ -1,8 +1,9 @@
 package com.vajrapulse.core.engine;
 
 import com.vajrapulse.core.metrics.MetricsCollector;
+import io.opentelemetry.api.trace.Span;
 import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * Callable for executing a task and recording metrics.
@@ -18,8 +19,10 @@ final class ExecutionCallable implements Callable<Void> {
     private final MetricsCollector metricsCollector;
     private final long iteration;
     private final long queueStartNanos;
-    private final AtomicLong pendingExecutions;
+    private final LongAdder pendingExecutions;
     private final boolean shouldRecordMetrics;
+    private final Span scenarioSpan; // Parent scenario span for tracing
+    private final String runId; // Run ID for tracing
     
     /**
      * Creates a new execution callable.
@@ -28,22 +31,28 @@ final class ExecutionCallable implements Callable<Void> {
      * @param metricsCollector the metrics collector
      * @param iteration the current iteration number
      * @param queueStartNanos the nano time when task was queued
-     * @param pendingExecutions atomic counter for pending executions
+     * @param pendingExecutions LongAdder counter for pending executions (high-contention counter)
      * @param shouldRecordMetrics whether metrics should be recorded for this execution
+     * @param scenarioSpan the parent scenario span for tracing (may be invalid if tracing disabled)
+     * @param runId the run ID for tracing correlation
      */
     ExecutionCallable(
             TaskExecutor taskExecutor,
             MetricsCollector metricsCollector,
             long iteration,
             long queueStartNanos,
-            AtomicLong pendingExecutions,
-            boolean shouldRecordMetrics) {
+            LongAdder pendingExecutions,
+            boolean shouldRecordMetrics,
+            Span scenarioSpan,
+            String runId) {
         this.taskExecutor = taskExecutor;
         this.metricsCollector = metricsCollector;
         this.iteration = iteration;
         this.queueStartNanos = queueStartNanos;
         this.pendingExecutions = pendingExecutions;
         this.shouldRecordMetrics = shouldRecordMetrics;
+        this.scenarioSpan = scenarioSpan;
+        this.runId = runId;
     }
     
     @Override
@@ -58,11 +67,11 @@ final class ExecutionCallable implements Callable<Void> {
         // Decrement pending count when execution starts (before actual execution)
         // This ensures queue size metric reflects only tasks waiting in queue,
         // not tasks that have started executing
-        pendingExecutions.decrementAndGet();
-        metricsCollector.updateQueueSize(pendingExecutions.get());
+        pendingExecutions.decrement(); // LongAdder for high-contention counter
+        metricsCollector.updateQueueSize(pendingExecutions.sum()); // LongAdder sum for read
         
         try {
-            ExecutionMetrics metrics = taskExecutor.executeWithMetrics(iteration);
+            ExecutionMetrics metrics = taskExecutor.executeWithMetrics(iteration, scenarioSpan, runId);
             // Only record metrics during steady-state phase (warm-up/cool-down excluded)
             if (shouldRecordMetrics) {
                 metricsCollector.record(metrics);

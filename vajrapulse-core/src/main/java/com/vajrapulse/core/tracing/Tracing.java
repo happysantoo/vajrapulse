@@ -70,25 +70,47 @@ public final class Tracing {
 
     public static boolean isEnabled() { return tracer != null; }
 
-    /** Starts a scenario span (root). */
+    /** Starts a scenario span (root) for the entire load test run.
+     * 
+     * <p>This span represents the entire load test scenario and serves as the parent
+     * for all execution spans. It includes attributes for run ID, task class, and
+     * load pattern type.
+     * 
+     * @param runId the run identifier for correlation
+     * @param taskClass the task class name
+     * @param loadPattern the load pattern class name
+     * @return the scenario span, or invalid span if tracing is disabled
+     */
     public static Span startScenarioSpan(String runId, String taskClass, String loadPattern) {
         if (!isEnabled()) return Span.getInvalid();
         return tracer.spanBuilder("scenario")
             .setSpanKind(SpanKind.INTERNAL)
-            .setAttribute(RUN_ID, runId)
-            .setAttribute(TASK_CLASS, taskClass)
-            .setAttribute(LOAD_PATTERN, loadPattern)
+            .setAttribute(RUN_ID, runId != null ? runId : "unknown")
+            .setAttribute(TASK_CLASS, taskClass != null ? taskClass : "unknown")
+            .setAttribute(LOAD_PATTERN, loadPattern != null ? loadPattern : "unknown")
             .startSpan();
     }
 
-    /** Starts an execution span child of a parent scenario span. */
+    /** Starts an execution span child of a parent scenario span.
+     * 
+     * <p>This span represents a single task execution iteration and is linked
+     * to the parent scenario span for proper trace hierarchy. It includes
+     * attributes for run ID and iteration number.
+     * 
+     * @param parent the parent scenario span (may be invalid if tracing disabled)
+     * @param runId the run identifier for correlation
+     * @param iteration the iteration number (0-based)
+     * @return the execution span, or invalid span if tracing is disabled
+     */
     public static Span startExecutionSpan(Span parent, String runId, long iteration) {
         if (!isEnabled()) return Span.getInvalid();
-        Context parentCtx = parent != null ? parent.storeInContext(Context.current()) : Context.current();
+        Context parentCtx = parent != null && parent.isRecording() 
+            ? parent.storeInContext(Context.current()) 
+            : Context.current();
         return tracer.spanBuilder("execution")
             .setParent(parentCtx)
             .setSpanKind(SpanKind.INTERNAL)
-            .setAttribute(RUN_ID, runId)
+            .setAttribute(RUN_ID, runId != null ? runId : "unknown")
             .setAttribute(ITERATION, iteration)
             .startSpan();
     }

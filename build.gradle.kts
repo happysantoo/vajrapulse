@@ -4,6 +4,7 @@ plugins {
     id("com.gradleup.shadow") version "9.0.0-beta4" apply false
     jacoco
     id("com.github.spotbugs") version "6.0.14" apply false
+    id("org.owasp.dependencycheck") version "9.0.9" apply false
     id("maven-publish")
     signing
 }
@@ -11,7 +12,7 @@ plugins {
 allprojects {
     // Artifact coordinates moved to 'com.vajrapulse' for 0.9 release alignment.
     group = "com.vajrapulse"
-    version = "0.9.10"
+    version = "0.9.11"
 
     repositories {
         mavenCentral()
@@ -43,6 +44,9 @@ subprojects {
         options.encoding = "UTF-8"
         options.release.set(21)
         options.compilerArgs.addAll(listOf("-parameters", "-Xlint:deprecation"))
+        // Enable preview features for ScopedValue (Java 21 preview API)
+        // Required for vajrapulse-core (uses ScopedValue) and all modules that depend on it
+        options.compilerArgs.add("--enable-preview")
         
         // Configure JavaDoc linting
         // Suppress doclint warnings for missing comments in examples (they're educational)
@@ -57,13 +61,14 @@ subprojects {
     
     // Configure JavaDoc task to check for documentation issues
     tasks.withType<Javadoc> {
-        options {
-            (this as StandardJavadocDocletOptions).apply {
-                addStringOption("Xdoclint:all,-missing", "-quiet")
-                // Suppress doclint for examples
-                if (project.path.startsWith(":examples")) {
-                    addStringOption("Xdoclint:none", "-quiet")
-                }
+        // Enable preview features for JavaDoc generation (required for ScopedValue)
+        (options as StandardJavadocDocletOptions).apply {
+            addBooleanOption("-enable-preview", true)
+            source = "21"
+            addStringOption("Xdoclint:all,-missing", "-quiet")
+            // Suppress doclint for examples
+            if (project.path.startsWith(":examples")) {
+                addStringOption("Xdoclint:none", "-quiet")
             }
         }
     }
@@ -79,10 +84,10 @@ subprojects {
 
         // Configure coverage verification: enforce ≥90% for tested modules
         tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
-            dependsOn(tasks.named("compileJava"))
-            // Include Groovy compilation if present (Spock tests / Groovy sources)
-            tasks.findByName("compileGroovy")?.let { dependsOn(it) }
             dependsOn(tasks.named("test"))
+            // Ensure test compilation is complete before coverage verification
+            dependsOn(tasks.named("compileTestJava"))
+            tasks.findByName("compileTestGroovy")?.let { dependsOn(it) }
             executionData.setFrom(files(layout.buildDirectory.dir("jacoco/test.exec")))
             val fileFilter = listOf("**/module-info.class")
             classDirectories.setFrom(
@@ -106,6 +111,9 @@ subprojects {
         }
 
         tasks.withType<Test> {
+            // Enable preview features for ScopedValue (Java 21 preview API)
+            // Required for all modules that depend on vajrapulse-core
+            jvmArgs("--enable-preview")
             useJUnitPlatform()
             testLogging {
                 events("passed", "skipped", "failed")
@@ -253,6 +261,9 @@ tasks.register("compileExamples") {
 tasks.named("build") {
     dependsOn(tasks.named("compileExamples"))
 }
+
+// OWASP Dependency Check is configured via security workflow
+// Default configuration is sufficient for CI/CD
 
 // Convenience task: aggregate build before release
 tasks.register("prepareRelease") {
