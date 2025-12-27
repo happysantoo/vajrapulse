@@ -46,11 +46,11 @@ public interface MetricsExporter {
      * <p>The default implementation delegates to {@link #export(String, AggregatedMetrics)}
      * for backward compatibility with existing exporters.
      * 
-     * @param title human-readable title describing the snapshot context
-     * @param metrics aggregated metrics data
-     * @param context run context with metadata (runId, task class, pattern, etc.)
-     * @since 0.9.12
-     */
+ * @param title human-readable title describing the snapshot context
+ * @param metrics aggregated metrics data
+ * @param context run context with metadata (runId, task class, pattern, etc.)
+ * @since 0.9.11
+ */
     default void export(String title, AggregatedMetrics metrics, RunContext context) {
         // Default implementation for backward compatibility
         export(title, metrics);

@@ -12,7 +12,7 @@ import java.util.Objects;
  * <p>This record provides an immutable implementation of RunContext
  * with defensive copies of mutable collections.
  * 
- * @since 0.9.12
+ * @since 0.9.11
  */
 record DefaultRunContext(
     String runId,

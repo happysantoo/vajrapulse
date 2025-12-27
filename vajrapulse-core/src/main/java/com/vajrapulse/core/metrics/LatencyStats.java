@@ -19,7 +19,7 @@ package com.vajrapulse.core.metrics;
  * @param min the minimum latency in nanoseconds
  * @param max the maximum latency in nanoseconds
  * @param count the number of samples
- * @since 0.9.12
+ * @since 0.9.11
  */
 public record LatencyStats(
     double mean,

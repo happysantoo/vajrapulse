@@ -16,7 +16,7 @@ import java.net.UnknownHostException;
  * @param osArch the operating system architecture (e.g., "aarch64")
  * @param hostname the hostname of the machine
  * @param availableProcessors the number of available processors
- * @since 0.9.12
+ * @since 0.9.11
  */
 public record SystemInfo(
     String javaVersion,

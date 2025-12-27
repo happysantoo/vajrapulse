@@ -22,7 +22,7 @@ import java.util.Map;
  * exporter.export("Test Results", metrics, context);
  * }</pre>
  * 
- * @since 0.9.12
+ * @since 0.9.11
  */
 public interface RunContext {
     
