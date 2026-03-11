@@ -12,7 +12,7 @@ plugins {
 allprojects {
     // Artifact coordinates moved to 'com.vajrapulse' for 0.9 release alignment.
     group = "com.vajrapulse"
-    version = "0.9.11"
+    version = "1.0.0"
 
     repositories {
         mavenCentral()
@@ -203,7 +203,7 @@ subprojects {
                         from(components["java"])
                         pom {
                             name.set(project.name)
-                            description.set("VajraPulse module ${project.name} (pre-1.0 load testing framework leveraging Java 21 virtual threads)")
+                            description.set("VajraPulse module ${project.name} — high-performance load testing framework leveraging Java 21 virtual threads")
                             url.set("https://github.com/happysantoo/vajrapulse")
                             licenses {
                                 license {

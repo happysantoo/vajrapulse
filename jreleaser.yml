@@ -1,7 +1,7 @@
 project:
   name: vajrapulse
-  version: 0.9.11
-  description: VajraPulse distributed load testing framework (pre-1.0, Java 21 virtual threads)
+  version: 1.0.0
+  description: VajraPulse high-performance load testing framework — Java 21 virtual threads, 1.0 production release
   authors:
     - Santhosh Kuppusamy
   license: Apache-2.0

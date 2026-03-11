@@ -15,6 +15,17 @@ package com.vajrapulse.api.task;
  *   <li>{@link #teardown()} - called exactly once after all executions complete</li>
  * </ol>
  * 
+ * <p><strong>Metrics Boundaries:</strong> Metrics (execution count, latency, success/failure rates)
+ * are recorded only for {@code execute()} invocations. The {@code init()} and {@code teardown()}
+ * phases are excluded from metrics collection to ensure accurate measurement of the actual load
+ * test workload. This means:
+ * <ul>
+ *   <li>Time spent in {@code init()} does not affect latency percentiles</li>
+ *   <li>Time spent in {@code teardown()} does not affect latency percentiles</li>
+ *   <li>Exceptions in {@code init()} or {@code teardown()} do not affect success/failure rates</li>
+ *   <li>Only {@code execute()} iterations contribute to execution counts</li>
+ * </ul>
+ * 
  * <p><strong>Thread Safety:</strong> {@code init()} and {@code teardown()} are
  * called from the orchestration thread and guaranteed not to run concurrently.
  * {@code execute(iteration)} may be called concurrently from multiple threads
@@ -128,6 +139,8 @@ public interface TaskLifecycle {
      *   <li>Called before any {@code execute()} invocations</li>
      *   <li>Not called concurrently with {@code execute()} or {@code teardown()}</li>
      *   <li>If this method throws an exception, {@code teardown()} will NOT be called</li>
+     *   <li><strong>Metrics Exclusion:</strong> Time spent in this method is NOT included in
+     *       execution metrics (latency, success/failure rates, execution counts)</li>
      * </ul>
      * 
      * @throws Exception if initialization fails; the test will not start
@@ -188,6 +201,8 @@ public interface TaskLifecycle {
      *   <li>Not called concurrently with {@code execute()}</li>
      *   <li>Always called, even if {@code execute()} threw exceptions</li>
      *   <li>Exceptions thrown here are logged but do not prevent shutdown</li>
+     *   <li><strong>Metrics Exclusion:</strong> Time spent in this method is NOT included in
+     *       execution metrics (latency, success/failure rates, execution counts)</li>
      * </ul>
      * 
      * @throws Exception if cleanup fails; logged but does not prevent shutdown completion

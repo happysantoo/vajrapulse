@@ -19,7 +19,7 @@ package com.vajrapulse.api.task;
  * @see com.vajrapulse.api.task.TaskResult
  * @see com.vajrapulse.api.task.VirtualThreads
  * @see com.vajrapulse.api.task.PlatformThreads
- * @deprecated Use {@link com.vajrapulse.api.task.TaskLifecycle} instead. This interface will be removed in 0.9.6.
+ * @deprecated Use {@link com.vajrapulse.api.task.TaskLifecycle} instead. This interface will be removed in 1.1.0.
  */
 @Deprecated(since = "0.9.5", forRemoval = true)
 public interface Task extends com.vajrapulse.api.task.TaskLifecycle {
