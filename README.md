@@ -33,6 +33,10 @@ Version 1.0.0 is the **first production release** of VajraPulse:
 
 See [CHANGELOG.md](CHANGELOG.md#100---2026-03-10) for complete release notes.
 
+### Scope: what 1.0.0 is (and is not)
+
+**1.0.0** is the first **SemVer-stable** release of the **standalone** engine: one JVM runs your load pattern, records metrics, and exports results. **Multi-worker / orchestrated distributed execution** is explicitly **out of scope** for 1.0.0 and is planned for a later minor (see [CHANGELOG.md](CHANGELOG.md) Unreleased and [`documents/roadmap/POST_1.0_BACKLOG.md`](documents/roadmap/POST_1.0_BACKLOG.md)). The public API inventory and stability categories are documented in [`documents/architecture/API_FREEZE_0.9.11.md`](documents/architecture/API_FREEZE_0.9.11.md).
+
 ---
 
 ## Why VajraPulse?
@@ -75,7 +79,7 @@ dependencies {
         <dependency>
             <groupId>com.vajrapulse</groupId>
             <artifactId>vajrapulse-bom</artifactId>
-            <version>0.9.10</version>
+            <version>1.0.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -367,7 +371,7 @@ dependencies {
         <dependency>
             <groupId>com.vajrapulse</groupId>
             <artifactId>vajrapulse-bom</artifactId>
-            <version>0.9.10</version>
+            <version>1.0.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -390,7 +394,7 @@ dependencies {
 ```kotlin
 dependencies {
     implementation("com.vajrapulse:vajrapulse-core:1.0.0")
-    implementation("com.vajrapulse:vajrapulse-worker:0.9.10")
+    implementation("com.vajrapulse:vajrapulse-worker:1.0.0")
 }
 ```
 

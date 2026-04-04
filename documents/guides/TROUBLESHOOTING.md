@@ -1,6 +1,6 @@
 # VajraPulse Troubleshooting Guide
 
-**Version**: 0.9.5  
+**Version**: 1.0.0  
 **Status**: Troubleshooting Guide
 
 ---
@@ -8,6 +8,19 @@
 ## Overview
 
 This guide helps diagnose and resolve common issues when using VajraPulse for load testing.
+
+---
+
+## High TPS: coordinator thread CPU
+
+**Symptoms**: At very high target TPS, one CPU core stays busy even when the system under test is idle.
+
+**Cause**: The load loop runs on the thread that invoked `ExecutionEngine.run()`. `RateController` may use short busy-wait segments (`Thread.onSpinWait`) for sub-millisecond pacing, which is intentional for timing accuracy.
+
+**Mitigations**:
+
+- Run the engine on a dedicated thread if your host application shares the caller thread with other work.
+- If CPU use is unacceptable, lower target TPS slightly or adjust pattern duration; consider profiling `RateController` on your platform.
 
 ---
 

@@ -1,182 +1,140 @@
 # VajraPulse Performance Baseline
 
-**Date**: 2026-03-10
-**Version**: 1.0.0
-**Status**: Infrastructure Ready — Run `./gradlew :benchmarks:jmh` to populate actual numbers
+**Date**: 2026-04-04  
+**Version**: 1.0.0  
+**Status**: Baseline captured (default JMH suite; macro benchmark optional)
 
 ---
 
 ## Executive Summary
 
-This document establishes performance baselines for VajraPulse core components using JMH benchmarks. These baselines serve as reference points for detecting performance regressions and validating optimizations.
+This document records JMH results for VajraPulse core components. Use them for regression triage with [`scripts/compare-benchmarks.sh`](../../scripts/compare-benchmarks.sh) and the benchmark workflow.
 
-**Baseline Environment**:
-- Java: 21
-- OS: macOS/Linux
-- CPU: Variable (CI runners)
-- JVM: OpenJDK 21 (default GC)
+**Baseline environment (this run)**:
+
+| Field | Value |
+|-------|--------|
+| JDK | OpenJDK 21.0.8 (Homebrew `openjdk@21`), macOS aarch64 |
+| JMH | 1.37 |
+| JVM options (forks) | `--enable-preview`, `-XX:+UseG1GC`, `-Xmx512m` (see JMH console for per-benchmark variance) |
+| Command | `./gradlew :benchmarks:jmh --no-configuration-cache` |
+
+**Note**: `MacroScenarioBenchmark` is **excluded by default** (~2 min per iteration). To include it:
+
+```bash
+./gradlew :benchmarks:jmh -Pjmh.includeMacro --no-configuration-cache
+```
 
 ---
 
-## Benchmark Results
+## Benchmark Results (2026-04-04)
+
+Summary copied from `benchmarks/build/results/jmh/results.txt` after a successful local run.
 
 ### TaskExecutorBenchmark
 
-Measures overhead of task execution instrumentation.
+| Benchmark | Mode | Score | Error | Units |
+|-----------|------|-------|-------|-------|
+| `executeWithMetrics` | avgt | 26.968 | ± 0.314 | ns/op |
+| `executeDirect` | avgt | 3.274 | ± 0.222 | ns/op |
 
-| Benchmark | Mode | Score (ns/op) | Error | Target | Status |
-|-----------|------|---------------|-------|--------|--------|
-| `executeWithMetrics` | avgt | TBD | ±TBD | < 1,000ns | ⏳ Pending |
-| `executeDirect` | avgt | TBD | ±TBD | Baseline | ⏳ Pending |
-
-**Notes**:
-- `executeWithMetrics` includes full instrumentation (timing, tracing, metrics)
-- `executeDirect` measures raw task execution (baseline)
-- Overhead = `executeWithMetrics` - `executeDirect`
-
----
+Instrumentation overhead (approx.): ~23.7 ns/op vs direct execute on this machine.
 
 ### MetricsCollectorBenchmark
 
-Measures metrics collection performance.
-
-| Benchmark | Mode | Score | Error | Target | Status |
-|-----------|------|-------|-------|--------|--------|
-| `record` | avgt | TBD ns/op | ±TBD | < 100ns | ⏳ Pending |
-| `snapshot` | avgt | TBD ms | ±TBD | < 1ms (1M execs) | ⏳ Pending |
-| `recordAndSnapshot` | avgt | TBD ns/op | ±TBD | Combined | ⏳ Pending |
-
-**Notes**:
-- `record` measures single metric recording overhead
-- `snapshot` measures aggregation overhead (with 1M recorded executions)
-- `recordAndSnapshot` measures combined operation
-
----
+| Benchmark | Mode | Score | Error | Units |
+|-----------|------|-------|-------|-------|
+| `record` | avgt | 65.058 | ± 0.917 | ns/op |
+| `snapshot` | avgt | 1872.087 | ± 188.325 | ns/op |
+| `recordAndSnapshot` | avgt | 39497.876 | ± 743.506 | ns/op |
 
 ### RateControllerBenchmark
 
-Measures rate control precision and overhead.
+| Benchmark | Mode | Score | Error | Units |
+|-----------|------|-------|-------|-------|
+| `getCurrentTps` | avgt | 10.513 | ± 0.171 | ns/op |
+| `getElapsedMillis` | avgt | 9.758 | ± 0.215 | ns/op |
+| `waitForNext` | avgt | 995508.633 | ± 30109.097 | ns/op |
 
-| Benchmark | Mode | Score | Error | Target | Status |
-|-----------|------|-------|-------|--------|--------|
-| `getCurrentTps` | avgt | TBD ns/op | ±TBD | < 10μs | ⏳ Pending |
-| `getElapsedMillis` | avgt | TBD ns/op | ±TBD | < 100ns | ⏳ Pending |
-| `waitForNext` | avgt | TBD ns/op | ±TBD | Variable | ⏳ Pending |
+`waitForNext` average reflects ~1 Hz pacing in the benchmark fixture (expected).
 
-**Notes**:
-- `waitForNext` includes adaptive sleep, so timing varies
-- Precision measured separately via integration tests
+Throughput mode (same class, alternate modes):
+
+| Benchmark | Mode | Score | Error | Units |
+|-----------|------|-------|-------|-------|
+| `getCurrentTps` | thrpt | 0.095 | ± 0.002 | ops/ns |
+| `getElapsedMillis` | thrpt | 0.103 | ± 0.002 | ops/ns |
+
+### MetricsOverheadBenchmark
+
+| Benchmark | Mode | Score | Error | Units |
+|-----------|------|-------|-------|-------|
+| `executeWithoutMetrics` | avgt | 1.290 | ± 0.026 | ns/op |
+| `executeWithMetrics` | avgt | 26.805 | ± 0.448 | ns/op |
+| `recordExecution` | avgt | 89.558 | ± 1.605 | ns/op |
+| `snapshotMetrics` | avgt | 1836.632 | ± 40.105 | ns/op |
+
+### AllocationBenchmark (throughput)
+
+| Benchmark | Mode | Score | Error | Units |
+|-----------|------|-------|-------|-------|
+| `metricsRecordHotPath` | thrpt | 11134599.191 | ± 182639.894 | ops/s |
+| `snapshotAllocation` | thrpt | 576868.574 | ± 10631.050 | ops/s |
+| `taskExecutorHotPath` | thrpt | 37236112.883 | ± 476524.668 | ops/s |
+| `taskResultAllocation` | thrpt | 328596930.809 | ± 1084871.269 | ops/s |
 
 ---
 
 ## Macro Scenario Benchmark
 
-**Status**: ⏳ To be implemented
+**Status**: Implemented; **not** in the default JMH run (use `-Pjmh.includeMacro`).
 
-A macro benchmark simulating a realistic load test scenario:
-- 10,000 TPS sustained load
-- 2-minute duration
-- Measures end-to-end overhead
-
-**Target Metrics**:
-- Total execution count: ~1,200,000
-- Average latency overhead: < 1μs
-- Memory allocation rate: TBD
-- CPU utilization: TBD
+Target scenario: 10,000 TPS, 2-minute single-shot invocations. Expect ~120 s/op per iteration.
 
 ---
 
 ## Performance Targets Summary
 
-| Component | Metric | Target | Baseline | Status |
-|-----------|--------|--------|----------|--------|
-| TaskExecutor | Execution overhead | < 1μs | TBD | ⏳ Pending |
-| MetricsCollector | Record latency | < 100ns | TBD | ⏳ Pending |
-| MetricsCollector | Snapshot (1M execs) | < 1ms | TBD | ⏳ Pending |
-| RateController | TPS calculation | < 10μs | TBD | ⏳ Pending |
-| RateController | Timing precision | < 1ms deviation | TBD | ⏳ Pending |
+| Component | Metric | Target | Baseline (2026-04-04) | Status |
+|-----------|--------|--------|------------------------|--------|
+| TaskExecutor | `executeWithMetrics` | < 1,000 ns/op | ~27 ns/op | OK |
+| MetricsCollector | `record` | < 100 ns/op | ~65 ns/op | Watch |
+| MetricsCollector | `snapshot` | context-dependent | ~1.9 μs/op | OK |
+| RateController | `getCurrentTps` / `getElapsedMillis` | < 10 μs | ~10 ns/op | OK |
+
+Targets are indicative; compare **relative** changes on the **same** hardware/CI image.
 
 ---
 
-## Running Benchmarks
-
-### Generate Baseline
+## Running benchmarks
 
 ```bash
-# Run all benchmarks
-./gradlew :benchmarks:jmh
+# Default suite (macro excluded)
+./gradlew :benchmarks:jmh --no-configuration-cache
 
-# Results will be in benchmarks/build/jmh-results/
+# Include macro benchmark
+./gradlew :benchmarks:jmh -Pjmh.includeMacro --no-configuration-cache
 ```
 
-### Update This Document
+Results: `benchmarks/build/results/jmh/results.txt`
 
-After running benchmarks, update this document with actual results:
-1. Copy results from JMH output
-2. Update tables with actual scores
-3. Mark status as ✅ Baseline or ⚠️ Needs Attention
-4. Commit baseline to version control
+### JMH + preview (ScopedValue)
+
+The bytecode generator and benchmark forks run with `--enable-preview` (see [`benchmarks/build.gradle.kts`](../../benchmarks/build.gradle.kts)).
 
 ---
 
-## Regression Detection
+## Regression detection
 
-**Threshold**: 10% degradation triggers investigation
-
-**Process**:
-1. Run benchmarks in CI
-2. Compare against baseline
-3. Fail CI if regression > 10%
-4. Document regression in issue tracker
+**Threshold**: investigate if degradation exceeds ~10% on comparable hardware (see `scripts/compare-benchmarks.sh`).
 
 ---
 
-## Additional Benchmarks
+## CI
 
-### MetricsOverheadBenchmark
-
-Measures instrumentation overhead (Task 3.3: P7).
-
-| Benchmark | Mode | Target | Purpose |
-|-----------|------|--------|---------|
-| `executeWithoutMetrics` | avgt | Baseline | Raw task execution |
-| `executeWithMetrics` | avgt | < 500μs overhead | Full instrumentation |
-| `recordExecution` | avgt | < 100ns | Direct metric recording |
-| `snapshotMetrics` | avgt | < 1ms | Aggregation overhead |
-
-### AllocationBenchmark
-
-Measures allocation rates in hot paths (Task 3.2: P2).
-
-Run with GC profiler: `./gradlew :benchmarks:jmh -Pjmh.profilers=gc`
-
-| Benchmark | Purpose | Target |
-|-----------|---------|--------|
-| `taskExecutorHotPath` | Full execution path | ≥20% reduction |
-| `metricsRecordHotPath` | Metrics recording | Minimal allocations |
-| `snapshotAllocation` | Aggregation allocations | Acceptable (periodic) |
-| `taskResultAllocation` | TaskResult creation | Zero/minimal |
+Benchmarks workflow: [`.github/workflows/benchmarks.yml`](../../.github/workflows/benchmarks.yml).
 
 ---
 
-## CI Integration
-
-Benchmarks run on push to main via `.github/workflows/benchmarks.yml`.
-
-Results are uploaded as artifacts for comparison.
-
----
-
-## Next Steps
-
-1. ✅ Created benchmark suite (TaskExecutor, MetricsCollector, RateController)
-2. ✅ Created overhead benchmark (MetricsOverheadBenchmark)
-3. ✅ Created allocation benchmark (AllocationBenchmark)
-4. ✅ Set up CI benchmark workflow
-5. ⏳ Run initial baseline and document actual results
-6. ✅ Implement benchmark comparison script (`scripts/compare-benchmarks.sh`)
-
----
-
-**Last Updated**: 2026-03-10
-**Next Review**: After first 1.0.0 baseline run is committed
+**Last updated**: 2026-04-04  
+**Next review**: After major engine or metrics changes, or quarterly

@@ -58,8 +58,13 @@ import java.util.concurrent.atomic.LongAdder;
  * 
  * <p><strong>Resource Management:</strong> The {@code MetricsCollector} passed to this
  * engine should be managed by the caller. If using try-with-resources for the engine,
- * also use try-with-resources for the metrics collector to ensure proper cleanup of
- * ThreadLocal instances and prevent memory leaks.
+ * also use try-with-resources for the metrics collector to ensure proper cleanup.
+ * 
+ * <p><strong>Queue depth gauge:</strong> Pending depth is decremented when a submitted
+ * execution starts. If the executor is shut down forcefully ({@code shutdownNow}) before
+ * some runnables start, those submissions never decrement the counter, so
+ * {@link com.vajrapulse.core.metrics.AggregatedMetrics#queueSize()} may be non-zero after
+ * a forced shutdown. Treat the gauge as best-effort in that scenario.
  * 
  * @since 0.9.0
  */

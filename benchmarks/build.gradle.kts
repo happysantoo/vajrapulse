@@ -3,6 +3,8 @@ plugins {
     id("me.champeau.jmh") version "0.7.1"
 }
 
+import me.champeau.jmh.JmhBytecodeGeneratorTask
+
 repositories {
     mavenCentral()
 }
@@ -47,4 +49,14 @@ jmh {
     iterations.set(10)
     fork.set(1)
     threads.set(1)
+    // vajrapulse-core uses preview (ScopedValue); JMH generator and forks must load those classes
+    jvmArgs.set(listOf("--enable-preview"))
+    // MacroScenarioBenchmark runs ~2 min per iteration; exclude unless explicitly enabled
+    if (!project.hasProperty("jmh.includeMacro")) {
+        excludes.add(".*MacroScenarioBenchmark.*")
+    }
+}
+
+tasks.withType<JmhBytecodeGeneratorTask>().configureEach {
+    jvmArgs.add("--enable-preview")
 }

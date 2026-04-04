@@ -4,7 +4,7 @@
 
 ### Code Quality
 - [x] All tests pass: `./gradlew test --rerun-tasks`
-- [x] Coverage ≥90%: `./gradlew jacocoTestCoverageVerification`
+- [x] Coverage ≥90%: `./gradlew jacocoTestCoverageVerification --rerun-tasks`
 - [x] SpotBugs clean: `./gradlew spotbugsMain`
 - [x] No compiler warnings
 - [x] Examples compile: `./gradlew compileExamples`
@@ -21,11 +21,14 @@
 - [x] documents/guides/QUICK_START.md validated (<2 min)
 - [x] Migration guide complete (MIGRATION_0.9_TO_1.0.md)
 - [x] Versioning strategy documented (VERSIONING.md)
+- [x] Publication guide: [RELEASE_1.0.0_PUBLICATION.md](../guides/RELEASE_1.0.0_PUBLICATION.md)
 
 ### Performance
 - [x] Benchmark infrastructure in place (`./gradlew :benchmarks:jmh`)
+- [x] JMH runs with Java 21 `--enable-preview` (bytecode generator + forks)
+- [x] Macro benchmark optional via `-Pjmh.includeMacro` (default suite excludes it for CI/local speed)
 - [x] Benchmark comparison script implemented (`scripts/compare-benchmarks.sh`)
-- [ ] Baseline numbers populated in PERFORMANCE_BASELINE.md (run benchmarks post-release)
+- [x] Baseline numbers populated in PERFORMANCE_BASELINE.md (2026-04-04 local run; re-run on release hardware as needed)
 
 ### Security
 - [x] OWASP dependency check configured (`.github/workflows/security.yml`)
@@ -41,16 +44,17 @@
 ### Release Process
 - [x] Version set to 1.0.0 in build.gradle.kts
 - [x] Version set to 1.0.0 in jreleaser.yml
-- [ ] Git tag created: v1.0.0
+- [x] Git annotated tag `v1.0.0` created locally (if missing: see publication guide)
+- [ ] Git tag `v1.0.0` pushed to `origin` (maintainer)
 - [ ] GitHub release created with notes
 - [ ] Maven Central publication successful
 - [ ] Artifacts available on Maven Central
 
 ## Post-Release
 - [ ] Announce release (GitHub, social media)
-- [ ] Update version to 1.0.1-SNAPSHOT
-- [ ] Create 1.0.x maintenance branch
-- [ ] Archive 0.9.x release documents
+- [ ] Update version to 1.0.1-SNAPSHOT (or next pre-release)
+- [ ] Create 1.0.x maintenance branch (if using branch-per-line)
+- [ ] Archive 0.9.x release documents (optional)
 
 ## Success Criteria
 

@@ -12,24 +12,13 @@ MAJOR.MINOR.PATCH
 - **MINOR**: New features, backwards compatible
 - **PATCH**: Bug fixes, backwards compatible
 
-## Pre-1.0 Rules (Current)
+## Pre-1.0 Rules (historical)
 
-During pre-1.0 development:
+Before **1.0.0**, breaking changes were allowed in minor versions. That phase is complete for the core library API.
 
-- **Breaking changes are allowed** in MINOR versions
-- API is evolving toward stabilization
-- Users should pin to specific versions
-- Migration guides provided for breaking changes
+## Post-1.0 Rules (current)
 
-### Current Status: 0.9.x
-
-- Core APIs are stabilizing
-- Breaking changes are minimized but possible
-- Focus on feature completeness and quality
-
-## Post-1.0 Rules
-
-After 1.0.0 release:
+As of **1.0.0**:
 
 - **MAJOR**: Reserved for breaking API changes
 - **MINOR**: New features, deprecations (no removals)
@@ -58,21 +47,21 @@ Breaking changes will:
 
 - Release versions: `v1.2.3`
 - Pre-releases: `v1.0.0-rc1`, `v1.0.0-beta1`
-- Snapshots: `0.9.12-SNAPSHOT` (not published)
+- Snapshots: `1.0.1-SNAPSHOT` (example; not published to Central until release)
 
-## 1.0.0 Freeze Date
+## 1.0.0 status
 
-**Target**: When all P0 items from gap analysis are complete
+**1.0.0** is the current production line. Criteria below are tracked in [`documents/releases/RELEASE_1.0.0_CHECKLIST.md`](../releases/RELEASE_1.0.0_CHECKLIST.md) and [`documents/analysis/PERFORMANCE_BASELINE.md`](../analysis/PERFORMANCE_BASELINE.md).
 
-### 1.0.0 Criteria
+### 1.0.0 criteria (reference)
 
-- [ ] All public APIs reviewed and frozen
-- [ ] 100% JavaDoc coverage on API module
-- [ ] Performance baselines established
-- [ ] CI/CD pipeline operational
-- [ ] Security scanning in place
-- [ ] Quick start guide validated
-- [ ] Migration guide complete
+- [x] Public APIs reviewed and frozen (see API freeze document)
+- [x] JavaDoc coverage enforced on `vajrapulse-api`
+- [x] Performance baseline numbers recorded (JMH; macro optional)
+- [x] CI/CD pipeline operational
+- [x] Security scanning in place
+- [x] Quick start guide validated
+- [x] Migration guide complete
 
 ## Deprecation Policy
 
