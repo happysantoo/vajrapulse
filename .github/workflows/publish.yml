@@ -33,6 +33,12 @@ jobs:
       - name: Build, test, and verify
         run: ./gradlew build jacocoTestCoverageVerification --no-daemon
 
+      - name: Stage Maven artifacts
+        run: |
+          ./gradlew prepareRelease publishAllPublicationsToMavenLocal --no-daemon
+          mkdir -p target/staging-deploy
+          cp -r ~/.m2/repository/com/vajrapulse target/staging-deploy/com/vajrapulse
+
       - name: Publish to Maven Central
         env:
           MAVENCENTRALUSERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
@@ -44,8 +50,6 @@ jobs:
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.GPG_SECRET_KEY }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          ./gradlew prepareRelease
-
           DRY_FLAG=""
           if [[ "${{ inputs.dry_run }}" == "true" ]]; then
             DRY_FLAG="--dry-run"
