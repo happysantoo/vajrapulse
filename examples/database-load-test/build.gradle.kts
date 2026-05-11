@@ -27,7 +27,7 @@ dependencies {
     implementation("com.h2database:h2:2.3.232")
     
     // HikariCP for connection pooling
-    implementation("com.zaxxer:HikariCP:6.1.0")
+    implementation("com.zaxxer:HikariCP:7.0.2")
     
     // PostgreSQL driver (optional - uncomment if using PostgreSQL)
     // implementation("org.postgresql:postgresql:42.7.4")
