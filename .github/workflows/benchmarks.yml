@@ -28,7 +28,6 @@ jobs:
       - run: chmod +x gradlew
 
       - name: Run JMH Benchmarks
-        # --no-configuration-cache: JMH plugin + configuration cache can conflict; preview enabled in benchmarks/build.gradle.kts
         run: ./gradlew :benchmarks:jmh --no-daemon --no-configuration-cache
         continue-on-error: true
 
