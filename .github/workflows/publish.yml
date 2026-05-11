@@ -45,8 +45,16 @@ jobs:
       - name: Stage Maven artifacts
         run: |
           ./gradlew prepareRelease publishToMavenLocal --no-daemon
-          mkdir -p target/staging-deploy
-          cp -r ~/.m2/repository/com/vajrapulse target/staging-deploy/com/vajrapulse
+          STAGING_DIR="target/staging-deploy"
+          mkdir -p "$STAGING_DIR"
+          # Copy from Maven local repo to staging
+          MAVEN_LOCAL=~/.m2/repository/com/vajrapulse
+          echo "Maven local contents:"
+          ls -R "$MAVEN_LOCAL" | head -60
+          mkdir -p "$STAGING_DIR/com/vajrapulse"
+          cp -r "$MAVEN_LOCAL"/* "$STAGING_DIR/com/vajrapulse/"
+          echo "Staging directory contents:"
+          ls -R "$STAGING_DIR" | head -60
 
       - name: Publish to Maven Central
         run: |
