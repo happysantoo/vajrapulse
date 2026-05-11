@@ -8,9 +8,9 @@ dependencies {
     implementation("org.slf4j:slf4j-api:2.0.9")
     implementation("org.yaml:snakeyaml:2.2")
     // Minimal OpenTelemetry tracing dependencies
-    implementation("io.opentelemetry:opentelemetry-api:1.41.0")
-    implementation("io.opentelemetry:opentelemetry-sdk:1.41.0")
-    implementation("io.opentelemetry:opentelemetry-exporter-otlp:1.41.0")
+    implementation("io.opentelemetry:opentelemetry-api:1.62.0")
+    implementation("io.opentelemetry:opentelemetry-sdk:1.62.0")
+    implementation("io.opentelemetry:opentelemetry-exporter-otlp:1.62.0")
     implementation("io.opentelemetry:opentelemetry-semconv:1.26.0-alpha")
     
     // Vortex micro-batching library for task submission optimization
