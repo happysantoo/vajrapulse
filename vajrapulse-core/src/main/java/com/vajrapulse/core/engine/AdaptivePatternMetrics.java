@@ -1,5 +1,6 @@
 package com.vajrapulse.core.engine;
 
+import com.vajrapulse.api.annotation.Experimental;
 import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
 import com.vajrapulse.api.pattern.adaptive.AdaptivePhase;
 import io.micrometer.core.instrument.Counter;
@@ -13,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Registers Micrometer metrics for adaptive load patterns.
- * 
+ *
  * <p>This class registers gauges, counters, and timers to track:
  * <ul>
  *   <li>Current phase (RAMP_UP, RAMP_DOWN, SUSTAIN)</li>
@@ -23,9 +24,13 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li>Phase duration timers</li>
  *   <li>TPS adjustment histogram</li>
  * </ul>
- * 
+ *
  * @since 0.9.5
  */
+@Experimental(
+    expectedStable = "1.1.0",
+    reason = "Gauge registration leaks memory (missing meterRegistry.remove() in unregister). Known bug: gauge-with-side-effects anti-pattern. Fixed in 1.1.0."
+)
 public final class AdaptivePatternMetrics {
     
     // Store trackers per pattern instance to persist across gauge polls

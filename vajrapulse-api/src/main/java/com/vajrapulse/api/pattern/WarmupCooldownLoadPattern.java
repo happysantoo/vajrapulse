@@ -1,10 +1,11 @@
 package com.vajrapulse.api.pattern;
 
+import com.vajrapulse.api.annotation.Experimental;
 import java.time.Duration;
 
 /**
  * Wraps a load pattern with warm-up and cool-down phases.
- * 
+ *
  * <p>This wrapper adds three phases to any load pattern:
  * <ol>
  *   <li><strong>Warm-up Phase</strong>: Gradually ramps from 0 TPS to the initial TPS
@@ -14,31 +15,35 @@ import java.time.Duration;
  *   <li><strong>Cool-down Phase</strong>: Gradually ramps from the final TPS to 0 TPS.
  *       Metrics are not recorded during this phase.</li>
  * </ol>
- * 
+ *
  * <p>This provides clean separation between initialization and measurement phases,
  * allowing accurate performance baselines without warm-up artifacts.
- * 
+ *
  * <p>Example:
  * <pre>{@code
  * // Base pattern: 100 TPS for 5 minutes
  * LoadPattern basePattern = new StaticLoad(100.0, Duration.ofMinutes(5));
- * 
+ *
  * // Add 30s warm-up and 10s cool-down
  * LoadPattern pattern = new WarmupCooldownLoadPattern(
  *     basePattern,
  *     Duration.ofSeconds(30),  // Warm-up: 30 seconds
  *     Duration.ofSeconds(10)   // Cool-down: 10 seconds
  * );
- * 
+ *
  * // Total duration: 30s warm-up + 5m steady-state + 10s cool-down = 5m 40s
  * }</pre>
- * 
+ *
  * <p><strong>Phase Detection:</strong> Use {@link #getCurrentPhase(long)} to determine
  * which phase is active at a given elapsed time. This is useful for metrics collection
  * (skip during warm-up/cool-down) and logging.
- * 
+ *
  * @since 0.9.7
  */
+@Experimental(
+    expectedStable = "1.1.0",
+    reason = "Part of the adaptive pipeline. Depends on known-buggy adaptive components. Phase enum should be top-level. Will be refactored in 1.1.0."
+)
 public final class WarmupCooldownLoadPattern implements LoadPattern {
     
     /**

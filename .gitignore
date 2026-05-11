@@ -37,3 +37,4 @@ examples/http-load-test/otel-collector-data
 
 # VajraPulse run artifacts (test output JSON files)
 vajrapulse-run-*.json
+.gstack/

@@ -29,6 +29,8 @@ jobs:
       ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_PASSPHRASE }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all tags for version pre-flight check
 
       - name: Set up JDK 25
         uses: actions/setup-java@v4
@@ -51,15 +53,29 @@ jobs:
 
       - name: Publish to Maven Central
         run: |
+          # Extract version from jreleaser.yml
+          VERSION=$(grep -oP 'version:\s*\K\S+' jreleaser.yml | head -1)
+          echo "Project version: $VERSION"
+
+          # Pre-flight: check if this version was already published (idempotent)
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists — release already published. Skipping."
+            exit 0
+          fi
+
           DRY_FLAG=""
           if [[ "${{ inputs.dry_run }}" == "true" ]]; then
             DRY_FLAG="--dry-run"
             echo "=== DRY RUN MODE — no artifacts will be published ==="
           fi
 
-          curl -sL https://github.com/jreleaser/jreleaser/releases/download/v1.18.0/jreleaser-1.18.0.zip -o /tmp/jreleaser.zip
+          JRELEASER_VERSION="1.18.0"
+          JRELEASER_SHA256="581b6089f2fecc3eefa33da530df54cbf8e8fe57f2c2c85d8d29d1b111a84424"
+
+          curl -sL "https://github.com/jreleaser/jreleaser/releases/download/v${JRELEASER_VERSION}/jreleaser-${JRELEASER_VERSION}.zip" -o /tmp/jreleaser.zip
+          echo "${JRELEASER_SHA256}  /tmp/jreleaser.zip" | sha256sum -c --strict
           unzip -q /tmp/jreleaser.zip -d /tmp/jreleaser
-          /tmp/jreleaser/jreleaser-1.18.0/bin/jreleaser full-release \
+          /tmp/jreleaser/jreleaser-${JRELEASER_VERSION}/bin/jreleaser full-release \
             -c jreleaser.yml \
             $DRY_FLAG \
             --exclude-distribution distributions
