@@ -27,7 +27,7 @@ dependencies {
     implementation("io.grpc:grpc-netty-shaded:1.64.0")
     implementation("io.grpc:grpc-protobuf:1.64.0")
     implementation("io.grpc:grpc-stub:1.64.0")
-    implementation("com.google.protobuf:protobuf-java:4.27.3")
+    implementation("com.google.protobuf:protobuf-java:4.34.1")
     
     // Annotation dependency for generated code (Java 21 compatibility)
     compileOnly("javax.annotation:javax.annotation-api:1.3.2")
@@ -38,7 +38,7 @@ dependencies {
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:4.27.3"
+        artifact = "com.google.protobuf:protoc:4.34.1"
     }
     plugins {
         create("grpc") {
