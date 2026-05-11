@@ -16,7 +16,7 @@ dependencies {
     // Vortex micro-batching library for task submission optimization
     implementation("com.vajrapulse:vortex")
     
-    testImplementation("org.spockframework:spock-core:2.4-M4-groovy-4.0")
+    testImplementation("org.spockframework:spock-core:2.4-groovy-4.0")
     testImplementation("org.slf4j:slf4j-simple:2.0.9")
     testImplementation("org.awaitility:awaitility:4.3.0")
     testImplementation("org.awaitility:awaitility-groovy:4.3.0")

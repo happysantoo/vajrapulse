@@ -24,7 +24,7 @@ dependencies {
     implementation("info.picocli:picocli:4.7.5")
     implementation("org.slf4j:slf4j-simple:2.0.9")
     
-    testImplementation("org.spockframework:spock-core:2.4-M4-groovy-4.0")
+    testImplementation("org.spockframework:spock-core:2.4-groovy-4.0")
     testImplementation("org.awaitility:awaitility:4.3.0")
     testImplementation("org.awaitility:awaitility-groovy:4.3.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

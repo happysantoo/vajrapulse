@@ -3,13 +3,15 @@ plugins {
     id("me.champeau.jmh") version "0.7.1"
 }
 
+import me.champeau.jmh.JmhBytecodeGeneratorTask
+
 repositories {
     mavenCentral()
 }
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        languageVersion.set(JavaLanguageVersion.of(25))
     }
 }
 
@@ -34,11 +36,9 @@ dependencies {
 }
 
 tasks.withType<JavaCompile> {
-    options.compilerArgs.add("--enable-preview") // Enable preview for ScopedValue
 }
 
 tasks.withType<Test> {
-    jvmArgs("--enable-preview") // Enable preview for tests
 }
 
 jmh {
@@ -47,4 +47,12 @@ jmh {
     iterations.set(10)
     fork.set(1)
     threads.set(1)
+    jvmArgs.set(listOf())
+    // MacroScenarioBenchmark runs ~2 min per iteration; exclude unless explicitly enabled
+    if (!project.hasProperty("jmh.includeMacro")) {
+        excludes.add(".*MacroScenarioBenchmark.*")
+    }
+}
+
+tasks.withType<JmhBytecodeGeneratorTask>().configureEach {
 }

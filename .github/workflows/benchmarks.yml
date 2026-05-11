@@ -1,0 +1,44 @@
+# VajraPulse Performance Regression Gate
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - run: chmod +x gradlew
+
+      - name: Run JMH Benchmarks
+        run: ./gradlew :benchmarks:jmh --no-daemon --no-configuration-cache
+        continue-on-error: true
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmarks/build/results/jmh/
+          retention-days: 30
+
+      # TODO: Add benchmark comparison when baseline is established
+      # - name: Compare with baseline
+      #   run: ./scripts/benchmark-gate.sh

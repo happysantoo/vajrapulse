@@ -3,7 +3,7 @@ plugins {
     groovy
     id("com.gradleup.shadow") version "9.0.0-beta4" apply false
     jacoco
-    id("com.github.spotbugs") version "6.0.14" apply false
+    id("com.github.spotbugs") version "6.5.3" apply false
     id("org.owasp.dependencycheck") version "9.0.9" apply false
     id("maven-publish")
     signing
@@ -12,7 +12,7 @@ plugins {
 allprojects {
     // Artifact coordinates moved to 'com.vajrapulse' for 0.9 release alignment.
     group = "com.vajrapulse"
-    version = "0.9.11"
+    version = "1.0.0"
 
     repositories {
         mavenCentral()
@@ -36,17 +36,14 @@ subprojects {
 
     java {
         toolchain {
-            languageVersion.set(JavaLanguageVersion.of(21))
+            languageVersion.set(JavaLanguageVersion.of(25))
         }
     }
 
     tasks.withType<JavaCompile> {
         options.encoding = "UTF-8"
-        options.release.set(21)
+        options.release.set(25)
         options.compilerArgs.addAll(listOf("-parameters", "-Xlint:deprecation"))
-        // Enable preview features for ScopedValue (Java 21 preview API)
-        // Required for vajrapulse-core (uses ScopedValue) and all modules that depend on it
-        options.compilerArgs.add("--enable-preview")
         
         // Configure JavaDoc linting
         // Suppress doclint warnings for missing comments in examples (they're educational)
@@ -61,10 +58,8 @@ subprojects {
     
     // Configure JavaDoc task to check for documentation issues
     tasks.withType<Javadoc> {
-        // Enable preview features for JavaDoc generation (required for ScopedValue)
         (options as StandardJavadocDocletOptions).apply {
-            addBooleanOption("-enable-preview", true)
-            source = "21"
+            source = "25"
             addStringOption("Xdoclint:all,-missing", "-quiet")
             // Suppress doclint for examples
             if (project.path.startsWith(":examples")) {
@@ -111,9 +106,6 @@ subprojects {
         }
 
         tasks.withType<Test> {
-            // Enable preview features for ScopedValue (Java 21 preview API)
-            // Required for all modules that depend on vajrapulse-core
-            jvmArgs("--enable-preview")
             useJUnitPlatform()
             testLogging {
                 events("passed", "skipped", "failed")
@@ -203,7 +195,7 @@ subprojects {
                         from(components["java"])
                         pom {
                             name.set(project.name)
-                            description.set("VajraPulse module ${project.name} (pre-1.0 load testing framework leveraging Java 21 virtual threads)")
+                            description.set("VajraPulse module ${project.name} — high-performance load testing framework leveraging Java 25 virtual threads")
                             url.set("https://github.com/happysantoo/vajrapulse")
                             licenses {
                                 license {

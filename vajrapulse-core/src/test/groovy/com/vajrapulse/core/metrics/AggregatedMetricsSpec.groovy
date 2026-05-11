@@ -122,12 +122,48 @@ class AggregatedMetricsSpec extends Specification {
             0L,     // queue size
             [:] as Map<Double, Double>  // queue wait percentiles
         )
-        
+
         when: "calculating TPS"
         def tps = metrics.responseTps()
-        
+
         then: "TPS is 1000 (1 execution per millisecond)"
         tps == 1000.0
+    }
+
+    def "should return zero TPS when elapsed time is zero"() {
+        given: "metrics with zero elapsed time"
+        def metrics = new AggregatedMetrics(
+            100L, 100L, 0L,
+            [:] as Map<Double, Double>,
+            [:] as Map<Double, Double>,
+            0L, 0L,
+            [:] as Map<Double, Double>
+        )
+
+        expect: "all TPS values are zero (safe division by zero guard)"
+        metrics.responseTps() == 0.0
+        metrics.successTps() == 0.0
+        metrics.failureTps() == 0.0
+    }
+
+    def "should return zero TPS when total executions is zero"() {
+        given: "metrics with zero executions"
+        def metrics = new AggregatedMetrics(
+            0L, 0L, 0L,
+            [:] as Map<Double, Double>,
+            [:] as Map<Double, Double>,
+            1000L, 0L,
+            [:] as Map<Double, Double>
+        )
+
+        expect: "all TPS values are zero"
+        metrics.responseTps() == 0.0
+        metrics.successTps() == 0.0
+        metrics.failureTps() == 0.0
+
+        and: "rates are zero when total is zero"
+        metrics.successRate() == 0.0
+        metrics.failureRate() == 0.0
     }
     
     def "should calculate success and failure rates correctly"() {
@@ -148,8 +184,8 @@ class AggregatedMetricsSpec extends Specification {
         def failureRate = metrics.failureRate()
         
         then: "rates are calculated correctly"
-        successRate == 95.0
-        failureRate == 5.0
+        successRate == 0.95
+        failureRate == 0.05
     }
     
     // New tests for statistical summary

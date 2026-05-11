@@ -17,20 +17,25 @@
 
 ---
 
-## 🆕 What's New in 0.9.11
+## 🆕 What's New in 1.0.0
 
-Version 0.9.11 is the **final pre-1.0 release**, completing all P0 items for 1.0.0 readiness:
+Version 1.0.0 is the **first production release** of VajraPulse:
 
+- ✅ **Stable API** - `TaskLifecycle` interface frozen; no breaking changes planned until 2.0
 - ✅ **ScopedValue migration** - Better virtual thread support, replacing ThreadLocal
 - ✅ **Enhanced tracing** - Proper span hierarchy with trace correlation in logs
 - ✅ **Run metadata persistence** - JSON manifest file for each test run
 - ✅ **CI/CD pipeline** - GitHub Actions with quality gates (coverage, SpotBugs)
-- ✅ **API freeze documentation** - Complete API stability inventory for 1.0
-- ✅ **Quick Start guide** - Get running in under 2 minutes
+- ✅ **Graceful shutdown** - 5-second drain + force-timeout, fully integration-tested
+- ✅ **7 load patterns** - Static, Ramp, Step, Spike, Sine, Ramp-Sustain, Adaptive
 
 > 🚀 **New to VajraPulse?** Check out the [Quick Start Guide](documents/guides/QUICK_START.md) to run your first load test!
 
-See [CHANGELOG.md](CHANGELOG.md#0911---2024-12-26) for complete release notes.
+See [CHANGELOG.md](CHANGELOG.md#100---2026-03-10) for complete release notes.
+
+### Scope: what 1.0.0 is (and is not)
+
+**1.0.0** is the first **SemVer-stable** release of the **standalone** engine: one JVM runs your load pattern, records metrics, and exports results. **Multi-worker / orchestrated distributed execution** is explicitly **out of scope** for 1.0.0 and is planned for a later minor (see [CHANGELOG.md](CHANGELOG.md) Unreleased and [`documents/roadmap/POST_1.0_BACKLOG.md`](documents/roadmap/POST_1.0_BACKLOG.md)). The public API inventory and stability categories are documented in [`documents/architecture/API_FREEZE_0.9.11.md`](documents/architecture/API_FREEZE_0.9.11.md).
 
 ---
 
@@ -61,7 +66,7 @@ See [CHANGELOG.md](CHANGELOG.md#0911---2024-12-26) for complete release notes.
 **Gradle (Kotlin DSL)** - Using BOM (Recommended):
 ```kotlin
 dependencies {
-    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.10"))
+    implementation(platform("com.vajrapulse:vajrapulse-bom:1.0.0"))
     implementation("com.vajrapulse:vajrapulse-core")
     implementation("com.vajrapulse:vajrapulse-worker") // For CLI
 }
@@ -74,7 +79,7 @@ dependencies {
         <dependency>
             <groupId>com.vajrapulse</groupId>
             <artifactId>vajrapulse-bom</artifactId>
-            <version>0.9.10</version>
+            <version>1.0.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -137,7 +142,7 @@ public class ApiLoadTest implements TaskLifecycle {
 
 **CLI (Recommended for quick tests):**
 ```bash
-java -jar vajrapulse-worker-0.9.10-all.jar \
+java -jar vajrapulse-worker-1.0.0-all.jar \
   com.example.ApiLoadTest \
   --mode static \
   --tps 100 \
@@ -341,7 +346,7 @@ if (result.failed()) {
 **Gradle (Kotlin DSL):**
 ```kotlin
 dependencies {
-    implementation(platform("com.vajrapulse:vajrapulse-bom:0.9.10"))
+    implementation(platform("com.vajrapulse:vajrapulse-bom:1.0.0"))
     implementation("com.vajrapulse:vajrapulse-core")
     implementation("com.vajrapulse:vajrapulse-worker")
     // Optional exporters
@@ -353,7 +358,7 @@ dependencies {
 **Gradle (Groovy DSL):**
 ```groovy
 dependencies {
-    implementation platform('com.vajrapulse:vajrapulse-bom:0.9.9')
+    implementation platform('com.vajrapulse:vajrapulse-bom:1.0.0')
     implementation 'com.vajrapulse:vajrapulse-core'
     implementation 'com.vajrapulse:vajrapulse-worker'
 }
@@ -366,7 +371,7 @@ dependencies {
         <dependency>
             <groupId>com.vajrapulse</groupId>
             <artifactId>vajrapulse-bom</artifactId>
-            <version>0.9.10</version>
+            <version>1.0.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -388,8 +393,8 @@ dependencies {
 **Without BOM** - Specify versions individually:
 ```kotlin
 dependencies {
-    implementation("com.vajrapulse:vajrapulse-core:0.9.10")
-    implementation("com.vajrapulse:vajrapulse-worker:0.9.10")
+    implementation("com.vajrapulse:vajrapulse-core:1.0.0")
+    implementation("com.vajrapulse:vajrapulse-worker:1.0.0")
 }
 ```
 
@@ -812,7 +817,7 @@ All metrics are tagged with `run_id` for test correlation.
 
 ## Code Quality
 
-Version 0.9.10 continues the code quality improvements:
+Version 1.0.0 delivers production-grade code quality:
 
 - ✅ **Test Coverage**: ≥90% for all modules
 - ✅ **Test Reliability**: 100% timeout coverage, 0% flakiness (validated)
@@ -845,24 +850,11 @@ All examples updated to use latest APIs (builder pattern, TaskLifecycle interfac
 
 ## Breaking Changes
 
-Version 0.9.10 includes some breaking changes (pre-1.0 release):
+**Version 1.0.0 has no breaking changes from 0.9.11.** The API is now stable.
 
-### Removed Incomplete Features
-- `BackpressureHandlingResult.RETRY` - Removed (was incomplete)
-- `BackpressureHandlingResult.DEGRADED` - Removed (was incomplete)
-- `BackpressureHandlers.retry()` - Removed (was incomplete)
-- `BackpressureHandlers.DEGRADE` - Removed (was incomplete)
+The `Task` interface (deprecated since 0.9.5) remains available but will be **removed in 1.1.0**. Migrate to `TaskLifecycle` before upgrading to 1.1.0.
 
-### Interface Changes
-- `BackpressureHandler.handle()` - Removed `iteration` parameter
-  - Before: `handle(long iteration, double backpressureLevel, BackpressureContext context)`
-  - After: `handle(double backpressureLevel, BackpressureContext context)`
-
-### Package Reorganization
-- `com.vajrapulse.core.backpressure.*` → `com.vajrapulse.core.metrics.*`
-  - All backpressure classes moved to metrics package
-
-**Migration Guide**: See [CHANGELOG.md](CHANGELOG.md#099---2025-12-14) for detailed migration instructions.
+For breaking changes introduced in the 0.9.x series, see [CHANGELOG.md](CHANGELOG.md) and [MIGRATION_0.9_TO_1.0.md](documents/guides/MIGRATION_0.9_TO_1.0.md).
 
 ---
 
@@ -897,7 +889,7 @@ Built with:
 </p>
 
 <p align="center">
-  <em>Pre-1.0: Breaking changes may occur as we refine the API</em>
+  <em>1.0.0 production release — stable API, production-ready</em>
 </p>
 
 ---

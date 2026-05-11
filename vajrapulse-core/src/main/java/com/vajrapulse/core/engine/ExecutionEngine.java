@@ -20,7 +20,6 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 
 import java.util.Map;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -58,8 +57,13 @@ import java.util.concurrent.atomic.LongAdder;
  * 
  * <p><strong>Resource Management:</strong> The {@code MetricsCollector} passed to this
  * engine should be managed by the caller. If using try-with-resources for the engine,
- * also use try-with-resources for the metrics collector to ensure proper cleanup of
- * ThreadLocal instances and prevent memory leaks.
+ * also use try-with-resources for the metrics collector to ensure proper cleanup.
+ * 
+ * <p><strong>Queue depth gauge:</strong> Pending depth is decremented when a submitted
+ * execution starts. If the executor is shut down forcefully ({@code shutdownNow}) before
+ * some runnables start, those submissions never decrement the counter, so
+ * {@link com.vajrapulse.core.metrics.AggregatedMetrics#queueSize()} may be non-zero after
+ * a forced shutdown. Treat the gauge as best-effort in that scenario.
  * 
  * @since 0.9.0
  */
@@ -549,20 +553,17 @@ public final class ExecutionEngine implements AutoCloseable {
             Map.of("pattern", loadPattern.getClass().getSimpleName(), 
                    "duration_ms", loadPattern.getDuration().toMillis()),
             runId);
-        logger.info("Starting load test runId={} pattern={} duration={}", runId, loadPattern.getClass().getSimpleName(), loadPattern.getDuration());
-        
+
         // Initialize task
         try {
             taskLifecycle.init();
             StructuredLogger.logWithRunId(ExecutionEngine.class, "INFO", 
                 "Task initialization completed", Map.of(), runId);
-            logger.info("Task initialization completed for runId={}", runId);
         } catch (Exception e) {
             StructuredLogger.logWithRunId(ExecutionEngine.class, "ERROR", 
                 "Task initialization failed", 
                 Map.of("error", e.getClass().getSimpleName(), "error_message", sanitize(e.getMessage())),
                 runId);
-            logger.error("Task initialization failed for runId={}: {}", runId, e.getMessage(), e);
             // Don't call teardown if init failed, but ensure executor is shut down
             executorShutdown.set(true);
             if (shutdownHookEnabled) {
@@ -615,13 +616,11 @@ public final class ExecutionEngine implements AutoCloseable {
                 taskLifecycle.teardown();
                 StructuredLogger.logWithRunId(ExecutionEngine.class, "INFO", 
                     "Task teardown completed", Map.of(), runId);
-                logger.info("Task teardown completed for runId={}", runId);
             } catch (Exception e) {
                 StructuredLogger.logWithRunId(ExecutionEngine.class, "ERROR", 
                     "Task teardown failed", 
                     Map.of("error", e.getClass().getSimpleName(), "error_message", sanitize(e.getMessage())),
                     runId);
-                logger.error("Task teardown failed for runId={}: {}", runId, e.getMessage(), e);
             } finally {
                 // End scenario span
                 if (Tracing.isEnabled() && scenarioSpan != null && scenarioSpan.isRecording()) {
@@ -682,6 +681,9 @@ public final class ExecutionEngine implements AutoCloseable {
     
     @Override
     public void close() {
+        // Shutdown tracing to flush pending spans
+        Tracing.shutdown();
+
         // Unregister adaptive pattern metrics to prevent memory leaks
         // Use instanceof here as unregister() is a static method in core module
         // and we need to identify AdaptiveLoadPattern instances for cleanup

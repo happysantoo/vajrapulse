@@ -7,8 +7,7 @@ import com.vajrapulse.core.util.TimeConstants;
 
 import java.time.Duration;
 import java.util.Deque;
-import java.util.Iterator;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.ArrayDeque;
 
 /**
  * Adapter that makes MetricsCollector implement MetricsProvider interface with
@@ -40,8 +39,8 @@ public final class MetricsProviderAdapter implements MetricsProvider {
     private final MetricsProvider cachedProvider;
     private final MetricsCollector metricsCollector;
 
-    // History for windowed calculations
-    private final Deque<WindowSnapshot> history = new ConcurrentLinkedDeque<>();
+    // History for windowed calculations, synchronized externally
+    private final Deque<WindowSnapshot> history = new ArrayDeque<>();
 
     /**
      * Creates an adapter for the given metrics collector with default caching
@@ -102,25 +101,30 @@ public final class MetricsProviderAdapter implements MetricsProvider {
         long currentTotal = currentSnapshot.totalExecutions();
         long currentFailures = currentSnapshot.failureCount();
 
-        // Add current snapshot to history
-        history.addLast(new WindowSnapshot(currentTime, currentTotal, currentFailures));
+        long windowCutoff = currentTime - (long)(windowSeconds * TimeConstants.MILLISECONDS_PER_SECOND);
+        WindowSnapshot baseline;
 
-        // Prune old history (older than retention policy)
-        long retentionCutoff = currentTime - HISTORY_RETENTION_MS;
-        while (!history.isEmpty() && history.peekFirst().timestampMillis() < retentionCutoff) {
-            history.removeFirst();
+        synchronized (history) {
+            // Add current snapshot to history
+            history.addLast(new WindowSnapshot(currentTime, currentTotal, currentFailures));
+
+            // Prune old history (older than retention policy)
+            long retentionCutoff = currentTime - HISTORY_RETENTION_MS;
+            while (!history.isEmpty() && history.peekFirst().timestampMillis() < retentionCutoff) {
+                history.removeFirst();
+            }
+
+            // Find baseline snapshot
+            baseline = findBaselineSnapshot(windowCutoff);
+
+            // If no baseline found, use oldest available (partial window)
+            if (baseline == null) {
+                baseline = history.isEmpty() ? null : history.peekFirst();
+            }
         }
 
-        // Find baseline snapshot: latest snapshot <= windowCutoff
-        long windowCutoff = currentTime - (long)(windowSeconds * TimeConstants.MILLISECONDS_PER_SECOND);
-        WindowSnapshot baseline = findBaselineSnapshot(windowCutoff);
-
-        // If no baseline found, use oldest available (partial window)
         if (baseline == null) {
-            baseline = history.isEmpty() ? null : history.peekFirst();
-            if (baseline == null) {
-                return currentSnapshot.failureRate();
-            }
+            return currentSnapshot.failureRate();
         }
 
         // Calculate rate over the window
@@ -133,11 +137,27 @@ public final class MetricsProviderAdapter implements MetricsProvider {
         long totalDiff = currentTotal - baseline.totalExecutions();
         long failureDiff = currentFailures - baseline.failureCount();
 
+        if (failureDiff < 0 || totalDiff < 0) {
+            return currentSnapshot.failureRate();
+        }
+
         if (totalDiff == 0) {
             return 0.0;
         }
 
-        return (failureDiff * 100.0) / totalDiff;
+        return failureRateAsRatio(failureDiff, totalDiff);
+    }
+
+    /**
+     * Calculates failure rate as a ratio (0.0 to 1.0) from failure and total
+     * counts. Single source of truth for all failure rate calculations
+     * in the metrics pipeline.
+     */
+    static double failureRateAsRatio(long failureCount, long totalExecutions) {
+        if (totalExecutions == 0) {
+            return 0.0;
+        }
+        return (double) failureCount / (double) totalExecutions;
     }
     
     /**

@@ -6,11 +6,50 @@ The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.0.
 
 ## [Unreleased]
 ### Planned
-- Distributed execution layer (multi-worker coordination)
-- Health & metrics endpoints for Kubernetes deployments
-- Configuration system enhancements (schema validation, inheritance)
-- GraalVM native image validation
-- Scenario scripting DSL
+- Distributed execution layer (multi-worker coordination) — 1.1.0
+- Real-time GUI dashboard — 1.2.0
+- Docker Hub image — 1.0.1
+- Enhanced reporting (time-series, error detail) — 1.1.0
+- Remove deprecated `Task` interface — 1.1.0
+
+## [1.0.0] - 2026-03-10
+
+### 🎯 Release Highlights
+
+Version 1.0.0 is the **first production release** of VajraPulse. The API is now stable under semantic versioning — no breaking changes until 2.0.0.
+
+**Key Milestones**:
+- ✅ **Stable API freeze** — `TaskLifecycle`, `LoadPattern`, all exporters, and assertion framework
+- ✅ **Production CI/CD** — GitHub Actions pipeline with coverage gates, SpotBugs, and benchmark workflows
+- ✅ **Graceful shutdown** — 5-second drain + force-timeout with full integration test coverage
+- ✅ **Run manifest** — JSON metadata persistence per run for cross-signal correlation
+- ✅ **Benchmark infrastructure** — JMH suite with regression detection script
+- ✅ **Complete documentation** — Quick Start, User Guide, Security, Versioning, Migration guides
+
+### Added
+
+- **GracefulShutdownSpec** — 6 integration test scenarios covering SIGINT, SIGTERM, timeout drain, and force-kill paths
+- **RunManifest** — JSON metadata file written per test run, capturing run_id, timestamps, pattern config, and result summary
+- **CI workflows** — `ci.yml` (build/test/coverage), `benchmarks.yml` (JMH), `security.yml` (OWASP)
+- **Dependabot** — weekly Gradle dependency and GitHub Actions version updates
+- **compare-benchmarks.sh** — shell script that compares two JMH result files and fails CI on >10% regression
+
+### Changed
+
+- **Version**: `0.9.11` → `1.0.0`
+- **`Task` interface** — Deprecation notice updated: removal deferred to 1.1.0 (was incorrectly noted as 0.9.6)
+- **POM description** — Removed "pre-1.0" wording; now reflects production status
+- **README** — Updated all version badges, dependency snippets, CLI jar references, and "What's New" section
+- **jreleaser.yml** — Version and description updated for production release
+
+### Deprecated
+
+- **`Task` interface** (`com.vajrapulse.api.task.Task`) — will be removed in 1.1.0. Migrate to `TaskLifecycle`.
+
+### Notes
+
+- No breaking changes from 0.9.11. Existing 0.9.x users can upgrade without code changes.
+- Distributed execution (multi-worker) is the primary feature gap; planned for 1.1.0.
 
 ## [0.9.11] - 2024-12-26
 

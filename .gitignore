@@ -34,3 +34,6 @@ hs_err_pid*
 test-results/
 test-output/
 examples/http-load-test/otel-collector-data
+
+# VajraPulse run artifacts (test output JSON files)
+vajrapulse-run-*.json

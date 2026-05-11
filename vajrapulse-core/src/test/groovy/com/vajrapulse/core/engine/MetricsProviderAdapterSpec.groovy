@@ -62,7 +62,7 @@ class MetricsProviderAdapterSpec extends Specification {
         def rate = adapter.getFailureRate()
 
         then: "failure rate is 100%"
-        rate == 100.0
+        rate == 1.0
     }
     
     def "should return recent window failure rate"() {
@@ -107,7 +107,7 @@ class MetricsProviderAdapterSpec extends Specification {
         // Recent window should show 100% failure rate (3 failures, 0 successes in recent window)
         // Note: This may vary based on implementation, but should be higher than all-time rate
         recentRate >= 0.0
-        recentRate <= 100.0
+        recentRate <= 1.0
     }
     
     def "should return all-time rate when window is larger than history"() {
@@ -130,7 +130,7 @@ class MetricsProviderAdapterSpec extends Specification {
 
         then: "recent rate should fall back to all-time rate"
         recentRate == allTimeRate
-        recentRate == 100.0
+        recentRate == 1.0
     }
     
     def "should handle invalid window size"() {

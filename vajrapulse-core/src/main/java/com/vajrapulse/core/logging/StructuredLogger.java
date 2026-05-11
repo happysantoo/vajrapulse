@@ -2,13 +2,10 @@ package com.vajrapulse.core.logging;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
-import io.opentelemetry.context.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
 import java.util.Map;
-import java.util.StringJoiner;
 
 /**
  * Lightweight structured logging utility emitting single-line JSON without external deps.

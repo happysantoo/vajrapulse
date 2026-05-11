@@ -117,7 +117,7 @@ public final class RateController {
         
         // If we're ahead of schedule, sleep
         if (currentCount > expectedCount) {
-            long nanosPerExecution = (long) (TimeConstants.NANOS_PER_SECOND / targetTps);
+            long nanosPerExecution = Math.round(TimeConstants.NANOS_PER_SECOND / targetTps);
             long targetNanos = testStartNanos + (currentCount * nanosPerExecution);
             long sleepNanos = targetNanos - nowNanos;
             

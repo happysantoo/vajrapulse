@@ -11,6 +11,10 @@ VajraPulse is a distributed load testing framework designed for high-scale perfo
 - **Observability**: OpenTelemetry, Micrometer
 - **Communication**: gRPC, HTTP/REST
 
+### Product scope (1.0.0 vs future)
+
+As of **1.0.0**, the shipping product is a **single-process** load runner (library + worker CLI) with optional exporters. Sections below that describe an **orchestrator**, **multi-worker distribution**, or **P2P coordination** reflect the **long-term architecture vision**; see [`documents/roadmap/POST_1.0_BACKLOG.md`](../roadmap/POST_1.0_BACKLOG.md) and [`CHANGELOG.md`](../../CHANGELOG.md) for what is scheduled after 1.0.0.
+
 ---
 
 ## Table of Contents

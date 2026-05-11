@@ -206,7 +206,7 @@ class AdaptiveLoadPatternSpec extends Specification {
     def "should transition to RAMP_DOWN when error threshold exceeded"() {
         given: "a new adaptive pattern"
         def provider = new MockMetricsProvider()
-        provider.setFailureRate(2.0) // 2% failure rate (above 1% threshold)
+        provider.setFailureRate(0.02) // 2% failure rate (above 1% threshold)
         def pattern = AdaptiveLoadPattern.builder()
             .initialTps(100.0)
             .rampIncrement(50.0)
@@ -247,7 +247,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         
         when: "simulating 3 consecutive stable intervals"
         // First, trigger RAMP_DOWN (by setting errors, then clearing)
-        provider.setFailureRate(2.0)
+        provider.setFailureRate(1.0)
         pattern.calculateTps(0) // Initialize
         pattern.calculateTps(1001) // Trigger RAMP_DOWN: 200 -> 150
         
@@ -313,8 +313,8 @@ class AdaptiveLoadPatternSpec extends Specification {
         when: "ramping down until TPS reaches minimum"
         pattern.calculateTps(0) // Initialize
         // Trigger RAMP_DOWN
-        provider.setFailureRate(2.0)
-        provider.setRecentFailureRate(2.0) // Keep recent rate high to prevent recovery
+        provider.setFailureRate(1.0)
+        provider.setRecentFailureRate(1.0) // Keep recent rate high to prevent recovery
         backpressureProvider.setBackpressure(0.8) // High backpressure to prevent recovery
         pattern.calculateTps(1001) // First ramp down: 100 -> 10 (minimum)
         
@@ -343,8 +343,8 @@ class AdaptiveLoadPatternSpec extends Specification {
         when: "pattern ramps down to minimum, then conditions improve"
         pattern.calculateTps(0) // Initialize
         // Trigger RAMP_DOWN to minimum
-        provider.setFailureRate(2.0)
-        provider.setRecentFailureRate(2.0)
+        provider.setFailureRate(1.0)
+        provider.setRecentFailureRate(1.0)
         pattern.calculateTps(1001) // Ramp down to 10 (minimum, recovery behavior in RAMP_DOWN)
         
         // Conditions improve - use recent window for recovery decision
@@ -386,8 +386,8 @@ class AdaptiveLoadPatternSpec extends Specification {
         pattern.calculateTps(8001) // 450 -> 500
         
         // Now ramp down to minimum (recovery behavior in RAMP_DOWN)
-        provider.setFailureRate(2.0)
-        provider.setRecentFailureRate(2.0)
+        provider.setFailureRate(1.0)
+        provider.setRecentFailureRate(1.0)
         pattern.calculateTps(9001) // 500 -> 400 (RAMP_DOWN, lastKnownGoodTps = 500)
         pattern.calculateTps(10001) // 400 -> 300
         pattern.calculateTps(11001) // 300 -> 200
@@ -428,7 +428,7 @@ class AdaptiveLoadPatternSpec extends Specification {
         def phase1 = pattern.getCurrentPhase()
         
         // Conditions worsen
-        provider.setFailureRate(2.0)
+        provider.setFailureRate(1.0)
         def tps = pattern.calculateTps(2001) // Should transition to RAMP_DOWN
         
         then: "should transition to RAMP_DOWN"
@@ -642,7 +642,7 @@ class AdaptiveLoadPatternSpec extends Specification {
     def "should combine error rate and backpressure for ramp down decision"() {
         given: "low error rate but high backpressure"
         def metricsProvider = new MockMetricsProvider()
-        metricsProvider.setFailureRate(0.5) // 0.5% error rate (below 1% threshold)
+        metricsProvider.setFailureRate(0.005) // 0.5% error rate (below 1% threshold)
         def backpressureProvider = new MockBackpressureProvider()
         backpressureProvider.setBackpressure(0.75) // High backpressure
         def pattern = AdaptiveLoadPattern.builder()
@@ -669,7 +669,7 @@ class AdaptiveLoadPatternSpec extends Specification {
     def "should ramp up only when both error rate and backpressure are low"() {
         given: "low error rate and low backpressure"
         def metricsProvider = new MockMetricsProvider()
-        metricsProvider.setFailureRate(0.5) // 0.5% error rate (below 1% threshold)
+        metricsProvider.setFailureRate(0.005) // 0.5% error rate (below 1% threshold)
         def backpressureProvider = new MockBackpressureProvider()
         backpressureProvider.setBackpressure(0.2) // Low backpressure
         def pattern = AdaptiveLoadPattern.builder()

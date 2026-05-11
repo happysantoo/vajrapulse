@@ -372,14 +372,14 @@ class AssertionsSpec extends Specification {
             double successRate() {
                 long total = totalExecutions()
                 if (total == 0) return 0.0
-                return (successCount() * 100.0) / total
+                return (double) successCount() / (double) total
             }
 
             @Override
             double failureRate() {
                 long total = totalExecutions()
                 if (total == 0) return 0.0
-                return (failureCount() * 100.0) / total
+                return (double) failureCount() / (double) total
             }
 
             @Override

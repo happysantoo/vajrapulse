@@ -37,11 +37,6 @@ public record AggregatedMetrics(
     LatencyStats failureStats
 ) implements Metrics {
     /**
-     * Percentage multiplier for rate calculations (100.0 = 100%).
-     */
-    private static final double PERCENTAGE_MULTIPLIER = 100.0;
-    
-    /**
      * Compact constructor that creates defensive copies of mutable collections.
      */
     public AggregatedMetrics {
@@ -85,27 +80,27 @@ public record AggregatedMetrics(
     }
     
     /**
-     * Calculates the success rate as a percentage.
-     * 
-     * @return success rate (0.0 to 100.0)
+     * Calculates the success rate as a ratio.
+     *
+     * @return success rate (0.0 = no successes, 1.0 = all successful)
      */
     public double successRate() {
         if (totalExecutions == 0) {
             return 0.0;
         }
-        return (successCount * PERCENTAGE_MULTIPLIER) / totalExecutions;
+        return (double) successCount / (double) totalExecutions;
     }
-    
+
     /**
-     * Calculates the failure rate as a percentage.
-     * 
-     * @return failure rate (0.0 to 100.0)
+     * Calculates the failure rate as a ratio.
+     *
+     * @return failure rate (0.0 = no failures, 1.0 = all failed)
      */
     public double failureRate() {
         if (totalExecutions == 0) {
             return 0.0;
         }
-        return (failureCount * PERCENTAGE_MULTIPLIER) / totalExecutions;
+        return (double) failureCount / (double) totalExecutions;
     }
     
     /**

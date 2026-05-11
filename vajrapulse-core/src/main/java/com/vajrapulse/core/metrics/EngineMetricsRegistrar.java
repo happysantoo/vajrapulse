@@ -9,6 +9,8 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 
@@ -148,6 +150,17 @@ public final class EngineMetricsRegistrar {
             corePoolSizeBuilder.register(registry);
             maxPoolSizeBuilder.register(registry);
             queueSizeBuilder.register(registry);
+        } else {
+            // Virtual thread executor: expose ThreadMXBean-based metrics
+            ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
+            var vtCountBuilder = Gauge.builder("vajrapulse.executor.virtual.threads",
+                    threadMXBean, ThreadMXBean::getThreadCount)
+                .description("Current virtual thread count (all virtual thread executors share this)")
+                .tag("thread_type", "virtual");
+            if (runId != null && !runId.isBlank()) {
+                vtCountBuilder.tag("run_id", runId);
+            }
+            vtCountBuilder.register(registry);
         }
     }
     

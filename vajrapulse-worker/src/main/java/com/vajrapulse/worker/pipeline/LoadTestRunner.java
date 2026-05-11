@@ -182,7 +182,7 @@ public final class LoadTestRunner implements AutoCloseable {
         
         switch (patternType) {
             case "StaticLoad" -> extractStaticLoadConfig(loadPattern, configuration);
-            case "RampUpLoad", "RampSustainLoad" -> extractRampLoadConfig(loadPattern, configuration);
+            case "RampUpLoad", "RampUpToMaxLoad" -> extractRampLoadConfig(loadPattern, configuration);
             case "AdaptiveLoadPattern" -> extractAdaptiveLoadConfig(loadPattern, configuration);
             default -> {
                 // For unknown patterns, just use the type name

@@ -5,7 +5,7 @@ plugins {
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        languageVersion.set(JavaLanguageVersion.of(25))
     }
 }
 
@@ -25,9 +25,9 @@ dependencies {
     implementation("org.slf4j:slf4j-api:2.0.13")
     
     // Testing
-    testImplementation(platform("org.spockframework:spock-bom:2.4-M4-groovy-4.0"))
+    testImplementation(platform("org.spockframework:spock-bom:2.4-groovy-4.0"))
     testImplementation("org.spockframework:spock-core")
-    testImplementation("org.apache.groovy:groovy:4.0.23")
+    testImplementation("org.apache.groovy:groovy:4.0.29")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testRuntimeOnly("org.slf4j:slf4j-simple:2.0.9")

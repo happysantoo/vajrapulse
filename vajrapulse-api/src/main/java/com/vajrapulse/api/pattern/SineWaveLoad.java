@@ -1,7 +1,6 @@
 package com.vajrapulse.api.pattern;
 
 import java.time.Duration;
-import java.util.Objects;
 
 /**
  * Sinusoidal load pattern oscillating around a mean rate.

@@ -1,9 +1,9 @@
 # JitPack build configuration
-# Ensures builds run on Java 21
+# Ensures builds run on Java 25
 jdk:
-  - openjdk21
+  - openjdk25
 
-# Keep builds fast and simple; Gradle toolchain will fetch JDK 21 when needed
+# Keep builds fast and simple; Gradle toolchain will fetch JDK 25 when needed
 # If you need custom steps later, uncomment and tweak below:
 # install:
 #   - ./gradlew clean build -x test
