@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry-run (skip actual publishing)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -41,8 +46,15 @@ jobs:
         run: |
           ./gradlew prepareRelease
 
+          DRY_FLAG=""
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            DRY_FLAG="--dry-run"
+            echo "=== DRY RUN MODE — no artifacts will be published ==="
+          fi
+
           curl -sL https://github.com/jreleaser/jreleaser/releases/download/v1.18.0/jreleaser-1.18.0.zip -o /tmp/jreleaser.zip
           unzip -q /tmp/jreleaser.zip -d /tmp/jreleaser
           /tmp/jreleaser/jreleaser-1.18.0/bin/jreleaser full-release \
             -c jreleaser.yml \
+            $DRY_FLAG \
             --exclude-distribution distributions
