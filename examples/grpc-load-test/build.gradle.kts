@@ -24,9 +24,9 @@ dependencies {
     implementation(project(":vajrapulse-exporter-console"))
     
     // gRPC dependencies
-    implementation("io.grpc:grpc-netty-shaded:1.64.0")
-    implementation("io.grpc:grpc-protobuf:1.64.0")
-    implementation("io.grpc:grpc-stub:1.64.0")
+    implementation("io.grpc:grpc-netty-shaded:1.81.0")
+    implementation("io.grpc:grpc-protobuf:1.81.0")
+    implementation("io.grpc:grpc-stub:1.81.0")
     implementation("com.google.protobuf:protobuf-java:4.27.3")
     
     // Annotation dependency for generated code (Java 21 compatibility)
@@ -42,7 +42,7 @@ protobuf {
     }
     plugins {
         create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:1.64.0"
+            artifact = "io.grpc:protoc-gen-grpc-java:1.81.0"
         }
     }
     generateProtoTasks {
