@@ -46,15 +46,8 @@ jobs:
         run: |
           ./gradlew prepareRelease publishToMavenLocal --no-daemon
           STAGING_DIR="target/staging-deploy"
-          mkdir -p "$STAGING_DIR"
-          # Copy from Maven local repo to staging
-          MAVEN_LOCAL=~/.m2/repository/com/vajrapulse
-          echo "Maven local contents:"
-          ls -R "$MAVEN_LOCAL" | head -60
           mkdir -p "$STAGING_DIR/com/vajrapulse"
-          cp -r "$MAVEN_LOCAL"/* "$STAGING_DIR/com/vajrapulse/"
-          echo "Staging directory contents:"
-          ls -R "$STAGING_DIR" | head -60
+          cp -r ~/.m2/repository/com/vajrapulse/* "$STAGING_DIR/com/vajrapulse/"
 
       - name: Publish to Maven Central
         run: |
