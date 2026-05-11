@@ -221,7 +221,7 @@ public final class ConfigLoader {
         
         Object sampleRate = map.get("tracingSampleRate");
         double tracingSampleRate = sampleRate != null
-            ? (sampleRate instanceof Number ? ((Number) sampleRate).doubleValue() : Double.parseDouble(sampleRate.toString()))
+            ? (sampleRate instanceof Number ? ((Number) sampleRate).doubleValue() : parseDoubleSafe(sampleRate.toString(), defaults.tracingSampleRate()))
             : defaults.tracingSampleRate();
         
         return new VajraPulseConfig.ObservabilityConfig(
@@ -416,8 +416,17 @@ public final class ConfigLoader {
     private static void validate(VajraPulseConfig config, List<String> errors) {
         // Additional validation beyond constructor checks
         if (config.execution().forceTimeout().compareTo(config.execution().drainTimeout()) < 0) {
-            errors.add("execution.forceTimeout (" + config.execution().forceTimeout() + 
+            errors.add("execution.forceTimeout (" + config.execution().forceTimeout() +
                 ") must be >= execution.drainTimeout (" + config.execution().drainTimeout() + ")");
+        }
+    }
+
+    private static double parseDoubleSafe(String value, double fallback) {
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid numeric value '{}', using default: {}", value, fallback);
+            return fallback;
         }
     }
 }

@@ -36,7 +36,7 @@ class MetricsCollectorSpec extends Specification {
         snapshot.totalExecutions() == 1
         snapshot.successCount() == 1
         snapshot.failureCount() == 0
-        snapshot.successRate() == 100.0
+        snapshot.successRate() == 1.0
         snapshot.failureRate() == 0.0
     }
     
@@ -63,7 +63,7 @@ class MetricsCollectorSpec extends Specification {
         snapshot.successCount() == 0
         snapshot.failureCount() == 1
         snapshot.successRate() == 0.0
-        snapshot.failureRate() == 100.0
+        snapshot.failureRate() == 1.0
     }
     
     def "should aggregate multiple executions"() {
@@ -86,8 +86,8 @@ class MetricsCollectorSpec extends Specification {
         snapshot.totalExecutions() == 7
         snapshot.successCount() == 5
         snapshot.failureCount() == 2
-        snapshot.successRate() > 70.0
-        snapshot.successRate() < 72.0  // ~71.4%
+        snapshot.successRate() > 0.70
+        snapshot.successRate() < 0.72  // ~71.4%
     }
     
     def "should use provided meter registry"() {

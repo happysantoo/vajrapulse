@@ -36,4 +36,56 @@ class StructuredLoggerSpec extends Specification {
         then:
         LoggerFactory.getLogger(StructuredLoggerSpec).isErrorEnabled()
     }
+
+    def "should log error without exception"() {
+        when:
+        StructuredLogger.error(StructuredLoggerSpec, "error_no_ex", [run_id: 'r3'], null)
+
+        then:
+        LoggerFactory.getLogger(StructuredLoggerSpec).isErrorEnabled()
+    }
+
+    def "should log with null fields map"() {
+        when:
+        StructuredLogger.info(StructuredLoggerSpec, "no_fields", null)
+
+        then:
+        LoggerFactory.getLogger(StructuredLoggerSpec).isInfoEnabled()
+    }
+
+    def "should log with runId via logWithRunId"() {
+        when:
+        StructuredLogger.logWithRunId(StructuredLoggerSpec, "INFO", "with_run_id",
+            [iteration: 1], "run-abc")
+
+        then:
+        LoggerFactory.getLogger(StructuredLoggerSpec).isInfoEnabled()
+    }
+
+    def "should log with warn level"() {
+        when:
+        StructuredLogger.logWithRunId(StructuredLoggerSpec, "WARN", "warning_msg",
+            [:], null)
+
+        then:
+        LoggerFactory.getLogger(StructuredLoggerSpec).isWarnEnabled()
+    }
+
+    def "should log with boolean and number field values"() {
+        when:
+        StructuredLogger.info(StructuredLoggerSpec, "mixed_types",
+            [enabled: true, count: 42, ratio: 0.95d])
+
+        then:
+        LoggerFactory.getLogger(StructuredLoggerSpec).isInfoEnabled()
+    }
+
+    def "should handle sanitize of null exception message"() {
+        when:
+        def ex = new RuntimeException((String) null)
+        StructuredLogger.error(StructuredLoggerSpec, "null_msg", [:], ex)
+
+        then:
+        LoggerFactory.getLogger(StructuredLoggerSpec).isErrorEnabled()
+    }
 }

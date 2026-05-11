@@ -30,6 +30,7 @@ public final class AdaptivePatternMetrics {
     
     // Store trackers per pattern instance to persist across gauge polls
     private static final ConcurrentHashMap<AdaptiveLoadPattern, PatternStateTracker> trackers = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<AdaptiveLoadPattern, MeterRegistry> registries = new ConcurrentHashMap<>();
     
     /**
      * Minimum TPS change threshold to record as an adjustment (avoids noise from floating-point precision).
@@ -194,9 +195,21 @@ public final class AdaptivePatternMetrics {
      * @param runId optional run ID for tagging (can be null)
      */
     public static void register(AdaptiveLoadPattern pattern, MeterRegistry registry, String runId) {
-        // Phase gauge (0=RAMP_UP, 1=RAMP_DOWN, 2=SUSTAIN)
-        var phaseBuilder = Gauge.builder("vajrapulse.adaptive.phase", pattern, 
-                p -> (double) p.getCurrentPhase().ordinal())
+        registries.put(pattern, registry);
+
+        // Create state tracker for transition/adjustment metrics
+        trackers.computeIfAbsent(pattern,
+            p -> new PatternStateTracker(p, registry, runId));
+
+        // Phase gauge (0=RAMP_UP, 1=RAMP_DOWN, 2=SUSTAIN) — also drives tracker updates
+        var phaseBuilder = Gauge.builder("vajrapulse.adaptive.phase", pattern,
+                p -> {
+                    PatternStateTracker t = trackers.get(pattern);
+                    if (t != null) {
+                        t.update(p);
+                    }
+                    return (double) p.getCurrentPhase().ordinal();
+                })
             .description("Current adaptive pattern phase (0=RAMP_UP, 1=RAMP_DOWN, 2=SUSTAIN)");
         if (runId != null && !runId.isBlank()) {
             phaseBuilder.tag("run_id", runId);
@@ -232,26 +245,6 @@ public final class AdaptivePatternMetrics {
             phaseTransitionBuilder.tag("run_id", runId);
         }
         phaseTransitionBuilder.register(registry);
-        
-        // Create and store state tracker for transition and adjustment metrics
-        trackers.computeIfAbsent(pattern, 
-            p -> new PatternStateTracker(p, registry, runId));
-        
-        // Register a gauge that updates the tracker when polled
-        // This ensures metrics are updated periodically by Micrometer's polling mechanism
-        var trackerUpdateBuilder = Gauge.builder("vajrapulse.adaptive.metrics_update", 
-                () -> {
-                    PatternStateTracker t = trackers.get(pattern);
-                    if (t != null) {
-                        t.update(pattern);
-                    }
-                    return 1.0; // Dummy value, we're using this for side effects
-                })
-            .description("Internal metric to trigger state tracking updates (value is always 1.0)");
-        if (runId != null && !runId.isBlank()) {
-            trackerUpdateBuilder.tag("run_id", runId);
-        }
-        trackerUpdateBuilder.register(registry);
     }
     
     /**
@@ -272,6 +265,12 @@ public final class AdaptivePatternMetrics {
     public static void unregister(AdaptiveLoadPattern pattern) {
         if (pattern != null) {
             trackers.remove(pattern);
+            MeterRegistry registry = registries.remove(pattern);
+            if (registry != null) {
+                registry.getMeters().stream()
+                    .filter(m -> m.getId().getName().startsWith("vajrapulse.adaptive"))
+                    .forEach(registry::remove);
+            }
         }
     }
 }

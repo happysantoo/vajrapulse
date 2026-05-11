@@ -70,6 +70,19 @@ public final class Tracing {
 
     public static boolean isEnabled() { return tracer != null; }
 
+    /** Shuts down tracing, flushing pending spans. Safe to call even if tracing was never enabled. */
+    public static void shutdown() {
+        if (openTelemetry instanceof OpenTelemetrySdk sdk) {
+            try {
+                sdk.close();
+            } catch (Exception e) {
+                logger.warn("Error shutting down tracing: {}", e.getMessage());
+            }
+        }
+        openTelemetry = null;
+        tracer = null;
+    }
+
     /** Starts a scenario span (root) for the entire load test run.
      * 
      * <p>This span represents the entire load test scenario and serves as the parent

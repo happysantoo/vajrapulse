@@ -14,9 +14,9 @@ import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.Map;
+import java.util.Objects;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.lang.ScopedValue;
 
 /**
  * Collects and aggregates execution metrics using Micrometer.
@@ -30,10 +30,8 @@ import java.lang.ScopedValue;
  * 
  * <p>Thread-safe for concurrent metric recording.
  * 
- * <p><strong>Resource Management:</strong> This class uses {@link ScopedValue} (Java 21)
- * for performance optimization, which is safer for virtual threads than ThreadLocal.
- * This class implements {@link AutoCloseable} for consistency, though ScopedValue
- * does not require explicit cleanup. Always use try-with-resources or explicitly
+ * <p><strong>Resource Management:</strong> This class implements
+ * {@link AutoCloseable}. Always use try-with-resources or explicitly
  * call {@link #close()} when done:
  * 
  * <pre>{@code
@@ -46,8 +44,7 @@ import java.lang.ScopedValue;
  * } // Resources automatically cleaned up
  * }</pre>
  * 
- * <p><strong>Note:</strong> ScopedValue provides better virtual thread compatibility
- * compared to ThreadLocal, with automatic cleanup when the scope ends.
+ * <p><strong>Note:</strong> This class is safe for use with virtual threads.
  * 
  * @since 0.9.0
  */
@@ -66,20 +63,6 @@ public final class MetricsCollector implements AutoCloseable {
     private final double[] configuredPercentiles;
     private final String runId; // Optional run correlation tag
     private final long startMillis; // Track when collection started
-    
-    // Reusable maps for snapshot() to avoid allocations
-    // Using ScopedValue (Java 21) instead of ThreadLocal for better virtual thread compatibility
-    // These are bound at the ExecutionEngine scope level
-    private static final ScopedValue<LinkedHashMap<Double, Double>> REUSABLE_SUCCESS_MAP = 
-        ScopedValue.newInstance();
-    private static final ScopedValue<LinkedHashMap<Double, Double>> REUSABLE_FAILURE_MAP = 
-        ScopedValue.newInstance();
-    private static final ScopedValue<LinkedHashMap<Double, Double>> REUSABLE_QUEUE_WAIT_MAP = 
-        ScopedValue.newInstance();
-    
-    // Reusable intermediate HashMap for indexSnapshot() to avoid allocations
-    private static final ScopedValue<HashMap<Double, Double>> REUSABLE_INDEX_MAP = 
-        ScopedValue.newInstance();
     
     /**
      * Creates a collector with default SimpleMeterRegistry.
@@ -229,6 +212,7 @@ public final class MetricsCollector implements AutoCloseable {
      * @param runId optional run ID for tagging
      */
     private void registerJvmMetrics(MeterRegistry registry, String runId) {
+        MeterRegistry reg = Objects.requireNonNull(registry, "registry");
         MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
         
         // Heap memory metrics
@@ -261,15 +245,15 @@ public final class MetricsCollector implements AutoCloseable {
             nonHeapCommittedBuilder.tag("run_id", runId);
         }
         
-        heapUsedBuilder.register(registry);
-        heapCommittedBuilder.register(registry);
-        heapMaxBuilder.register(registry);
-        nonHeapUsedBuilder.register(registry);
-        nonHeapCommittedBuilder.register(registry);
+        heapUsedBuilder.register(reg);
+        heapCommittedBuilder.register(reg);
+        heapMaxBuilder.register(reg);
+        nonHeapUsedBuilder.register(reg);
+        nonHeapCommittedBuilder.register(reg);
         
         // GC metrics - collection count and time
         for (GarbageCollectorMXBean gcBean : ManagementFactory.getGarbageCollectorMXBeans()) {
-            String gcName = gcBean.getName();
+            String gcName = Objects.requireNonNull(gcBean.getName(), "gcName");
             
             var gcCountBuilder = io.micrometer.core.instrument.Gauge.builder("vajrapulse.jvm.gc.collections",
                     gcBean, GarbageCollectorMXBean::getCollectionCount)
@@ -285,8 +269,8 @@ public final class MetricsCollector implements AutoCloseable {
                 gcTimeBuilder.tag("run_id", runId);
             }
             
-            gcCountBuilder.register(registry);
-            gcTimeBuilder.register(registry);
+            gcCountBuilder.register(reg);
+            gcTimeBuilder.register(reg);
         }
     }
     
@@ -345,19 +329,7 @@ public final class MetricsCollector implements AutoCloseable {
     
     /**
      * Creates a snapshot of current metrics.
-     * 
-     * <p><strong>Performance Optimizations:</strong>
-     * <ul>
-     *   <li>Reuses map instances (LinkedHashMap and HashMap) to avoid allocations</li>
-     *   <li>Thread-safe via ScopedValue (Java 21) for reusable maps</li>
-     *   <li>Minimizes GC pressure by reusing intermediate data structures</li>
-     * </ul>
-     * 
-     * <p><strong>ScopedValue Usage:</strong> This method uses ScopedValue instances
-     * for map reuse, which is safer for virtual threads than ThreadLocal. The scope
-     * should be set up at the ExecutionEngine level. If not bound, new maps are
-     * created (with minimal performance impact).
-     * 
+     *
      * @return aggregated metrics snapshot
      */
     public AggregatedMetrics snapshot() {
@@ -374,13 +346,9 @@ public final class MetricsCollector implements AutoCloseable {
         Map<Double, Double> failureIdx = indexSnapshot(failureSnapshot);
         Map<Double, Double> queueWaitIdx = indexSnapshot(queueWaitSnapshot);
 
-        // Reuse map instances to avoid allocations (using ScopedValue with fallback)
-        LinkedHashMap<Double, Double> successMap = REUSABLE_SUCCESS_MAP.isBound() 
-            ? REUSABLE_SUCCESS_MAP.get() : new LinkedHashMap<>();
-        LinkedHashMap<Double, Double> failureMap = REUSABLE_FAILURE_MAP.isBound() 
-            ? REUSABLE_FAILURE_MAP.get() : new LinkedHashMap<>();
-        LinkedHashMap<Double, Double> queueWaitMap = REUSABLE_QUEUE_WAIT_MAP.isBound() 
-            ? REUSABLE_QUEUE_WAIT_MAP.get() : new LinkedHashMap<>();
+        LinkedHashMap<Double, Double> successMap = new LinkedHashMap<>();
+        LinkedHashMap<Double, Double> failureMap = new LinkedHashMap<>();
+        LinkedHashMap<Double, Double> queueWaitMap = new LinkedHashMap<>();
         
         // Clear and populate maps
         successMap.clear();
@@ -520,17 +488,12 @@ public final class MetricsCollector implements AutoCloseable {
 
     /**
      * Indexes a histogram snapshot into a map of percentile -> value.
-     * 
-     * <p><strong>Performance Optimization:</strong> Reuses a HashMap instance
-     * via ScopedValue (Java 21) to avoid allocations in the hot path.
-     * 
+     *
      * @param snapshot the histogram snapshot to index
      * @return map of percentile (rounded to 3 decimals) -> value in nanoseconds
      */
     private Map<Double, Double> indexSnapshot(io.micrometer.core.instrument.distribution.HistogramSnapshot snapshot) {
-        // Reuse HashMap instance to avoid allocations (using ScopedValue with fallback)
-        HashMap<Double, Double> idx = REUSABLE_INDEX_MAP.isBound() 
-            ? REUSABLE_INDEX_MAP.get() : new HashMap<>();
+        HashMap<Double, Double> idx = new HashMap<>();
         idx.clear();
         for (var pv : snapshot.percentileValues()) {
             double key = round3(pv.percentile());
@@ -610,30 +573,13 @@ public final class MetricsCollector implements AutoCloseable {
     }
     
     /**
-     * Closes this metrics collector and cleans up resources.
-     * 
-     * <p>This method is provided for {@link AutoCloseable} compatibility.
-     * With ScopedValue (Java 21), explicit cleanup is not required as values
-     * are automatically cleaned up when the scope ends. However, this method
-     * is kept for API consistency and potential future resource management needs.
-     * 
-     * <p>After calling this method, the collector should not be used. Calling
-     * {@link #snapshot()} or other methods after close may work but is not guaranteed
-     * and is not recommended.
-     * 
-     * <p>This method is idempotent - calling it multiple times has no additional effect.
-     * 
-     * <p><strong>Best Practice:</strong> Always use try-with-resources:
-     * <pre>{@code
-     * try (MetricsCollector collector = new MetricsCollector()) {
-     *     // Use collector
-     * } // Automatically closed
-     * }</pre>
+     * Closes this metrics collector.
+     *
+     * <p>After calling this method, the collector should not be used.
+     * This method is idempotent.
      */
     @Override
     public void close() {
-        // ScopedValue does not require explicit cleanup - values are automatically
-        // cleaned up when the scope ends. This method is kept for AutoCloseable
-        // compatibility and potential future resource management needs.
+        // Reserved for future resource cleanup (e.g., closing MeterRegistry backends)
     }
 }

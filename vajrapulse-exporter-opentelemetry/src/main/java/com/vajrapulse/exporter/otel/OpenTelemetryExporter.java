@@ -68,9 +68,11 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     private final io.opentelemetry.api.metrics.LongCounter executionCount;
     // Gauge (async): vajrapulse.execution.duration {status=success|failure, percentile=<p>}
 
-    // Track last cumulative counts to emit deltas for monotonic counter per status
-    private long lastSuccess;
-    private long lastFailure;
+    // Track last cumulative counts to emit deltas for monotonic counter per status.
+    // Wrapped in an AtomicReference so the (success, failure) pair is updated atomically.
+    private final AtomicReference<CounterPair> lastCounters = new AtomicReference<>(new CounterPair(0, 0));
+
+    private record CounterPair(long success, long failure) {}
 
     // Store latest snapshot for asynchronous success rate gauge
     private final AtomicReference<AggregatedMetrics> lastMetrics = new AtomicReference<>();
@@ -292,7 +294,7 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
     }
     
     @Override
-    public synchronized void export(String title, AggregatedMetrics metrics) {
+    public void export(String title, AggregatedMetrics metrics) {
         try {
             logger.debug("Exporting metrics to OTLP: {}", title);
 
@@ -305,13 +307,13 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
                 lastFailureTps = metrics.failureTps();
             }
 
-            // Compute deltas per status for unified counter
+            // Compute deltas per status for unified counter (jointly atomic)
             long success = metrics.successCount();
             long failure = metrics.failureCount();
-            long deltaSuccess = success - lastSuccess;
-            long deltaFailure = failure - lastFailure;
+            CounterPair prev = lastCounters.getAndSet(new CounterPair(success, failure));
+            long deltaSuccess = success - prev.success();
+            long deltaFailure = failure - prev.failure();
             if (deltaSuccess < 0 || deltaFailure < 0) {
-                // Reset scenario – treat as fresh
                 deltaSuccess = success;
                 deltaFailure = failure;
             }
@@ -327,12 +329,8 @@ public final class OpenTelemetryExporter implements MetricsExporter, AutoCloseab
                     .put(AttributeKey.stringKey("run_id"), runId)
                     .build());
             }
-            lastSuccess = success;
-            lastFailure = failure;
 
             // Duration percentiles are recorded via async gauge callback above
-
-            // Flush is deferred to periodic reader; avoid heavy forceFlush each call.
             logger.debug("Metrics recorded for export batch: successDelta={}, failureDelta={}, successTotal={}, failureTotal={}", deltaSuccess, deltaFailure, success, failure);
         } catch (Exception e) {
             logger.error("Failed to export metrics to OTLP endpoint: {}", endpoint, e);

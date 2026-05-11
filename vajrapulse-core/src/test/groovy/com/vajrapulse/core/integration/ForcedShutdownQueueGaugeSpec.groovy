@@ -43,7 +43,10 @@ class ForcedShutdownQueueGaugeSpec extends Specification {
 
         when: "engine runs, stop is requested while many long-running tasks are in flight"
         def engineThread = Thread.startVirtualThread { engine.run() }
-        Thread.sleep(300)
+        // Allow engine to start and accumulate tasks before stopping.
+        // BlockingTask never completes (sleeps 600s), so use a fixed delay
+        // past the drain timeout (200ms) to ensure shutdownNow is triggered.
+        Thread.sleep(500)
         engine.stop()
         engineThread.join(45_000)
         def snap = collector.snapshot()

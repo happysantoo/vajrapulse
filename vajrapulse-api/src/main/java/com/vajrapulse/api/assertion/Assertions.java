@@ -94,7 +94,7 @@ public final class Assertions {
         }
         
         return metrics -> {
-            double errorRate = metrics.failureRate() / 100.0; // Convert percentage to ratio
+            double errorRate = metrics.failureRate();
             if (errorRate > maxErrorRate) {
                 return AssertionResult.failure(
                     "Error rate %.2f%% exceeds maximum %.2f%%",
@@ -120,7 +120,7 @@ public final class Assertions {
         }
         
         return metrics -> {
-            double successRate = metrics.successRate() / 100.0; // Convert percentage to ratio
+            double successRate = metrics.successRate();
             if (successRate < minSuccessRate) {
                 return AssertionResult.failure(
                     "Success rate %.2f%% is below minimum %.2f%%",

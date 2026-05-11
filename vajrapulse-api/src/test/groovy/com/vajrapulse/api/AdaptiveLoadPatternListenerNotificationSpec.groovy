@@ -123,6 +123,46 @@ class AdaptiveLoadPatternListenerNotificationSpec extends Specification {
         listener1Events[0].newTps() == listener2Events[0].newTps()
     }
     
+    def "should continue notifying other listeners when one throws exception"() {
+        given:
+        def provider = new MockMetricsProvider()
+        provider.setFailureRate(0.0)
+        def secondListenerCalled = new java.util.concurrent.atomic.AtomicBoolean(false)
+        def throwingListener = new AdaptivePatternListener() {
+            @Override
+            void onTpsChange(TpsChangeEvent event) {
+                throw new RuntimeException("Listener error simulation")
+            }
+        }
+        def normalListener = new AdaptivePatternListener() {
+            @Override
+            void onTpsChange(TpsChangeEvent event) {
+                secondListenerCalled.set(true)
+            }
+        }
+        def pattern = AdaptiveLoadPattern.builder()
+            .initialTps(100.0)
+            .rampIncrement(50.0)
+            .rampDecrement(100.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(1000.0)
+            .minTps(10.0)
+            .sustainDuration(Duration.ofSeconds(10))
+            .stableIntervalsRequired(3)
+            .metricsProvider(provider)
+            .decisionPolicy(new com.vajrapulse.api.pattern.adaptive.DefaultRampDecisionPolicy(0.01))
+            .listener(throwingListener)
+            .listener(normalListener)
+            .build()
+
+        when: "Trigger TPS change that causes one listener to throw"
+        pattern.calculateTps(0)
+        pattern.calculateTps(1001)
+
+        then: "Second listener still receives notification"
+        secondListenerCalled.get()
+    }
+
     def "should include phase in TPS change event"() {
         given:
         def provider = new MockMetricsProvider()

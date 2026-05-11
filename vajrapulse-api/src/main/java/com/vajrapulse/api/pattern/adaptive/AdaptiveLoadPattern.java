@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Adaptive load pattern that automatically finds the maximum sustainable TPS.
@@ -61,14 +63,12 @@ public final class AdaptiveLoadPattern implements LoadPattern {
     private final RampDecisionPolicy decisionPolicy;
     private final List<AdaptivePatternListener> listeners;
     
+    private static final Logger LOGGER = Logger.getLogger(AdaptiveLoadPattern.class.getName());
+
     // Immutable state stored atomically
     private final AtomicReference<AdaptiveState> state;
-    
-    /**
-     * Conversion factor from percentage to ratio (100.0% = 1.0).
-     */
-    private static final double PERCENTAGE_TO_RATIO = 100.0;
-    
+
+
     /**
      * Creates a new adaptive load pattern with configuration.
      * 
@@ -364,8 +364,8 @@ public final class AdaptiveLoadPattern implements LoadPattern {
      */
     private MetricsSnapshot captureMetricsSnapshot(long elapsedMillis) {
         return new MetricsSnapshot(
-            metricsProvider.getFailureRate() / PERCENTAGE_TO_RATIO,
-            metricsProvider.getRecentFailureRate(10) / PERCENTAGE_TO_RATIO,
+            metricsProvider.getFailureRate(),
+            metricsProvider.getRecentFailureRate(10),
             getBackpressureLevel(),
             metricsProvider.getTotalExecutions()
         );
@@ -469,8 +469,7 @@ public final class AdaptiveLoadPattern implements LoadPattern {
             try {
                 notification.accept(listener);
             } catch (Exception e) {
-                System.err.println("Listener error in " + methodName + ": " + e.getMessage());
-                e.printStackTrace();
+                LOGGER.log(Level.WARNING, "Listener error in " + methodName, e);
             }
         }
     }

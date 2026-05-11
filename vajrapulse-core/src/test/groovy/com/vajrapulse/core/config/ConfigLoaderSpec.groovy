@@ -304,6 +304,156 @@ execution:
         "AUTO"      | VajraPulseConfig.ThreadPoolStrategy.AUTO
     }
 
+    def "should load via no-arg load method using defaults"() {
+        when:
+        def config = ConfigLoader.load()
+
+        then:
+        config != null
+        config.execution().drainTimeout() == Duration.ofSeconds(5)
+        config.execution().forceTimeout() == Duration.ofSeconds(10)
+    }
+
+    def "should load from JSON configuration file"() {
+        given: "a JSON config file"
+        def configFile = tempDir.resolve("vajrapulse.conf.json")
+        Files.writeString(configFile, """
+{
+  "execution": {
+    "drainTimeout": "3s",
+    "forceTimeout": "15s",
+    "defaultThreadPool": "platform",
+    "platformThreadPoolSize": 8
+  },
+  "observability": {
+    "tracingEnabled": true,
+    "metricsEnabled": true,
+    "structuredLogging": false,
+    "otlpEndpoint": "http://localhost:4317",
+    "tracingSampleRate": 0.1
+  }
+}
+""")
+
+        when:
+        def config = ConfigLoader.load(configFile)
+
+        then:
+        config.execution().drainTimeout() == Duration.ofSeconds(3)
+        config.execution().forceTimeout() == Duration.ofSeconds(15)
+        config.execution().defaultThreadPool() == VajraPulseConfig.ThreadPoolStrategy.PLATFORM
+        config.observability().tracingEnabled() == true
+    }
+
+    def "should use execution defaults when execution section is missing"() {
+        given: "a config with only observability section"
+        def configFile = tempDir.resolve("vajrapulse.conf.yml")
+        Files.writeString(configFile, """
+observability:
+  tracingEnabled: true
+""")
+
+        when:
+        def config = ConfigLoader.load(configFile)
+
+        then:
+        config.execution().drainTimeout() == Duration.ofSeconds(5)
+        config.execution().forceTimeout() == Duration.ofSeconds(10)
+        config.execution().defaultThreadPool() == VajraPulseConfig.ThreadPoolStrategy.VIRTUAL
+        config.observability().tracingEnabled() == true
+    }
+
+    def "should use observability defaults when observability section is missing"() {
+        given: "a config with only execution section"
+        def configFile = tempDir.resolve("vajrapulse.conf.yml")
+        Files.writeString(configFile, """
+execution:
+  drainTimeout: 7s
+""")
+
+        when:
+        def config = ConfigLoader.load(configFile)
+
+        then:
+        config.execution().drainTimeout() == Duration.ofSeconds(7)
+        config.observability().tracingEnabled() == false
+        config.observability().metricsEnabled() == true
+    }
+
+    def "should handle execution section with missing fields using defaults"() {
+        given: "a config with execution section but no fields"
+        def configFile = tempDir.resolve("vajrapulse.conf.yml")
+        Files.writeString(configFile, """
+execution: {}
+""")
+
+        when:
+        def config = ConfigLoader.load(configFile)
+
+        then:
+        config.execution().drainTimeout() == Duration.ofSeconds(5)
+        config.execution().forceTimeout() == Duration.ofSeconds(10)
+        config.execution().defaultThreadPool() == VajraPulseConfig.ThreadPoolStrategy.VIRTUAL
+    }
+
+    def "should handle observability section with missing fields using defaults"() {
+        given: "a config with observability section but no fields"
+        def configFile = tempDir.resolve("vajrapulse.conf.yml")
+        Files.writeString(configFile, """
+observability: {}
+""")
+
+        when:
+        def config = ConfigLoader.load(configFile)
+
+        then:
+        config.observability().tracingEnabled() == false
+        config.observability().metricsEnabled() == true
+        config.observability().structuredLogging() == true
+    }
+
+    def "should handle empty YAML document gracefully"() {
+        given: "a config file with only comments/whitespace"
+        def configFile = tempDir.resolve("vajrapulse.conf.yml")
+        Files.writeString(configFile, "# just a comment\n")
+
+        when:
+        def config = ConfigLoader.load(configFile)
+
+        then:
+        config.execution().drainTimeout() == Duration.ofSeconds(5)
+    }
+
+    def "should handle numeric sample rate as integer"() {
+        given: "a config with integer sample rate"
+        def configFile = tempDir.resolve("vajrapulse.conf.yml")
+        Files.writeString(configFile, """
+observability:
+  tracingSampleRate: 1
+""")
+
+        when:
+        def config = ConfigLoader.load(configFile)
+
+        then:
+        config.observability().tracingSampleRate() == 1.0
+    }
+
+    def "should handle invalid numeric string in parseDoubleSafe"() {
+        given: "a config with invalid sample rate string"
+        def configFile = tempDir.resolve("vajrapulse.conf.yml")
+        Files.writeString(configFile, """
+observability:
+  tracingSampleRate: not-a-number
+""")
+
+        when: "loading config"
+        def config = ConfigLoader.load(configFile)
+
+        then: "falls back to default sample rate"
+        config.observability().tracingSampleRate() == 0.05 // default
+    }
+
     // Helper methods for environment override testing
     private void setEnvOverride(String key, String value) {
         // Since we can't actually modify env vars in tests, we rely on the loader

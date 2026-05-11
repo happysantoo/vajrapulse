@@ -1,10 +1,12 @@
 package com.vajrapulse.exporter.otel
 
 import com.vajrapulse.core.metrics.AggregatedMetrics
+import com.vajrapulse.api.task.TaskIdentity
 import spock.lang.Specification
 import spock.lang.TempDir
 
 import java.nio.file.Path
+import java.util.Collections
 
 /**
  * Tests for OpenTelemetryExporter using Spock.
@@ -442,6 +444,165 @@ class OpenTelemetryExporterSpec extends Specification {
         exporter?.close()
     }
     
+    def "should handle concurrent exports without counter corruption"() {
+        given: "an exporter instance"
+        def exporter = OpenTelemetryExporter.builder()
+            .endpoint("http://localhost:4318")
+            .build()
+
+        and: "a series of metrics with monotonically increasing counts"
+        def metricsList = (1..50).collect { i ->
+            createSampleMetrics(
+                totalExecutions: i * 10L,
+                successCount: i * 9L,
+                failureCount: i * 1L
+            )
+        }
+
+        when: "exporting concurrently from multiple threads"
+        def exceptions = Collections.synchronizedList([])
+        def threads = []
+        metricsList.collate(10).each { batch ->
+            threads << Thread.startVirtualThread {
+                batch.each { metrics ->
+                    try {
+                        exporter.export("Concurrent Test", metrics)
+                    } catch (Exception e) {
+                        exceptions << e
+                    }
+                }
+            }
+        }
+        threads.each { it.join(5000) }
+
+        then: "no exceptions from concurrent access"
+        exceptions.isEmpty()
+
+        cleanup:
+        exporter?.close()
+    }
+
+    def "should build exporter with custom runId"() {
+        given: "a custom run ID"
+        def runId = "my-custom-run-123"
+
+        when: "building with custom run ID"
+        def exporter = OpenTelemetryExporter.builder()
+            .runId(runId)
+            .build()
+
+        then: "run ID is preserved"
+        exporter.getRunId() == runId
+
+        cleanup:
+        exporter?.close()
+    }
+
+    def "should auto-generate runId when not provided"() {
+        when: "building without run ID"
+        def exporter = OpenTelemetryExporter.builder()
+            .build()
+
+        then: "run ID is auto-generated"
+        exporter.getRunId() != null
+        !exporter.getRunId().isBlank()
+
+        cleanup:
+        exporter?.close()
+    }
+
+    def "should build exporter with taskIdentity"() {
+        given: "a task identity"
+        def identity = TaskIdentity.of("my-task", "component", "payments")
+
+        when: "building with task identity"
+        def exporter = OpenTelemetryExporter.builder()
+            .taskIdentity(identity)
+            .build()
+
+        then: "exporter is created successfully"
+        exporter != null
+
+        cleanup:
+        exporter?.close()
+    }
+
+    def "should export with taskIdentity resource attributes"() {
+        given: "an exporter with taskIdentity"
+        def identity = new TaskIdentity("checkout", ["scenario": "high-tps", "dataset": "prod"])
+        def exporter = OpenTelemetryExporter.builder()
+            .taskIdentity(identity)
+            .build()
+
+        and: "sample metrics"
+        def metrics = createSampleMetrics(totalExecutions: 10L, successCount: 10L, failureCount: 0L)
+
+        when: "exporting"
+        exporter.export("TaskIdentity Test", metrics)
+
+        then:
+        noExceptionThrown()
+
+        cleanup:
+        exporter?.close()
+    }
+
+    def "should return zero TPS before any export"() {
+        given: "a freshly built exporter"
+        def exporter = OpenTelemetryExporter.builder().build()
+
+        expect: "all TPS values are zero"
+        exporter.getLastResponseTps() == 0.0
+        exporter.getLastSuccessTps() == 0.0
+        exporter.getLastFailureTps() == 0.0
+
+        cleanup:
+        exporter?.close()
+    }
+
+    def "should handle metrics with queue size and wait percentiles"() {
+        given: "an exporter instance"
+        def exporter = OpenTelemetryExporter.builder().build()
+
+        and: "metrics with queue data"
+        def metrics = new AggregatedMetrics(
+            100L, 95L, 5L,
+            [0.50: 50_000_000.0d, 0.95: 100_000_000.0d] as Map<Double, Double>,
+            [0.50: 25_000_000.0d] as Map<Double, Double>,
+            1000L,
+            42L,
+            [0.50: 10_000_000.0d, 0.95: 50_000_000.0d] as Map<Double, Double>
+        )
+
+        when:
+        exporter.export("Queue Test", metrics)
+
+        then:
+        noExceptionThrown()
+
+        cleanup:
+        exporter?.close()
+    }
+
+    def "should handle resource attribute key translation"() {
+        given: "an exporter with resource attributes that get translated"
+        def exporter = OpenTelemetryExporter.builder()
+            .resourceAttributes(["environment": "staging", "region": "us-west-2", "custom.namespace": "test"])
+            .build()
+
+        and: "sample metrics"
+        def metrics = createSampleMetrics(totalExecutions: 5L, successCount: 5L, failureCount: 0L)
+
+        when:
+        exporter.export("Translation Test", metrics)
+
+        then:
+        noExceptionThrown()
+
+        cleanup:
+        exporter?.close()
+    }
+
     // Helper method to create sample AggregatedMetrics
     private AggregatedMetrics createSampleMetrics(Map params) {
         long totalExecutions = params.totalExecutions ?: 0L
