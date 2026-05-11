@@ -34,14 +34,21 @@ jobs:
           MAVENCENTRALPASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.GPG_SECRET_KEY }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_PASSPHRASE }}
-          JRELEASER_SIGNING_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
-          JRELEASER_SIGNING_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
+          # Write JReleaser secrets file for signing key resolution
+          python3 -c "
+          import os
+          with open('/tmp/secrets.properties', 'w') as f:
+              f.write(f'signing.secretKey={os.environ[\"ORG_GRADLE_PROJECT_signingKey\"]}\n')
+              f.write(f'signing.passphrase={os.environ[\"ORG_GRADLE_PROJECT_signingPassword\"]}\n')
+          "
+
           ./gradlew prepareRelease
 
           curl -sL https://github.com/jreleaser/jreleaser/releases/download/v1.18.0/jreleaser-1.18.0.zip -o /tmp/jreleaser.zip
           unzip -q /tmp/jreleaser.zip -d /tmp/jreleaser
           /tmp/jreleaser/jreleaser-1.18.0/bin/jreleaser full-release \
             --config jreleaser.yml \
+            --secrets /tmp/secrets.properties \
             --exclude-distributions \
             --auto-config=false
