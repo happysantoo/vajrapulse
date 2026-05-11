@@ -22,7 +22,7 @@ dependencies {
     implementation(project(":vajrapulse-core"))
     
     // OpenTelemetry for Span type in benchmarks
-    implementation("io.opentelemetry:opentelemetry-api:1.32.0")
+    implementation("io.opentelemetry:opentelemetry-api:1.62.0")
     
     // JMH - add to implementation for compilation, jmh config for runtime
     implementation("org.openjdk.jmh:jmh-core:1.37")
