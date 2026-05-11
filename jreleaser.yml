@@ -8,15 +8,15 @@ project:
   copyright: "Copyright © 2025 Santhosh Kuppusamy"
   links:
     homepage: https://github.com/happysantoo/vajrapulse
-    scm: https://github.com/happysantoo/vajrapulse
+    vcsBrowser: https://github.com/happysantoo/vajrapulse
     documentation: https://github.com/happysantoo/vajrapulse
-  java:
-    groupId: com.vajrapulse
+  languages:
+    java:
+      groupId: com.vajrapulse
 
 signing:
   active: ALWAYS
   armored: true
-  # secretKey & passphrase sourced from gradle properties (signingKey, signingPassword)
 
 release:
   github:
@@ -26,17 +26,12 @@ release:
 deploy:
   maven:
     mavenCentral:
-      active: ALWAYS
-      stage: FULL          # UPLOAD | PUBLISH | FULL
-      username: '{{mavenCentralUsername}}'
-      password: '{{mavenCentralPassword}}'
-      retryDelay: 10       # seconds between polls
-      maxRetries: 10
-
-# Environment variable / Gradle properties mapping:
-# - mavenCentralUsername / mavenCentralPassword -> portal credentials
-# - signingKey / signingPassword -> PGP key & passphrase (in ~/.gradle/gradle.properties)
-
-# To run:
-#   ./gradlew prepareRelease jreleaserDeploy --dry-run   # validate
-#   ./gradlew prepareRelease jreleaserDeploy            # full upload + publish
+      sonatype:
+        active: ALWAYS
+        url: https://central.sonatype.com/api/v1/publisher
+        username: '{{mavenCentralUsername}}'
+        password: '{{mavenCentralPassword}}'
+        stagingRepositories:
+          - target/staging-deploy
+        retryDelay: 10
+        maxRetries: 10
