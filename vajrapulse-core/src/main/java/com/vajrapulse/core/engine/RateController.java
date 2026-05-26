@@ -54,7 +54,12 @@ public final class RateController {
     private final long testStartNanos;
     private final AtomicLong executionCount;
     
-    // Cached elapsed time to reduce System.nanoTime() calls
+    // Cached elapsed time to reduce System.nanoTime() calls.
+    // Note: cachedElapsedNanos and cachedElapsedTimeNanos are read/written non-atomically
+    // as a pair. This is intentional: the primary caller (waitForNext) is single-threaded,
+    // and concurrent readers (e.g., metrics gauges) may see a slightly stale but consistent
+    // cache value, which is acceptable for metrics polling. The worst case is an unnecessary
+    // recompute of elapsed time, not a correctness error.
     private volatile long cachedElapsedNanos;
     private volatile long cachedElapsedTimeNanos;
     

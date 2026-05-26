@@ -98,6 +98,9 @@ public final class ExecutionEngine implements AutoCloseable {
     private Counter lifecycleCompleteCounter;
     private Timer uptimeTimer;
     
+    // Adaptive pattern metrics instance (null if not using adaptive pattern)
+    private AdaptivePatternMetrics adaptivePatternMetrics;
+    
     /**
      * Engine state for health metrics.
      */
@@ -398,23 +401,21 @@ public final class ExecutionEngine implements AutoCloseable {
     /**
      * Executes the main load test loop.
      * 
-     * <p>This method handles the core execution loop:
-     * <ul>
-     *   <li>Creates task executor and rate controller</li>
-     *   <li>Registers rate controller metrics</li>
-     *   <li>Submits task executions according to load pattern</li>
-     *   <li>Respects stop requests and pattern completion</li>
-     * </ul>
+     * <p>This method handles rate-controlled task submission according to the
+     * load pattern. It uses a {@link RateController} to pace submissions and
+     * tracks queue depth for backpressure monitoring.
      * 
-     * @throws Exception if execution fails
+     * <p><strong>Note:</strong> The {@code @SuppressWarnings} annotation suppresses
+     * the RV_RETURN_VALUE_IGNORED_BAD_PRACTICE warning because fire-and-forget
+     * submission to the executor is intentional - we don't need the Future result.
      */
-    private void executeLoadTest() throws Exception {
-        // TaskExecutor is a simple wrapper that provides instrumentation and metrics capture.
-        // It's created directly here rather than injected because:
-        // 1. It's tightly coupled to the task lifecycle (one TaskExecutor per task)
-        // 2. It has no dependencies beyond the TaskLifecycle itself
-        // 3. It's a lightweight utility class, not a service requiring DI
-        // 4. This pattern is consistent throughout the codebase
+    @SuppressWarnings("RV_RETURN_VALUE_IGNORED_BAD_PRACTICE") // Fire-and-forget executor.submit() is intentional
+    private void executeLoadTest() {
+        logger.info("Starting load test execution runId={}, pattern={}, duration={}ms", 
+            runId, 
+            loadPattern.getClass().getSimpleName(),
+            loadPattern.getDuration().toMillis());
+        
         TaskExecutor taskExecutor = new TaskExecutor(taskLifecycle);
         RateController rateController = new RateController(loadPattern);
         
@@ -496,13 +497,9 @@ public final class ExecutionEngine implements AutoCloseable {
         // Register pattern-specific metrics
         loadPattern.registerMetrics(registry, runId);
         
-        // Adaptive pattern metrics require special handling due to module boundaries:
-        // - AdaptiveLoadPattern is in api module (zero dependencies)
-        // - AdaptivePatternMetrics is in core module (depends on Micrometer)
-        // - Cannot use polymorphism without breaking module boundaries
-        // This instanceof check is isolated and acceptable.
+        // Adaptive pattern metrics: create instance-based metrics for proper lifecycle management
         if (loadPattern instanceof AdaptiveLoadPattern adaptivePattern) {
-            AdaptivePatternMetrics.register(adaptivePattern, registry, runId);
+            adaptivePatternMetrics = new AdaptivePatternMetrics(adaptivePattern, registry, runId);
         }
     }
 
@@ -564,6 +561,10 @@ public final class ExecutionEngine implements AutoCloseable {
                 "Task initialization failed", 
                 Map.of("error", e.getClass().getSimpleName(), "error_message", sanitize(e.getMessage())),
                 runId);
+            // End scenario span since we won't reach the finally block in the main try
+            if (Tracing.isEnabled() && scenarioSpan != null && scenarioSpan.isRecording()) {
+                scenarioSpan.end();
+            }
             // Don't call teardown if init failed, but ensure executor is shut down
             executorShutdown.set(true);
             if (shutdownHookEnabled) {
@@ -685,10 +686,9 @@ public final class ExecutionEngine implements AutoCloseable {
         Tracing.shutdown();
 
         // Unregister adaptive pattern metrics to prevent memory leaks
-        // Use instanceof here as unregister() is a static method in core module
-        // and we need to identify AdaptiveLoadPattern instances for cleanup
-        if (loadPattern instanceof AdaptiveLoadPattern adaptivePattern) {
-            AdaptivePatternMetrics.unregister(adaptivePattern);
+        // Uses instance-based cleanup that removes only this engine's meters
+        if (adaptivePatternMetrics != null) {
+            adaptivePatternMetrics.unregister();
         }
         
         // Signal shutdown completion and remove hook only if hooks were enabled

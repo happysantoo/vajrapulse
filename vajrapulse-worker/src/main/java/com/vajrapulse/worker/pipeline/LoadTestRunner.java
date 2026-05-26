@@ -3,6 +3,11 @@ package com.vajrapulse.worker.pipeline;
 import com.vajrapulse.api.metrics.RunContext;
 import com.vajrapulse.api.metrics.SystemInfo;
 import com.vajrapulse.api.pattern.LoadPattern;
+import com.vajrapulse.api.pattern.StaticLoad;
+import com.vajrapulse.api.pattern.RampUpLoad;
+import com.vajrapulse.api.pattern.RampUpToMaxLoad;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveLoadPattern;
+import com.vajrapulse.api.pattern.adaptive.AdaptiveConfig;
 import com.vajrapulse.api.metrics.MetricsProvider;
 import com.vajrapulse.api.task.TaskLifecycle;
 import com.vajrapulse.core.engine.ExecutionEngine;
@@ -124,34 +129,26 @@ public final class LoadTestRunner implements AutoCloseable {
         // Create RunContext with metadata
         RunContext context = createRunContext(task, loadPattern, startTime, endTime);
 
-        // Export final metrics to all exporters with context
+        // Export final metrics to all exporters
         for (MetricsExporter exporter : exporters) {
             try {
                 exporter.export("Final Results", finalSnapshot, context);
             } catch (Exception e) {
-                logger.error("Exporter {} failed during final export", exporter.getClass().getSimpleName(), e);
+                logger.error("Failed to export final metrics to {}: {}", 
+                    exporter.getClass().getSimpleName(), e.getMessage(), e);
             }
         }
+        
         return finalSnapshot;
     }
     
-    /**
-     * Creates a RunContext with metadata about the test run.
-     * 
-     * @param task the task that was executed
-     * @param loadPattern the load pattern used
-     * @param startTime when the test started
-     * @param endTime when the test ended
-     * @return a RunContext with all available metadata
-     */
     private RunContext createRunContext(TaskLifecycle task, LoadPattern loadPattern, 
-                                        Instant startTime, Instant endTime) {
+                                       Instant startTime, Instant endTime) {
         Map<String, Object> configuration = new LinkedHashMap<>();
+        configuration.put("task_class", task.getClass().getSimpleName());
+        configuration.put("pattern_class", loadPattern.getClass().getSimpleName());
+        configuration.put("duration_ms", loadPattern.getDuration().toMillis());
         
-        // Add load pattern configuration
-        configuration.put("duration", loadPattern.getDuration().toString());
-        
-        // Add pattern-specific configuration based on type
         addPatternConfiguration(loadPattern, configuration);
         
         return RunContext.of(
@@ -168,66 +165,29 @@ public final class LoadTestRunner implements AutoCloseable {
     /**
      * Adds pattern-specific configuration to the map.
      * 
-     * <p>Uses reflection to extract pattern-specific configuration values.
-     * Silently ignores any reflection errors since configuration extraction
-     * is optional and should not affect test execution.
+     * <p>Uses pattern type checking instead of reflection for type-safe
+     * configuration extraction. This avoids reflection overhead and
+     * provides compile-time safety.
      * 
      * @param loadPattern the load pattern
      * @param configuration the configuration map to populate
      */
-    @SuppressWarnings("PMD.EmptyCatchBlock")
     private void addPatternConfiguration(LoadPattern loadPattern, Map<String, Object> configuration) {
-        // Use reflection to extract pattern-specific configuration
-        String patternType = loadPattern.getClass().getSimpleName();
-        
-        switch (patternType) {
-            case "StaticLoad" -> extractStaticLoadConfig(loadPattern, configuration);
-            case "RampUpLoad", "RampUpToMaxLoad" -> extractRampLoadConfig(loadPattern, configuration);
-            case "AdaptiveLoadPattern" -> extractAdaptiveLoadConfig(loadPattern, configuration);
-            default -> {
-                // For unknown patterns, just use the type name
-            }
+        if (loadPattern instanceof StaticLoad staticLoad) {
+            configuration.put("tps", staticLoad.tps());
+        } else if (loadPattern instanceof RampUpLoad rampLoad) {
+            configuration.put("startTps", 0.0);
+            configuration.put("endTps", rampLoad.maxTps());
+        } else if (loadPattern instanceof RampUpToMaxLoad rampSustainLoad) {
+            configuration.put("startTps", 0.0);
+            configuration.put("endTps", rampSustainLoad.maxTps());
+        } else if (loadPattern instanceof AdaptiveLoadPattern adaptivePattern) {
+            AdaptiveConfig config = adaptivePattern.getConfig();
+            configuration.put("initialTps", config.initialTps());
+            configuration.put("maxTps", config.maxTps());
+            configuration.put("minTps", config.minTps());
         }
-    }
-    
-    @SuppressWarnings("PMD.EmptyCatchBlock")
-    private void extractStaticLoadConfig(LoadPattern loadPattern, Map<String, Object> configuration) {
-        try {
-            var tpsMethod = loadPattern.getClass().getMethod("tps");
-            configuration.put("tps", tpsMethod.invoke(loadPattern));
-        } catch (NoSuchMethodException | IllegalAccessException | java.lang.reflect.InvocationTargetException e) {
-            // Ignore if method doesn't exist or fails - configuration is optional
-        }
-    }
-    
-    @SuppressWarnings("PMD.EmptyCatchBlock")
-    private void extractRampLoadConfig(LoadPattern loadPattern, Map<String, Object> configuration) {
-        try {
-            var startTpsMethod = loadPattern.getClass().getMethod("startTps");
-            var endTpsMethod = loadPattern.getClass().getMethod("endTps");
-            configuration.put("startTps", startTpsMethod.invoke(loadPattern));
-            configuration.put("endTps", endTpsMethod.invoke(loadPattern));
-        } catch (NoSuchMethodException | IllegalAccessException | java.lang.reflect.InvocationTargetException e) {
-            // Ignore if methods don't exist or fail - configuration is optional
-        }
-    }
-    
-    @SuppressWarnings("PMD.EmptyCatchBlock")
-    private void extractAdaptiveLoadConfig(LoadPattern loadPattern, Map<String, Object> configuration) {
-        try {
-            var configMethod = loadPattern.getClass().getMethod("getConfig");
-            var config = configMethod.invoke(loadPattern);
-            if (config != null) {
-                var initialTpsMethod = config.getClass().getMethod("initialTps");
-                var maxTpsMethod = config.getClass().getMethod("maxTps");
-                var minTpsMethod = config.getClass().getMethod("minTps");
-                configuration.put("initialTps", initialTpsMethod.invoke(config));
-                configuration.put("maxTps", maxTpsMethod.invoke(config));
-                configuration.put("minTps", minTpsMethod.invoke(config));
-            }
-        } catch (NoSuchMethodException | IllegalAccessException | java.lang.reflect.InvocationTargetException e) {
-            // Ignore if methods don't exist or fail - configuration is optional
-        }
+        // For unknown patterns, no additional configuration is extracted
     }
 
     /**

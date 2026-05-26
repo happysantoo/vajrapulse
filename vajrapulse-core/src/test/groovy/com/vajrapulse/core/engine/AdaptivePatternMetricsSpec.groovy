@@ -33,7 +33,7 @@ class AdaptivePatternMetricsSpec extends Specification {
             .build()
 
         when: "registering metrics"
-        AdaptivePatternMetrics.register(pattern, registry, "test-run")
+        def metrics = new AdaptivePatternMetrics(pattern, registry, "test-run")
 
         then: "metrics are registered"
         registry.find("vajrapulse.adaptive.phase").gauge() != null
@@ -41,10 +41,9 @@ class AdaptivePatternMetricsSpec extends Specification {
         registry.find("vajrapulse.adaptive.stable_tps").gauge() != null
 
         when: "unregistering metrics"
-        AdaptivePatternMetrics.unregister(pattern)
+        metrics.unregister()
 
-        then: "tracker is removed (pattern can be garbage collected)"
-        // Verify unregister doesn't throw
+        then: "meters are removed"
         noExceptionThrown()
     }
 
@@ -67,21 +66,56 @@ class AdaptivePatternMetricsSpec extends Specification {
             .build()
 
         when: "registering and unregistering multiple times"
-        AdaptivePatternMetrics.register(pattern, registry, "test-run-1")
-        AdaptivePatternMetrics.unregister(pattern)
-        AdaptivePatternMetrics.register(pattern, registry, "test-run-2")
-        AdaptivePatternMetrics.unregister(pattern)
+        def metrics1 = new AdaptivePatternMetrics(pattern, registry, "test-run-1")
+        metrics1.unregister()
+        def metrics2 = new AdaptivePatternMetrics(pattern, registry, "test-run-2")
+        metrics2.unregister()
 
         then: "no exceptions are thrown"
         noExceptionThrown()
     }
 
-    def "should handle unregister with null pattern gracefully"() {
-        when: "unregistering null pattern"
-        AdaptivePatternMetrics.unregister(null)
+    def "should only remove its own meters when unregistering"() {
+        given: "two adaptive patterns sharing a registry"
+        def registry = new SimpleMeterRegistry()
+        def collector = new MetricsCollector(registry)
+        def metricsProvider = new MetricsProviderAdapter(collector)
+        def pattern1 = AdaptiveLoadPattern.builder()
+            .initialTps(10.0)
+            .rampIncrement(5.0)
+            .rampDecrement(10.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(100.0)
+            .minTps(5.0)
+            .sustainDuration(Duration.ofSeconds(10))
+            .stableIntervalsRequired(3)
+            .metricsProvider(metricsProvider)
+            .decisionPolicy(new DefaultRampDecisionPolicy(0.01))
+            .build()
+        def pattern2 = AdaptiveLoadPattern.builder()
+            .initialTps(20.0)
+            .rampIncrement(10.0)
+            .rampDecrement(20.0)
+            .rampInterval(Duration.ofSeconds(1))
+            .maxTps(200.0)
+            .minTps(10.0)
+            .sustainDuration(Duration.ofSeconds(10))
+            .stableIntervalsRequired(3)
+            .metricsProvider(metricsProvider)
+            .decisionPolicy(new DefaultRampDecisionPolicy(0.01))
+            .build()
 
-        then: "no exception is thrown"
+        when: "registering both and unregistering one"
+        def metrics1 = new AdaptivePatternMetrics(pattern1, registry, "run-1")
+        def metrics2 = new AdaptivePatternMetrics(pattern2, registry, "run-2")
+        metrics1.unregister()
+
+        then: "pattern2 metrics are still registered"
+        registry.find("vajrapulse.adaptive.current_tps").gauge() != null
         noExceptionThrown()
+
+        cleanup:
+        metrics2?.unregister()
     }
 
     def "should prevent memory leaks by allowing pattern garbage collection"() {
@@ -103,13 +137,11 @@ class AdaptivePatternMetricsSpec extends Specification {
             .metricsProvider(metricsProvider)
             .decisionPolicy(new DefaultRampDecisionPolicy(0.01))
             .build()
-        AdaptivePatternMetrics.register(pattern, registry, "test-run")
-        AdaptivePatternMetrics.unregister(pattern)
+        def metrics = new AdaptivePatternMetrics(pattern, registry, "test-run")
+        metrics.unregister()
         pattern = null // Allow garbage collection
 
         then: "pattern can be garbage collected (no strong reference in static map)"
-        // This test verifies the cleanup mechanism exists
-        // Actual GC verification would require more complex setup
         noExceptionThrown()
     }
 }

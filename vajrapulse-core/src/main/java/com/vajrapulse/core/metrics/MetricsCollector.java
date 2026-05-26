@@ -448,7 +448,7 @@ public final class MetricsCollector implements AutoCloseable {
             return 0.0;
         }
         
-        // Find P50, P16, and P84 (or closest available)
+        // Find P50, P16, and P84 (or closest available percentiles)
         double p50 = Double.NaN;
         double p16 = Double.NaN;
         double p84 = Double.NaN;
@@ -466,12 +466,12 @@ public final class MetricsCollector implements AutoCloseable {
             }
         }
         
-        // If we have P50 and P84, estimate upper stddev
+        // Use P84-P50 as a robust spread estimate (for normal distributions, P84 ≈ μ+σ, so P84-P50 ≈ σ)
         if (!Double.isNaN(p50) && !Double.isNaN(p84)) {
             return p84 - p50;
         }
         
-        // If we have P50 and P16, estimate lower stddev
+        // Use P50-P16 as a robust spread estimate (for normal distributions, P16 ≈ μ-σ, so P50-P16 ≈ σ)
         if (!Double.isNaN(p50) && !Double.isNaN(p16)) {
             return p50 - p16;
         }

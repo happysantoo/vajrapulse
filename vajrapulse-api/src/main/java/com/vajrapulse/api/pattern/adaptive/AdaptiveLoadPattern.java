@@ -518,6 +518,15 @@ public final class AdaptiveLoadPattern implements LoadPattern {
         return state.get().phaseTransitionCount();
     }
     
+    /**
+     * Gets the adaptive configuration.
+     * 
+     * @return the configuration
+     */
+    public AdaptiveConfig getConfig() {
+        return config;
+    }
+    
     // Note: registerMetrics() is not overridden here because AdaptivePatternMetrics
     // is in the core module, and api module has zero dependencies. ExecutionEngine
     // handles adaptive pattern metrics registration directly using instanceof check,

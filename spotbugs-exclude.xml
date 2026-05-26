@@ -141,4 +141,19 @@
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>
         <Class name="com.vajrapulse.api.pattern.adaptive.LoggingAdaptivePatternListener"/>
     </Match>
+    
+    <!-- AdaptivePatternMetrics stores MeterRegistry for meter registration/unregistration -->
+    <!-- MeterRegistry is used only to register and remove meters, which is the intended design -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="com.vajrapulse.core.engine.AdaptivePatternMetrics"/>
+    </Match>
+    
+    <!-- Tracing.shutdown() casts OpenTelemetrySdk directly - the instanceof check is defensive -->
+    <!-- Even though the variable is declared as OpenTelemetry type, the cast is safe -->
+    <Match>
+        <Bug pattern="BC_VACUOUS_INSTANCEOF"/>
+        <Class name="com.vajrapulse.core.tracing.Tracing"/>
+        <Method name="initIfEnabled"/>
+    </Match>
 </FindBugsFilter>

@@ -15,6 +15,8 @@ import io.opentelemetry.context.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
  * Minimal tracing bootstrap for VajraPulse.
  * <p>Enabled iff environment variable {@code VAJRAPULSE_TRACE_ENABLED=true}.
@@ -23,8 +25,8 @@ import org.slf4j.LoggerFactory;
  */
 public final class Tracing {
     private static final Logger logger = LoggerFactory.getLogger(Tracing.class);
-    private static volatile OpenTelemetry openTelemetry;
-    private static volatile Tracer tracer;
+    private static final AtomicReference<OpenTelemetry> openTelemetryRef = new AtomicReference<>();
+    private static final AtomicReference<Tracer> tracerRef = new AtomicReference<>();
     private static final AttributeKey<String> RUN_ID = AttributeKey.stringKey("run_id");
     private static final AttributeKey<String> TASK_CLASS = AttributeKey.stringKey("task.class");
     private static final AttributeKey<String> LOAD_PATTERN = AttributeKey.stringKey("load.pattern");
@@ -33,9 +35,9 @@ public final class Tracing {
 
     private Tracing() {}
 
-    /** Initializes tracing if enabled; safe to call multiple times. */
+    /** Initializes tracing if enabled; safe to call multiple times. Uses CAS to prevent double-initialization. */
     public static void initIfEnabled(String runId) {
-        if (tracer != null) {
+        if (tracerRef.get() != null) {
             return; // already initialized
         }
         String enabled = System.getenv("VAJRAPULSE_TRACE_ENABLED");
@@ -60,27 +62,38 @@ public final class Tracing {
                 .addSpanProcessor(SimpleSpanProcessor.create(exporter))
                 .setResource(resource)
                 .build();
-            openTelemetry = OpenTelemetrySdk.builder().setTracerProvider(provider).build();
-            tracer = openTelemetry.getTracer("vajrapulse");
-            logger.info("Tracing initialized endpoint={} runId={}", endpoint, runId);
+            OpenTelemetry otel = OpenTelemetrySdk.builder().setTracerProvider(provider).build();
+            Tracer tracer = otel.getTracer("vajrapulse");
+            
+            // Use CAS to ensure only one thread initializes
+            if (openTelemetryRef.compareAndSet(null, otel)) {
+                tracerRef.compareAndSet(null, tracer);
+                logger.info("Tracing initialized endpoint={} runId={}", endpoint, runId);
+            } else {
+                // Another thread initialized first; close our instance
+                if (otel instanceof OpenTelemetrySdk) {
+                    try { ((OpenTelemetrySdk) otel).close(); } catch (Exception ignored) { /* best effort */ }
+                }
+            }
         } catch (Exception e) {
             logger.error("Failed to initialize tracing: {}", e.getMessage());
         }
     }
 
-    public static boolean isEnabled() { return tracer != null; }
+    public static boolean isEnabled() { return tracerRef.get() != null; }
 
     /** Shuts down tracing, flushing pending spans. Safe to call even if tracing was never enabled. */
+    @SuppressWarnings("BC_VACUOUS_INSTANCEOF")
     public static void shutdown() {
-        if (openTelemetry instanceof OpenTelemetrySdk sdk) {
+        OpenTelemetry otel = openTelemetryRef.getAndSet(null);
+        tracerRef.set(null);
+        if (otel instanceof OpenTelemetrySdk) {
             try {
-                sdk.close();
+                ((OpenTelemetrySdk) otel).close();
             } catch (Exception e) {
                 logger.warn("Error shutting down tracing: {}", e.getMessage());
             }
         }
-        openTelemetry = null;
-        tracer = null;
     }
 
     /** Starts a scenario span (root) for the entire load test run.
@@ -92,11 +105,11 @@ public final class Tracing {
      * @param runId the run identifier for correlation
      * @param taskClass the task class name
      * @param loadPattern the load pattern class name
-     * @return the scenario span, or invalid span if tracing is disabled
+     * @return the scenario span, or invalid span if tracing disabled
      */
     public static Span startScenarioSpan(String runId, String taskClass, String loadPattern) {
         if (!isEnabled()) return Span.getInvalid();
-        return tracer.spanBuilder("scenario")
+        return tracerRef.get().spanBuilder("scenario")
             .setSpanKind(SpanKind.INTERNAL)
             .setAttribute(RUN_ID, runId != null ? runId : "unknown")
             .setAttribute(TASK_CLASS, taskClass != null ? taskClass : "unknown")
@@ -113,14 +126,14 @@ public final class Tracing {
      * @param parent the parent scenario span (may be invalid if tracing disabled)
      * @param runId the run identifier for correlation
      * @param iteration the iteration number (0-based)
-     * @return the execution span, or invalid span if tracing is disabled
+     * @return the execution span, or invalid span if tracing disabled
      */
     public static Span startExecutionSpan(Span parent, String runId, long iteration) {
         if (!isEnabled()) return Span.getInvalid();
         Context parentCtx = parent != null && parent.isRecording() 
             ? parent.storeInContext(Context.current()) 
             : Context.current();
-        return tracer.spanBuilder("execution")
+        return tracerRef.get().spanBuilder("execution")
             .setParent(parentCtx)
             .setSpanKind(SpanKind.INTERNAL)
             .setAttribute(RUN_ID, runId != null ? runId : "unknown")
